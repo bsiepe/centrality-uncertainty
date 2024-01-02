@@ -38,8 +38,11 @@ transformed parameters{
   // Partial correlation matrix
   array[I]matrix[K,K] Rho;
   //  Centrality
-  array[I] vector[K] Beta_centrality;
+  array[I] vector[K] Beta_out_strength; 
+  array[I] vector[K] Beta_in_strength;
+  array[I] vector[K] Beta_density;
   array[I] vector[K] Rho_centrality;
+  array[I] vector[K] Rho_density;
 
   for(i in 1:I) {
     
@@ -62,10 +65,13 @@ transformed parameters{
       } // end k
     } // end j
     
-    //  Centrality
+    //  Centrality, Density
     for(k in 1:K){
-      Beta_centrality[i,k] = sum(Beta[i, ,k]);
-      Rho_centrality[i, k] = sum(Rho[i, ,k]);
+      Beta_out_strength[i,k] = sum(Beta[i, ,k]);
+      Beta_out_strength[i,k] = sum(Beta[i,k ,]);
+      Beta_density[i,k]      = sum(Beta[i, , ]);
+      Rho_centrality[i, k]   = sum(Rho[i, ,k]);
+      Rho_density[i, k]      = sum(Rho[i, , ]);
     } // end k
   } // end i
 } // end transformed parameters
@@ -86,7 +92,7 @@ model {
         // Scaled beta prior on partial correlations 
         // (Rho[j,k] / 2 + 0.5 is a scaling to the unit interval)
         target+= beta_proportion_lpdf(
-          Rho[j,k] / 2 + 0.5 | prior_Rho_loc[j,k], prior_Rho_scale[j,k]);
+          Rho[i,j,k] / 2 + 0.5 | prior_Rho_loc[j,k], prior_Rho_scale[j,k]);
         } // end if
       } // end k
     } // end j
