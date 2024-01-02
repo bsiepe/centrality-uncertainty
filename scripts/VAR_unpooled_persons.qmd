@@ -67,7 +67,7 @@ gvar_mod$PCC <- -cov2cor(gvar_mod$kappa)
 diag(gvar_mod$PCC) <- 0
 
 # Simulate data
-I <- 5
+I <- 10
 n_t <- rep(200, I)
 
 Y <-
