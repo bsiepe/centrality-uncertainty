@@ -1,3 +1,48 @@
+
+# -------------------------------------------------------------------------
+# graphicalVAR helper functions -------------------------------------------
+# -------------------------------------------------------------------------
+# Function to extract centralities from graphicalVAR fit object
+centrality_graphicalvar <- function(fit){
+  
+  #--- Prepare matrices
+  beta <- abs(fit$beta[,-1])
+  pcor <- abs(-cov2cor(fit$kappa))
+  diag(pcor) <- 0
+  pcor[lower.tri(pcor)] <- 0L
+  
+  #--- Outstrength 
+  outstrength <- colSums(beta)
+  
+  #--- Instrength
+  instrength <- rowSums(beta)
+  
+  #--- Strength
+  strength <- colSums(pcor)
+  
+  #--- Temporal Density
+  temporal_density <- sum(beta)
+  
+  #--- Contemporaneous Density
+  contemporaneous_density <- sum(pcor)
+  
+  #--- Return list
+  return(list(outstrength = outstrength,
+              instrength = instrength,
+              strength = strength,
+              temporal_density = temporal_density,
+              contemporaneous_density = contemporaneous_density))
+  
+}
+
+
+
+
+
+
+
+
+
 #------------------------------------------------------------------------------>
 # Helper functions to transform between different draws formats
 #------------------------------------------------------------------------------>
