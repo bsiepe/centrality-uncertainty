@@ -1,16 +1,6 @@
 ---
-title: "VAR"
+title: "Centrality"
 format: html
----
-
----
-title: "GVAR - Model Fitting and Results"
-output:
-  html_document:
-    toc: yes
-    toc_float: yes
-    collapsed: no
-    smooth_scroll: yes
 ---
 
 ```{r setup, include = FALSE}
@@ -44,18 +34,6 @@ set.seed(35037)
 
 ### Simulate data
 ```{r}
-gvar_mod <- graphicalVAR::randomGVARmodel(Nvar = 8,
-                              probKappaEdge = .3,
-                              probBetaEdge = .2)
-# DGP matrices
-gvar_mod$beta     # regression weights
-gvar_mod$kappa    # precision matrix
-
-# Simulate data from it
-gvar_dat <- graphicalVAR::graphicalVARsim(nTime = 200, 
-                                          beta = gvar_mod$beta,
-                                          kappa = gvar_mod$kappa)
-
 # Additionally, use data from our preprint
 l_graphs <- readRDS(here("data", "l_graphs.rds"))
 
@@ -67,7 +45,7 @@ gvar_mod$PCC <- -cov2cor(gvar_mod$kappa)
 diag(gvar_mod$PCC) <- 0
 
 # Simulate data
-I <- 10
+I <- 50
 n_t <- rep(200, I)
 
 Y <-
@@ -83,28 +61,6 @@ K <- ncol(Y)
 N <- nrow(Y)
 ```
 
-### Specify Priors
-```{r}
-# prior on the locations of partial correlations (scaled Beta location)
-prior_Rho_loc <- matrix(.5, nrow = K, ncol = K)
-# prior_Rho_scale <- matrix(sqrt(.5), nrow = K, ncol = K) # sqrt(mu) corresponds to uniform distribution
-prior_Rho_scale <- matrix(.2, nrow = K, ncol = K) # bit more regularization
-
-prior_Beta_loc <- matrix(0, nrow = K, ncol = K)
-prior_Beta_scale <- matrix(.5, nrow = K, ncol = K)  # regularize a bit
-```
-
-#### Plot prior choices for scaled beta
-BS: Would be good to not make this uniform, high partial correlations are quite unrealistic.
-Would decrease the prior sd for the partial correlations
-```{r}
-mu <- .5
-sd <- sqrt(mu)
-a <- mu / (sd * sd)
-b <- (1-mu) / (sd * sd)
-hist((rbeta(1e6,a, b) - .5) * 2)
-```
-
 ## Fit VAR Model in Stan
 ```{r stan data & compilation}
 # prepare stan data
@@ -113,12 +69,8 @@ stan_data <-
        I = I,
        N = N,
        n_t = n_t,
-       Y = as.array(Y),
-       prior_Rho_loc = prior_Rho_loc,
-       prior_Rho_scale = prior_Rho_scale,
-       prior_Beta_loc = prior_Beta_loc,
-       prior_Beta_scale = prior_Beta_scale
-       )
+       Y = as.array(Y)
+  )
 # Choose model to fit
 model_name <- "VAR_LKJ_centrality"
 # Compile model
@@ -150,6 +102,20 @@ var_lkj_fit <- var_lkj_model$sample(
 var_lkj_fit$time()$total
 
 #var_lkj_fit$output(1)
+```
+
+
+```{r variational, message=FALSE}
+
+# Run sampler
+var_lkj_fit <- var_lkj_model$variational(
+  data = stan_data,
+  seed = 2023,
+  init = .1,
+  adapt_engaged = FALSE,
+  eta = 0.1, 
+  eval_elbo = 200
+)
 ```
 
 ## Effective sample size (ESS) & Rhat Plots
