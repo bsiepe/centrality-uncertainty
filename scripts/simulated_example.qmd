@@ -15,6 +15,7 @@ library(parallel)
 library(here)
 library(broom)
 library(gimme)
+library(cmdstanr)
 set.seed(35037)
 source(here("scripts", "functions.R"))
 
@@ -23,7 +24,7 @@ source(here("scripts", "functions.R"))
 # Simulate data
 
 ## Simulate time series data with specific centrality/density
-We simulate data from a multilevel model for now. 
+We simulate data from a multilevel model for now.
 
 ```{r sim-params}
 n <- 50
@@ -33,7 +34,9 @@ tp <- 100
 ```
 
 
+TODO: The following does not work yet when we scale the variables, because the true values are not scaled. Maybe we can just not scale the variables for LASSO, because the variances will be roughly equal anyway.
 
+Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
 ```{r sim-data}
 # Simulate data
 ml_sim <- mlVAR::mlVARsim(nPerson = n, 
@@ -49,7 +52,10 @@ ml_sim <- mlVAR::mlVARsim(nPerson = n,
                 shrink_deviation = 0.9)
 
 # Obtain individual models and data
-ml_data <- ml_sim$Data %>% 
+ml_data <- ml_sim$Data %>%
+  group_by(ID) %>% 
+  # mutate(across(c(V1, V2, V3, V4, V5, V6), ~scale(.))) %>%
+  ungroup() %>% 
   split(.$ID)
 
 # Obtain parameters
@@ -82,7 +88,7 @@ ml_contemporaneous_density <- lapply(ml_pcor, function(x){
 
 ## Simulate regression data
 Simulate data from simple one-predictor regression model:
-```{r}
+```{r sim-covariate}
 # Extract temporal density as predictor
 tempdens <- unlist(ml_tempdens)
 
@@ -96,7 +102,7 @@ reg_data <- tibble(
   ID = 1:n,
   tempdens = tempdens,
   depression = 0.25 * tempdens + resid
-) %>% 
+) 
 
 ```
 
@@ -106,7 +112,7 @@ reg_data <- tibble(
 
 ### graphicalVAR
 Fit graphicalVAR model to each time series:
-```{r}
+```{r fit-graphicalvar}
 # setup cluster
 cl <- parallel::makeCluster(parallel::detectCores() - 8)
 parallel::clusterEvalQ(cl, {
@@ -121,6 +127,61 @@ ml_fit <- parallel::parLapply(cl, ml_data, function(x){
 parallel::stopCluster(cl)
 
 ```
+
+
+### Stan
+Prepare Stan model 
+```{r}
+# Combine data to data.frame
+Y <- do.call(rbind, ml_data)
+# Remove ID column
+Y <- Y[, -7]
+
+
+# Obtain dimensions
+K <- ncol(Y) 
+NR <- nrow(Y)
+n_t <- rep(tp, n)
+
+# Prep stan data
+stan_data <-
+  list(K = K,
+       I = I,
+       N = NR,
+       n_t = n_t,
+       Y = as.array(as.matrix(Y))
+  )
+# Choose model to fit
+model_name <- "VAR_LKJ_centrality"
+# Compile model
+var_lkj_model <- cmdstanr::cmdstan_model(
+  stan_file = here("scripts", paste0(model_name, ".stan")),
+  pedantic = TRUE#, 
+  #quiet = FALSE
+  )
+
+```
+
+Now fit the model (takes ages):
+```{r}
+n_chains <- 4
+# Run sampler
+var_lkj_fit <- var_lkj_model$sample(
+  data = stan_data,
+  seed = 2023,
+  chains = n_chains,
+  parallel_chains = n_chains,
+  iter_warmup = 500,
+  iter_sampling = 500,
+  refresh = 500,
+  thin = 1,
+  adapt_delta = .8,
+  init = .1
+)
+# time to fit
+var_lkj_fit$time()$total
+```
+
 
 
 
