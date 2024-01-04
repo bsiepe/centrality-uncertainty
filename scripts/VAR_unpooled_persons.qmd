@@ -3,6 +3,8 @@ title: "Centrality"
 format: html
 ---
 
+# Preparation
+
 ```{r setup, include = FALSE}
 # Libraries
 packages <- c(
@@ -58,6 +60,9 @@ Y <-
   do.call(rbind, .)
 
 K <- ncol(Y) 
+
+# BS: TODO change away from N, this is misleading because this is  N = tp*n
+# I didn't change it myself because this is your notation, but I suggest nrow
 N <- nrow(Y)
 ```
 
