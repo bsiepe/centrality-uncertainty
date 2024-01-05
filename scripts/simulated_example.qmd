@@ -90,7 +90,7 @@ ml_contemporaneous_density <- lapply(ml_pcor, function(x){
 Simulate data from simple one-predictor regression model:
 ```{r sim-covariate}
 # Extract temporal density as predictor
-tempdens <- unlist(ml_tempdens)
+tempdens <- unlist(ml_temporal_density)
 
 # Simulate linear model data with regression coefficient of 0.5
 eps <- 1
@@ -127,6 +127,23 @@ ml_fit <- parallel::parLapply(cl, ml_data, function(x){
 parallel::stopCluster(cl)
 
 ```
+
+
+### GIMME
+Fit GIMME model to all time series: 
+```{r fit-gimme}
+gimme_data <- lapply(ml_data, function(x){x[,-7]})
+
+gimme_fit <- gimme::gimme(data = gimme_data,
+                          subgroup = TRUE)
+
+
+
+```
+
+
+
+
 
 
 ### Stan
@@ -197,7 +214,7 @@ emp_centrality <- lapply(ml_fit, centrality_graphicalvar)
 Compare to true centralities
 ```{r}
 tempdens_true <- unlist(ml_tempdens)
-tempdens_emp <- unlist(lapply(emp_centrality, function(x) x$temporal_density))
+tempdens_emp <- unlist(lapply(emp_centrality, function(x) x$dens_temp))
 reg_data <- reg_data %>%
   mutate(
     tempdens_emp = tempdens_emp
