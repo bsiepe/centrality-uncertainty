@@ -1,4 +1,3 @@
-
 # -------------------------------------------------------------------------
 # graphicalVAR helper functions -------------------------------------------
 # -------------------------------------------------------------------------
@@ -21,20 +20,82 @@ centrality_graphicalvar <- function(fit){
   strength <- colSums(pcor)
   
   #--- Temporal Density
-  temporal_density <- sum(beta)
+  dens_temp <- sum(beta)
   
   #--- Contemporaneous Density
-  contemporaneous_density <- sum(pcor)
+  # This should be equivalent to strength
+  dens_cont <- sum(pcor)
   
   #--- Return list
   return(list(outstrength = outstrength,
               instrength = instrength,
               strength = strength,
-              temporal_density = temporal_density,
-              contemporaneous_density = contemporaneous_density))
+              dens_temp = dens_temp,
+              dens_cont = dens_cont))
   
 }
 
+
+
+# -------------------------------------------------------------------------
+# GIMME helper functions --------------------------------------------------
+# -------------------------------------------------------------------------
+# Function to extract centralities from GIMME fit object
+centrality_gimme <- function(fit){
+  
+  
+  #--- Density
+  dens_temp <- lapply(ref_path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      sum(abs(x[, temp_ind]))
+    }
+  })
+  
+  dens_cont <- lapply(ref_path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      diag(x) <- 0
+      x[lower.tri(x)] <- 0L
+      sum(abs(x))
+    }
+  })
+
+  #--- Centrality
+  outstrength <- lapply(ref_path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      colSums(abs(x))
+    }
+  })
+  instrength <- lapply(ref_path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      rowSums(abs(x))
+    }
+  })
+  strength <- lapply(ref_path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      diag(x) <- 0
+      x[lower.tri(x)] <- 0L
+      colSum(abs(x))
+    }
+  })
+  
+  
+  
+}
 
 
 
