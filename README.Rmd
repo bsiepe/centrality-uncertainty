@@ -1,0 +1,12 @@
+# Background
+
+This repository contains files for the project "Uncertainty is central for good inference".
+
+
+## Data
+
+## Scripts
+
+## Figures
+
+## Output
