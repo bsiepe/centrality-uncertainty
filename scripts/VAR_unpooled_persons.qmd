@@ -10,26 +10,15 @@ format: html
 packages <- c(
   "tidyverse",
   "devtools",
-  "readxl",
-  "lubridate",
   "rmarkdown",
-  "psych",
   "cmdstanr",
-  "loo",
   "bayesplot",
   "posterior",
-  "bayestestR",
   "here",
-  "rtf",
-  "sjlabelled",
-  "tsnet",
-  "BGGM",
-  "graphicalVAR"
+  "graphicalVAR",
+  "cmdstanr"
 )
-#remotes::install_github("donaldRwilliams/BGGM")
-#devtools::install_github("bsiepe/tsnet")
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load(packages, update = F, character.only = T)
+lapply(packages, library, character.only = TRUE)
 
 set.seed(35037)
 ```
@@ -62,12 +51,12 @@ Y <-
 K <- ncol(Y) 
 
 # BS: TODO change away from N, this is misleading because this is  N = tp*n
-# I didn't change it myself because this is your notation, but I suggest nrow
+# I didn't change it myself because this is your notation, but I suggest NR instead
 N <- nrow(Y)
 ```
 
 ## Fit VAR Model in Stan
-```{r stan data & compilation}
+```{r stan data & compilation, renv.ignore = TRUE}
 # prepare stan data
 stan_data <-
   list(K = K,
@@ -87,7 +76,7 @@ var_lkj_model <- cmdstanr::cmdstan_model(
 
 ```
 
-```{r sampling, message=FALSE}
+```{r sampling, message=FALSE, renv.ignore=TRUE}
 # number of MCMC chains
 n_chains <- 4
 # Run sampler
@@ -110,8 +99,7 @@ var_lkj_fit$time()$total
 ```
 
 
-```{r variational, message=FALSE}
-
+```{r variational, message=FALSE, renv.ignore=TRUE}
 # Run sampler
 var_lkj_fit <- var_lkj_model$variational(
   data = stan_data,
@@ -161,7 +149,7 @@ param_ests <- var_lkj_fit$summary()
 # Parameter Recovery
 
 ### Betas
-```{r}
+```{r renv.ignore=TRUE}
 medians_beta <-
   var_lkj_fit$summary("Beta") %>% 
   dplyr::select(median) %>% 
@@ -212,97 +200,7 @@ bayesplot::ppc_intervals(gvar_mod$PCC %>% as.vector(),draws_rho)
 ```
 
 
-***
 
-# Compare One Fit to Itself
-```{r}
-
-```
-
-
-***
-
-# Compare Variational Inference
-```{r}
-# Run variational
-var_lkj_fit_vb <- var_lkj_model$variational(
-  data = stan_data,
-  seed = 2023,
-  tol_rel_obj = .001,
-  init = .1,
-  refresh = 1000
-)
-# time to fit
-var_lkj_fit_vb$time()$total
-```
-
-```{r}
-medians_beta_vb <-
-  var_lkj_fit_vb$summary("Beta") %>% 
-  dplyr::select(median) %>% 
-  unlist() %>% 
-  round(2)
-plot(medians_beta_vb, medians_beta %>% as.vector())
-abline(coef = c(0,1))
-```
-
-
-```{r}
-medians_rho_vb <-
-  var_lkj_fit_vb$summary("Rho") %>% 
-  dplyr::select(median) %>% 
-  unlist() %>% 
-  round(2)
-
-# This looks abit more ugly now!
-plot(medians_rho_vb, medians_rho %>% as.vector())
-abline(coef = c(0,1))
-```
-
-
-
-
-
-# Posterior comparisons
-Compare data structures of BGGM and the stan model/posterior package
-```{r}
-library(BGGM)
-library(tsnet)
-
-
-# Load data of two individuals
-data <- BGGM::ifit
-data_1 <- subset(data, id == 1)
-data_3 <- subset(data, id == 3)
-
-# Estimate networks
-# (should perform detrending etc. in a real use case)
-net_1 <- BGGM::var_estimate(data_1[,-1],
-                            rho_sd = 0.25, 
-                            beta_sd = 0.5,
-                            iter = 50000)
-net_3 <- BGGM::var_estimate(data_3[,-1],
-                            rho_sd = 0.25, 
-                            beta_sd = 0.5,
-                            iter = 50000)
-
-
-```
-Posterior samples are in a slightly different format when we use the BGGM package
-in BGGM, they are in a tensor format. I think this will be the most efficient format for the test.
-```{r}
-source(here("scripts","functions.R"))
-dim(net_1$fit$beta)
-arr <- net_1$fit$beta
-dim(arr)
-mat <- draws_array2matrix(arr)
-
-arr2 <- 
-draws_matrix2array(mat)
-dim(arr2)
-arr[,,1]
-arr2[,,1]
-```
 
 
 

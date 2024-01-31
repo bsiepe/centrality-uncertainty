@@ -43,9 +43,14 @@ centrality_graphicalvar <- function(fit){
 # Function to extract centralities from GIMME fit object
 centrality_gimme <- function(fit){
   
+  #--- Prepare 
+  n_var <- fit$n_vars_total
+  temp_ind <- 1:(n_var/2)
+  cont_ind <- ((n_var/2)+1):n_var
+  
   
   #--- Density
-  dens_temp <- lapply(ref_path_est_mats, function(x){
+  dens_temp <- lapply(fit$path_est_mats, function(x){
     if(!is.double(x)){
       NA
     }
@@ -54,11 +59,12 @@ centrality_gimme <- function(fit){
     }
   })
   
-  dens_cont <- lapply(ref_path_est_mats, function(x){
+  dens_cont <- lapply(fit$path_est_mats, function(x){
     if(!is.double(x)){
       NA
     }
     else{
+      x <- x[, cont_ind]
       diag(x) <- 0
       x[lower.tri(x)] <- 0L
       sum(abs(x))
@@ -66,33 +72,40 @@ centrality_gimme <- function(fit){
   })
 
   #--- Centrality
-  outstrength <- lapply(ref_path_est_mats, function(x){
+  outstrength <- lapply(fit$path_est_mats, function(x){
     if(!is.double(x)){
       NA
     }
     else{
+      colSums(abs(x[, temp_ind]))
+    }
+  })
+  instrength <- lapply(fit$path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      rowSums(abs(x[, temp_ind]))
+    }
+  })
+  strength <- lapply(fit$path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      x <- x[, cont_ind]
+      diag(x) <- 0
+      x[lower.tri(x)] <- 0L
       colSums(abs(x))
     }
   })
-  instrength <- lapply(ref_path_est_mats, function(x){
-    if(!is.double(x)){
-      NA
-    }
-    else{
-      rowSums(abs(x))
-    }
-  })
-  strength <- lapply(ref_path_est_mats, function(x){
-    if(!is.double(x)){
-      NA
-    }
-    else{
-      diag(x) <- 0
-      x[lower.tri(x)] <- 0L
-      colSum(abs(x))
-    }
-  })
   
+  # return list
+  return(list(outstrength = outstrength,
+              instrength = instrength,
+              strength = strength,
+              dens_temp = dens_temp,
+              dens_cont = dens_cont))
   
   
 }
@@ -147,341 +160,7 @@ draws_array2matrix <- function(array_3d,
   return(matrix)
 }
 
-#------------------------------------------------------------------------------>
-# Function to extract the log_lik for the gVAR
-#------------------------------------------------------------------------------>
-log_lik_gVAR <- function(Y, draws_beta, draws_sigma, n_cores = 1) {
-  # # save chain ids
-  # chain_ids <- draws_beta %>%
-  #   as_draws_df() %>%
-  #   select(.chain) %>% unlist()
-  
-  # prepare matrices from draws
-  Beta <- draws_matrix2list(draws_beta)
-  Sigma <- draws_matrix2list(draws_sigma)
-  # number of iterations
-  n_iter <- length(Beta)
-  n_t <- nrow(Y)
-  # parallelization
-  if (n_cores > 1) {
-    future::plan("multisession", workers = n_cores)
-  } else{
-    future::plan("sequential")
-  }
-  future::plan("multisession", workers = n_cores)
-  # progress bar
-  p <- progressr::progressor(along = 1:n_iter)
-  # loop over iteraions
-  progressr::with_progress(log_lik_list <- furrr::future_map(
-    .x = 1:n_iter,
-    .f = function(n) {
-      # loop over time points
-      log_lik_row <-
-        lapply(2:n_t, function(t) {
-          return(mvtnorm::dmvnorm(
-            x = Y[t,],
-            mean = Beta[[n]] %*% Y[t - 1,],
-            sigma = Sigma[[n]],
-            log = TRUE
-          ))
-        }) # end timepoint
-      log_lik_row <- do.call(cbind, log_lik_row)
-      return(log_lik_row)
-      p()
-    }
-    # end iterations
-    # end progress bar
-  ))
-  # end paralleliztion
-  
-  if (n_cores > 1) {
-    future::plan("sequential")
-  }
-  log_lik_list <- do.call(rbind, log_lik_list)
-  
-  log_lik_mat <- posterior::as_draws_matrix(log_lik_list)
-  return(log_lik_mat)
-}
 
-#------------------------------------------------------------------------------>
-# Function to fit the gVAR Model in Stan
-#------------------------------------------------------------------------------>
-fit_gVAR_stan <-
-  function(data,
-           # a vector of beeps with length of nrow(data)
-           beep = NULL,
-           priors = NULL,
-           backend = "rstan",
-           method = "sampling",
-           cov_prior = "LKJ",
-           # c("LKJ", "IW")
-           rmv_overnight = FALSE,
-           iter_sampling = 500,
-           iter_warmup = 500,
-           n_chains = 4,
-           n_cores = 4,
-           server = FALSE,  # temporary option to run code on Linux server
-           center_only = FALSE,   # only center (not scale)
-           ...) {
-    if(isTRUE(center_only)){
-      Y <- data %>% apply(., 2, scale, center = TRUE, scale = FALSE)
-    } else{
-      Y <- data %>% apply(., 2, scale, center = TRUE, scale = TRUE)
-    }
-    
-    K <- ncol(data)
-    n_t <- nrow(data)
-    
-    # Specify Priors
-    if (is.null(priors)) {
-      prior_Rho_loc <- matrix(.5, nrow = K, ncol = K)
-      prior_Rho_scale <- matrix(.4, nrow = K, ncol = K)
-      prior_Beta_loc <- matrix(0, nrow = K, ncol = K)
-      prior_Beta_scale <- matrix(.5, nrow = K, ncol = K)
-    } else{
-      prior_Rho_loc <- priors[["prior_Rho_loc"]]
-      prior_Rho_scale <- priors[["prior_Rho_scale"]]
-      prior_Beta_loc <- priors[["prior_Beta_loc"]]
-      prior_Beta_scale <- priors[["prior_Beta_scale"]]
-    }
-    
-    # Stan Data
-    stan_data <- list(
-      K = K,
-      "T" = n_t,
-      Y = as.matrix(Y),
-      beep = beep,
-      prior_Rho_loc = prior_Rho_loc,
-      prior_Rho_scale = prior_Rho_scale,
-      prior_Beta_loc = prior_Beta_loc,
-      prior_Beta_scale = prior_Beta_scale
-    )
-    
-    # Choose model to fit
-    if (cov_prior == "LKJ") {
-      if (isTRUE(rmv_overnight)) {
-        # remove overnight effects
-        model_name <- "VAR_LKJ_beep"
-      } else{
-        # standard model
-        model_name <- "VAR_LKJ"
-      }
-    }
-    if (cov_prior == "IW") {
-      if (isTRUE(rmv_overnight)) {
-        # remove overnight effects
-        model_name <- "VAR_wishart_beep"
-      } else{
-        # standard model
-        model_name <- "VAR_wishart"
-      }
-    }
-    
-    
-    if (backend == "rstan") {
-      # Compile model
-      if(isFALSE(server)){
-        stan_model <-
-          rstan::stan_model(file = here::here("scripts", paste0(model_name, ".stan")))        
-      } else {
-        stan_model <-
-          rstan::stan_model(file = paste0("~/stan-gvar/scripts/", model_name, ".stan"))
-      }
-      
-      
-      if (method == "sampling") {
-        # Run sampler
-        stan_fit <- rstan::sampling(
-          object = stan_model,
-          data = stan_data,
-          #pars = c("Beta_raw"),
-          #include = FALSE,
-          chains = n_chains,
-          cores = n_cores,
-          iter = iter_sampling + iter_warmup,
-          warmup = iter_warmup,
-          refresh = 500,
-          thin = 1,
-          init = .1,
-          control = list(adapt_delta = .8),
-          ...
-        )
-      }
-      if (method == "variational") {
-        stan_fit <- rstan::vb(
-          object = stan_model,
-          data = stan_data,
-          #pars = c("Beta_raw"),
-          #include = FALSE,
-          init = .1,
-          tol_rel_obj = .001,
-          output_samples = iter_sampling * n_chains,
-          ...
-        )
-      }
-    } else{
-      # Compile model
-      if(isFALSE(server)){
-      stan_model <-
-        cmdstanr::cmdstan_model(stan_file = here::here("scripts", paste0(model_name, ".stan")),
-                                pedantic = TRUE)
-      } else {
-        stan_model <-
-          cmdstanr::cmdstan_model(file = paste0("~/stan-gvar/scripts/", model_name, ".stan"),
-                                  pedantic = TRUE)        
-      }
-      if (method == "sampling") {
-        # Run sampler
-        stan_fit <- stan_model$sample(
-          data = stan_data,
-          chains = n_chains,
-          parallel_chains = n_cores,
-          iter_warmup = iter_warmup,
-          iter_sampling = iter_sampling,
-          refresh = 500,
-          thin = 1,
-          adapt_delta = .8,
-          init = .1,
-          ...
-        )
-      }
-      if (method == "variational") {
-        stan_fit <- stan_model$variational(
-          data = stan_data,
-          tol_rel_obj = .001,
-          init = .1,
-          output_samples = iter_sampling * n_chains,
-          ...
-        )
-      }
-    }
-    return(stan_fit)
-  }
-
-#------------------------------------------------------------------------------>
-# Function to Compute the LOO-CV for Independent Stan Model and Data
-#------------------------------------------------------------------------------>
-loo_gVAR <- function(stan_fit, data, n_cores = 1) {
-  c <- class(stan_fit)
-  if (attr(c, "package") == "rstan") {
-    log_lik <-
-      log_lik_gVAR(
-        Y = data %>% apply(., 2, scale),
-        draws_beta = posterior::as_draws_matrix(rstan::extract(
-          stan_fit, pars = "Beta", permuted = FALSE
-        )),
-        draws_sigma = posterior::as_draws_matrix(rstan::extract(
-          stan_fit, pars = "Sigma", permuted = FALSE
-        )),
-        n_cores = n_cores
-      )
-    chain_ids <-
-      rstan::extract(stan_fit, pars = "Beta", permuted = FALSE) %>%
-      posterior::as_draws_df() %>%
-      dplyr::select(.chain) %>%
-      unlist()
-  } else{
-    log_lik <-
-      log_lik_gVAR(
-        Y = data %>% apply(., 2, scale),
-        draws_beta = posterior::as_draws_matrix(stan_fit$draws("Beta")),
-        draws_sigma = posterior::as_draws_matrix(stan_fit$draws("Sigma")),
-        n_cores = n_cores
-      )
-    chain_ids <- stan_fit$draws("Beta") %>%
-      posterior::as_draws_df() %>%
-      dplyr::select(.chain) %>%
-      unlist()
-  }
-  loo <- loo::loo(log_lik, r_eff = relative_eff(log_lik, chain_ids))
-  return(loo)
-}
-
-#------------------------------------------------------------------------------>
-# Function to Compute the Bayes Factor for a Posterior Difference Matrix
-#------------------------------------------------------------------------------>
-# Helpers
-fisher_z <- function(r) {
-  return(0.5 * log((1 + r) / (1 - r)))
-}
-fisher_z_inv <- function(z) {
-  return((exp(2 * z) - 1) / (exp(2 * z) + 1))
-}
-
-
-
-
-
-
-
-
-# -------------------------------------------------------------------------
-# Helper functions for model evaluation -----------------------------------
-# -------------------------------------------------------------------------
-# Convert Stan fit to array -----------------------------------------------
-# TODO should maybe be flexible to incorporate something else besides Sigma?
-# i.e. also theta (precision matrix?)
-
-stan_fit_convert <-
-  function(stan_fit) {
-    # check fitting backend
-    c <- class(stan_fit)
-    
-    if (attr(c, "package") == "rstan") {
-      draws_beta <- posterior::as_draws_matrix(rstan::extract(stan_fit, pars = "Beta", permuted = FALSE))
-      draws_sigma <- posterior::as_draws_matrix(rstan::extract(stan_fit, pars = "Sigma", permuted = FALSE))
-      draws_rho <- posterior::as_draws_matrix(rstan::extract(stan_fit, pars = "Rho", permuted = FALSE))
-    }
-    else{
-      draws_beta <- posterior::as_draws_matrix(stan_fit$draws("Beta"))
-      draws_sigma <-
-        posterior::as_draws_matrix(stan_fit$draws("Sigma"))
-      draws_rho <- posterior::as_draws_matrix(stan_fit$draws("Rho"))
-    }
-    # Convert to array of p x p matrices
-    nvar <- sqrt(ncol(draws_beta))
-    
-    # Beta
-    split_beta <- split(draws_beta, seq(nrow(draws_beta)))
-    beta_l <- lapply(split_beta, function(x) {
-      matrix(x,
-             nrow = nvar,
-             ncol = nvar,
-             byrow = TRUE)
-    })
-    beta_array <-
-      array(unlist(beta_l), dim = c(nvar, nvar, nrow(draws_beta)))
-    
-    # Sigma
-    split_sigma <- split(draws_sigma, seq(nrow(draws_sigma)))
-    sigma_l <- lapply(split_sigma, function(x) {
-      matrix(x,
-             nrow = nvar,
-             ncol = nvar,
-             byrow = TRUE)
-    })
-    sigma_array <-
-      array(unlist(sigma_l), dim = c(nvar, nvar, nrow(draws_sigma)))
-    
-    # Rho
-    split_rho <- split(draws_rho, seq(nrow(draws_rho)))
-    rho_l <- lapply(split_rho, function(x) {
-      matrix(x,
-             nrow = nvar,
-             ncol = nvar,
-             byrow = TRUE)
-    })
-    rho_array <-
-      array(unlist(rho_l), dim = c(nvar, nvar, nrow(draws_rho)))
-    
-    # Return
-    return(list(
-      beta = beta_array,
-      sigma = sigma_array,
-      rho = rho_array
-    ))
-    
-  }
 
 
 

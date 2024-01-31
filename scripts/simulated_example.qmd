@@ -137,8 +137,6 @@ gimme_data <- lapply(ml_data, function(x){x[,-7]})
 gimme_fit <- gimme::gimme(data = gimme_data,
                           subgroup = TRUE)
 
-
-
 ```
 
 
@@ -207,14 +205,19 @@ var_lkj_fit$time()$total
 ### Extract centralities
 
 ```{r}
-emp_centrality <- lapply(ml_fit, centrality_graphicalvar)
+# graphicalVAR
+emp_centrality_gvar <- lapply(ml_fit, centrality_graphicalvar)
+
+# GIMME
+emp_centrality_gimme <- centrality_gimme(gimme_fit)
 
 ```
 
 Compare to true centralities
 ```{r}
 tempdens_true <- unlist(ml_tempdens)
-tempdens_emp <- unlist(lapply(emp_centrality, function(x) x$dens_temp))
+tempdens_emp_gvar <- unlist(lapply(emp_centrality_gvar, function(x) x$dens_temp))
+tempdens_emp_gimme <- unlist(emp_centrality_gimme$dens_temp)
 reg_data <- reg_data %>%
   mutate(
     tempdens_emp = tempdens_emp
