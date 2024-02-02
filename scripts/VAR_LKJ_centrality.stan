@@ -5,6 +5,7 @@ data {
   int<lower=0> K; // number of predictors
   int<lower=0> I; // number of predictors
   int<lower=0> N; // number of total measurements
+  int<lower=1> marg_beta_par; // prior for partial corr: marginal beta parameter 
   array[I] int<lower=0> n_t; // number of time points per person
   array[N] vector[K] Y; // responses
 }
@@ -87,7 +88,7 @@ model {
     // Priors
     // marginal beta: alpha = beta = eta -1 + K/2
     // cholesky prior: eta = alpha +1 -K/2
-    target+= lkj_corr_cholesky_lpdf(L_Theta[i] | 10 + 1 - K/2.0);  
+    target+= lkj_corr_cholesky_lpdf(L_Theta[i] | marg_beta_par + 1 - K/2.0);  
     
     // Data for one respondent
     array[n_t[i]] vector[K] Y_temp = segment(Y, position, n_t[i]); // slice array
