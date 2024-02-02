@@ -247,6 +247,8 @@ Beta_vec <-
   )
 
 Beta_true_vec <- ml_beta %>% do.call(rbind, .) %>% as.vector()
+
+cor.test(Beta_vec, Beta_true_vec, method = "spearman")
 # plot
 plot(Beta_vec,Beta_true_vec)
 abline(a = 0, b = 1, col = "red")
@@ -284,7 +286,7 @@ Rho_vec <- unlist(list)
 
 Rho_true_vec <- ml_pcor %>% map(function(x)
   x[2, 1]) %>% unlist()
-
+cor.test(Rho_vec, Rho_true_vec, method = "spearman")
 # plot
 plot(Rho_vec, Rho_true_vec, xlim = c(-1, 1), ylim = c(-1, 1))
 abline(a = 0, b = 1, col = "red")
@@ -296,6 +298,8 @@ Beta_density <- mlvar_fit$summary("Beta_density") %>%
   dplyr::select(median) %>%
   unlist()
 Beta_density_true <- ml_temporal_density %>% unlist()
+
+cor.test(Beta_density, Beta_density_true, method = "spearman")
 # plot
 plot(Beta_density, Beta_density_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
@@ -306,6 +310,8 @@ Rho_density <- mlvar_fit$summary("Rho_density") %>%
   dplyr::select(median) %>%
   unlist()
 Rho_density_true <- ml_contemporaneous_density %>% unlist()
+
+cor.test(Rho_density, Rho_density_true, method = "spearman")
 # plot
 plot(Rho_density, Rho_density_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
@@ -316,6 +322,7 @@ in_strength <- mlvar_fit$summary("Beta_in_strength") %>%
   dplyr::select(median) %>%
   unlist()
 in_strength_true <- ml_outstrength %>% unlist()
+cor.test(in_strength, in_strength_true, method = "spearman")
 # plot
 plot(in_strength, in_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
@@ -326,6 +333,7 @@ out_strength <- mlvar_fit$summary("Beta_out_strength") %>%
   dplyr::select(median) %>%
   unlist()
 out_strength_true <- ml_outstrength %>% unlist()
+cor.test(out_strength, out_strength_true, method = "spearman")
 # plot
 plot(out_strength, out_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
@@ -336,6 +344,7 @@ Rho_strength <- mlvar_fit$summary("Rho_centrality") %>%
   dplyr::select(median) %>%
   unlist()
 Rho_strength_true <- ml_strength %>% unlist()
+cor.test(Rho_strength, Rho_strength_true, method = "spearman")
 # plot
 plot(Rho_strength, Rho_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
