@@ -97,11 +97,11 @@ transformed parameters{
     for(k in 1:K){
       Beta_out_strength[i,k] = mean(abs(Beta[i, ,k]));
       Beta_in_strength[i,k]  = mean(abs(Beta[i,k, ]));
-      Rho_centrality[i, k]   = sum(abs(Rho[i, ,k]));
+      Rho_centrality[i, k]   = mean(abs(Rho[i, ,k]));
     } // end k
     // Density
     Beta_density[i] = mean(abs(Beta[i]));
-    Rho_density[i]  = mean(abs(Rho[i])) / 2;
+    Rho_density[i]  = mean(abs(Rho[i]));
     
     // Regression ////////////////////////////////////////////////////////
     mu_regression[i] = reg_intercept +  reg_slope_density * Beta_density[i];

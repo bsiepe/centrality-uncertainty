@@ -52,19 +52,19 @@ ml_sim <- mlVAR::mlVARsim(
                 DF_theta = K * 2, 
                 mu_SD = c(1, 1), 
                 init_beta_SD = c(0.1, 1), 
-                fixedMuSD = 1, 
+                fixedMuSD = 2, 
                 shrink_fixed = 0.9, 
                 shrink_deviation = 0.9)
 # Obtain individual models and data
 ml_data <- ml_sim$Data %>%
-  group_by(ID) %>% 
+  group_by(ID) %>%
   # mutate(across(c(V1, V2, V3, V4, V5, V6), ~scale(.))) %>%
-  ungroup() %>% 
+  ungroup() %>%
   split(.$ID)
 
 # Response data for Stan
-Y <- do.call(rbind, ml_data) %>% 
-  select(-ID) %>% 
+Y <- do.call(rbind, ml_data) %>%
+  select(-ID) %>%
   as.matrix()
 
 # Obtain parameters
@@ -76,18 +76,23 @@ ml_pcor <- ml_sim$model$Theta$pcor$subject
 # Obtain centrality and density
 # TODO double check the matrix formatting here
 # where are the DVs, where is the IV
-ml_outstrength <- lapply(ml_beta, function(x){colMeans(abs(x))})
-ml_instrength <- lapply(ml_beta, function(x){rowMeans(abs(x))})
-ml_strength <- lapply(ml_pcor, function(x){
-  diag(x) <- 0
-  x[lower.tri(x)] <- 0L
+ml_outstrength <- lapply(ml_beta, function(x) {
   colMeans(abs(x))
 })
-ml_temporal_density <- lapply(ml_beta, function(x)mean(abs(x)))
-# This should be equivalent to strength
-ml_contemporaneous_density <- lapply(ml_pcor, function(x){
+ml_instrength <- lapply(ml_beta, function(x) {
+  rowMeans(abs(x))
+})
+ml_strength <- lapply(ml_pcor, function(x) {
   diag(x) <- 0
-  x[lower.tri(x)] <- 0L
+  #x[lower.tri(x)] <- 0L # Matze: I think this is wrong!
+  colMeans(abs(x))
+})
+ml_temporal_density <- lapply(ml_beta, function(x)
+  mean(abs(x)))
+# This should be equivalent to strength
+ml_contemporaneous_density <- lapply(ml_pcor, function(x) {
+  diag(x) <- 0
+  #x[lower.tri(x)] <- 0L
   mean(abs(x))
 })
 ```
@@ -251,8 +256,8 @@ abline(a = 0, b = 1, col = "red")
 ## Regression
 ```{r}
 bayesplot::mcmc_recover_intervals(
-  true = c(0,.25),
-  x = mlvar_fit$draws(c("reg_intercept", "reg_slope_density")) %>% 
+  true = c(0,.25, log(eps)),
+  x = mlvar_fit$draws(c("reg_intercept", "reg_slope_density", "reg_residual")) %>% 
     as_draws_matrix())
 ```
 ## Partial Correlations
@@ -281,7 +286,7 @@ Rho_true_vec <- ml_pcor %>% map(function(x)
   x[2, 1]) %>% unlist()
 
 # plot
-plot(Rho_vec, Rho_true_vec)
+plot(Rho_vec, Rho_true_vec, xlim = c(-1, 1), ylim = c(-1, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -292,7 +297,7 @@ Beta_density <- mlvar_fit$summary("Beta_density") %>%
   unlist()
 Beta_density_true <- ml_temporal_density %>% unlist()
 # plot
-plot(Beta_density, Beta_density_true)
+plot(Beta_density, Beta_density_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -302,7 +307,7 @@ Rho_density <- mlvar_fit$summary("Rho_density") %>%
   unlist()
 Rho_density_true <- ml_contemporaneous_density %>% unlist()
 # plot
-plot(Rho_density, Rho_density_true)
+plot(Rho_density, Rho_density_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -312,7 +317,7 @@ in_strength <- mlvar_fit$summary("Beta_in_strength") %>%
   unlist()
 in_strength_true <- ml_outstrength %>% unlist()
 # plot
-plot(in_strength, in_strength_true)
+plot(in_strength, in_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -322,7 +327,7 @@ out_strength <- mlvar_fit$summary("Beta_out_strength") %>%
   unlist()
 out_strength_true <- ml_outstrength %>% unlist()
 # plot
-plot(out_strength, out_strength_true)
+plot(out_strength, out_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -332,6 +337,6 @@ Rho_strength <- mlvar_fit$summary("Rho_centrality") %>%
   unlist()
 Rho_strength_true <- ml_strength %>% unlist()
 # plot
-plot(Rho_strength, Rho_strength_true)
+plot(Rho_strength, Rho_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
