@@ -1,0 +1,241 @@
+---
+title: "Centrality Simulation"
+format: html
+---
+
+# Background
+This script contains the `SimDesign` code for the simulation study. 
+
+We first load all relevant packages: 
+```{r packages}
+library(tidyverse)
+library(SimDesign)
+library(mlVAR)
+library(graphicalVAR)
+library(gimme)
+```
+
+
+
+
+# Data Generation
+
+## Data-Generating Processes
+```{r dgps}
+
+
+```
+
+
+
+## Setting parameters
+```{r params}
+# Simulation parameters
+# Number of individuals 
+n_id <- c(50, 150)
+
+# Number of variables
+n_var <- c(6, 9)
+
+# Number of timepoints
+n_tp <- c(75, 150)
+
+# Type of DGP
+dgp <- c("sparse", "dense")
+
+# Strength of regression association
+beta <- c(0.25, 5)
+
+
+# Design
+SimDesign::createDesign(
+  n_id = n_id,
+  n_var = n_var,
+  n_tp = n_tp,
+  dgp = dgp)
+
+# Parameters
+sim_pars <- list()
+
+```
+
+
+
+## Simulating Data
+```{r data-generation}
+sim_generate <- function(condition, fixed_objects = NULL){
+  
+  # obtain fixed params
+  SimDesign::Attach(fixed_objects)
+  
+  # Simulate data
+  ml_sim <- mlVAR::mlVARsim(
+                nPerson = n_id, 
+                nNode = n_var, 
+                nTime = n_tp, 
+                lag = 1, 
+                thetaVar = rep(1,nvar),
+                DF_theta = nvar * 2.5, 
+                mu_SD = c(1, 1), 
+                init_beta_SD = c(0.3, 1.5), 
+                fixedMuSD = 1, 
+                shrink_fixed = 0.9, 
+                shrink_deviation = 0.9)
+  
+  # Obtain true centralities
+
+  
+  # Simulate covariate
+  eps <- 1
+
+  # Simulate error
+  resid <- rnorm(n, mean = 0, sd = eps)
+
+  reg_data <- tibble(
+    ID = 1:n,
+    tempdens = tempdens,
+    depression = 0.25 * tempdens + resid
+  ) 
+  
+  # Return data
+  return(ml_dat)
+  
+  
+}
+
+```
+
+
+# Analysis
+
+```{r data-analysis}
+sim_analyse <- function(condition, dat, fixed_objects = NULL){
+  
+  #--- Preparation
+  SimDesign::Attach(fixed_objects)
+  # Split data for idiographic models
+  
+  
+  #--- graphicalVAR
+  # Fit models
+  fit_gvar <- lapply(data_list, function(x){
+    graphicalVAR::graphicalVAR(x, 
+                               nLambda = 50,
+                               verbose = FALSE,
+                               gamma = 0.5, 
+                               scale = FALSE)
+  })
+  } 
+  
+  # Obtain centralities
+  cent_gvar <- lapply(fit_gvar, function(x){
+    centrality_gvar(x)
+  })
+  dens_temp_gimme <- vapply(cent_gvar, function(x){
+    x$dens_temp
+  }, numeric(1))
+  
+  # Fit regression
+
+  
+  #--- GIMME
+  
+  # Fit model
+  fit_gimme <- gimme::gimme(data_list,
+                            ar = TRUE,
+                            subgroup = TRUE,
+                            plot = FALSE,
+                            hybrid = FALSE,
+                            groupcutoff = .50,
+                            subcutoff = .50)
+  
+  # Obtain centralities
+  cent_gimme <- centrality_gimme(fit_gimme)
+  
+  # Fit regression
+
+  
+  #--- frequentist mlVAR
+  
+  # Fit model
+  fit_mlvar <- mlVAR::mlVAR(data, 
+                            vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
+                            idvar = "ID",
+                            estimator = "lmer",
+                            contemporaneous = "correlated",
+                            temporal = "correlated",
+                            nCores = 1,
+                            scale = FALSE)
+  
+  # Obtain centralities
+  cent_mlvar <- centrality_mlvar(fit_mlvar)
+  
+  # Fit regression
+  
+  
+  #--- Bayesian mlVAR
+  
+  # Fit model
+  
+  # Obtain centralities
+  
+  # Fit regression
+  
+  
+  #--- Return Results
+  
+  
+}
+
+```
+
+
+
+# Summary
+
+```{r summarize}
+sim_summarise <- function(condition, results, fixed_objects = NULL){
+  
+  #--- Preparation
+  SimDesign::Attach(fixed_objects)
+  
+  #--- Centrality
+  
+  
+  #--- Regression
+  
+  
+  
+}
+
+
+```
+
+
+# Executing Simulation
+
+```{r run-sim}
+sim_results <- SimDesign::runSimulation(
+                                    design = df_design, 
+                                    replications = 100, 
+                                    generate = sim_generate, 
+                                    analyse = sim_analyse, 
+                                    summarise = sim_summarise, 
+                                    fixed_objects = sim_pars,
+                                    # parallel = TRUE,
+                                    # packages = c("tidyverse"),
+                                    # save_results = TRUE,
+                                    # ncores = 2,
+                                    # debug = "summarise",
+                                    filename = "centrality-simulation.rds",
+                                    # save_seeds = TRUE
+                                    )
+
+
+```
+
+
+# Visualization
+
+
+
