@@ -162,7 +162,7 @@ model {
     position_Y += n_t[i]; // increment position counter
     
     // Cholesky decomposition of the covariance matrix
-    matrix[K, K] Sigma_chol = diag_pre_multiply(exp(theta_sd[i]), L_Theta[i]);
+    matrix[K, K] Sigma_chol = diag_pre_multiply(exp(theta_sd[i] + log(.5)), L_Theta[i]);
     array[n_t[i]-1] vector[K] mu_network;
     
     // network predictions: loop over time points

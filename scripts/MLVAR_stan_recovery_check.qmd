@@ -35,7 +35,7 @@ TODO: The following does not work yet when we scale the variables, because the t
 Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
 ```{r sim-data}
 I <- 100
-K <- 8
+K <- 6
 n_pc <-  K * (K - 1) / 2
 idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>% 
   c() %>% 
@@ -153,6 +153,10 @@ mlvar_fit <- mlvar_model$sample(
   adapt_delta = .9,
   init = .1
 )
+saveRDS(mlvar_fit, here("fits", "mlvar_fit.rds"))
+```
+
+```{r load fit, eval=FALSE}
 #mlvar_fit$output(1)
 ```
 

@@ -46,9 +46,7 @@ fit_mlvar_stan <- function(response_data,
   idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>%
     c() %>%
     which(.)
-  
   n_t <- rep(n_timepoints, I)
-  
   
   # Response data for Stan
   Y <- do.call(rbind, response_data) %>%
@@ -68,6 +66,8 @@ fit_mlvar_stan <- function(response_data,
       outcome = regression_outcome
     )
   
+  # fit model
+  # MCMC
   if (method == "sampling") {
     # Run sampler
     mlvar_fit <- mlvar_model$sample(
@@ -82,7 +82,7 @@ fit_mlvar_stan <- function(response_data,
       init = .1
     )
   }
-  
+  # variational Bayes
   if (method == "variational") {
     # Run variational
     mlvar_fit <- mlvar_model$variational(
@@ -93,7 +93,6 @@ fit_mlvar_stan <- function(response_data,
       eval_elbo = 200
     )
   }
-  
   return(mlvar_fit)
 }
 ```
