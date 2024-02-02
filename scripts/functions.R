@@ -2,7 +2,7 @@
 # graphicalVAR helper functions -------------------------------------------
 # -------------------------------------------------------------------------
 # Function to extract centralities from graphicalVAR fit object
-centrality_graphicalvar <- function(fit){
+centrality_gvar <- function(fit){
   
   #--- Prepare matrices
   beta <- abs(fit$beta[,-1])
@@ -110,7 +110,10 @@ centrality_gimme <- function(fit){
   
 }
 
-
+# -------------------------------------------------------------------------
+# mlVAR helper functions --------------------------------------------------
+# -------------------------------------------------------------------------
+# Obtain centrality of fitted mlVAR object
 centrality_mlvar <- function(fit){
   
   #--- Prepare
@@ -153,14 +156,73 @@ centrality_mlvar <- function(fit){
     colSums(abs(x))
   })
   
+  # return list
+  return(list(outstrength = outstrength,
+              instrength = instrength,
+              strength = strength,
+              dens_temp = dens_temp,
+              dens_cont = dens_cont))
+  
 }
 
 
+# Obtain centrality of simulated mlVAR object
+centrality_mlvar_sim <- function(simobj){
+  #--- Prepare
+  n_id <- length(simobj$model$mu$subject)
+  
+  #--- Obtain networks
+  l_beta <- lapply(1:n_id, function(i){
+    simobj$model$Beta$subject[[i]][,,1]
+  })
+  
+  l_pcor <- lapply(1:n_id, function(i){
+    x <- simobj$model$Theta$pcor$subject[[i]]
+    diag(x) <- 0
+    x
+  })
+  
+  #--- Density
+  dens_temp <- lapply(l_beta, function(x){
+    sum(abs(x))
+  })
+  dens_cont <- lapply(l_pcor, function(x){
+    x <- x
+    x[lower.tri(x)] <- 0L
+    sum(abs(x))
+  })
+  
+  #--- Centrality
+  # Important: in mlVAR, the lagged vars are rows, not columns
+  outstrength <- lapply(l_beta, function(x){
+    rowSums(abs(x))
+  })
+  instrngth <- lapply(l_beta, function(x){
+    colSums(abs(x))
+  })
+  strength <- lapply(l_pcor, function(x){
+    colSums(abs(x))
+  })
+  
+  # return list
+  return(list(outstrength = outstrength,
+              instrength = instrength,
+              strength = strength,
+              dens_temp = dens_temp,
+              dens_cont = dens_cont))
+  
+  
+}
 
 
-
-
-
+# Double check with an ml_sim object
+# beta_arr <- array(0, dim = c(6, 6,50))
+# for(i in 1:50){
+#   beta_arr[,,i]<- ml_sim$model$Beta$subject[[i]][,,1]
+# }
+# beta_arr_mean <- apply(beta_arr, c(1,2),mean)
+# beta_mean <- ml_sim$model$Beta$mean[,,1]
+# beta_arr_mean - beta_mean
 
 
 #------------------------------------------------------------------------------>
