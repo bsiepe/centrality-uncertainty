@@ -13,6 +13,9 @@ library(SimDesign)
 library(mlVAR)
 library(graphicalVAR)
 library(gimme)
+library(here)
+source(here("scripts", "functions.R"))
+
 ```
 
 
@@ -22,7 +25,18 @@ library(gimme)
 
 ## Data-Generating Processes
 ```{r dgps}
+# Settings for data simulation
+# for mlvar sim
+thetaVar = 1
+DF_theta = 2.5
+mu_SD = c(1, 1)
+init_beta_SD = c(0.3, 1.5) 
+fixedMuSD = 1
+shrink_fixed = 0.9
+shrink_deviation = 0.9
 
+# for regression
+reg_error_sd = 1
 
 ```
 
@@ -41,21 +55,30 @@ n_var <- c(6, 9)
 n_tp <- c(75, 150)
 
 # Type of DGP
-dgp <- c("sparse", "dense")
+# dgp <- c("sparse", "dense")
 
 # Strength of regression association
-beta <- c(0.25, 5)
+beta_reg <- c(0.25, 5)
 
 
 # Design
-SimDesign::createDesign(
+df_design <- SimDesign::createDesign(
   n_id = n_id,
   n_var = n_var,
   n_tp = n_tp,
-  dgp = dgp)
+  beta_reg = beta_reg)
 
 # Parameters
-sim_pars <- list()
+sim_pars <- list(
+  reg_error_sd = reg_error_sd,
+  thetaVar = thetaVar,
+  DF_theta = DF_theta,
+  mu_SD = mu_SD,
+  init_beta_SD = init_beta_SD,
+  fixedMuSD = fixedMuSD,
+  shrink_fixed = shrink_fixed,
+  shrink_deviation = shrink_deviation
+)
 
 ```
 
@@ -70,35 +93,43 @@ sim_generate <- function(condition, fixed_objects = NULL){
   
   # Simulate data
   ml_sim <- mlVAR::mlVARsim(
-                nPerson = n_id, 
-                nNode = n_var, 
-                nTime = n_tp, 
+                nPerson = condition$n_id, 
+                nNode = condition$n_var, 
+                nTime = condition$n_tp, 
                 lag = 1, 
-                thetaVar = rep(1,nvar),
-                DF_theta = nvar * 2.5, 
-                mu_SD = c(1, 1), 
-                init_beta_SD = c(0.3, 1.5), 
-                fixedMuSD = 1, 
-                shrink_fixed = 0.9, 
-                shrink_deviation = 0.9)
+                thetaVar = rep(thetaVar,condition$n_var),
+                DF_theta = condition$n_var * DF_theta, 
+                mu_SD = mu_SD, 
+                init_beta_SD = init_beta_SD, 
+                fixedMuSD = fixedMuSD, 
+                shrink_fixed = shrink_fixed, 
+                shrink_deviation = shrink_deviation)
   
   # Obtain true centralities
-
+  true_cent <- centrality_mlvar_sim(ml_sim)
   
-  # Simulate covariate
-  eps <- 1
+  tempdens <- unlist(true_cent$dens_temp)
+  outstrength <- sapply(true_cent$outstrength, `[`, 1)
+  
+  
+  # Simulate covariate with certain error
+  eps_sd <- reg_error_sd
 
   # Simulate error
-  resid <- rnorm(n, mean = 0, sd = eps)
+  resid_dens <- rnorm(condition$n_id, mean = 0, sd = eps_sd)
+  resid_cent <- rnorm(condition$n_id, mean = 0, sd = eps_sd)
 
-  reg_data <- tibble(
-    ID = 1:n,
-    tempdens = tempdens,
-    depression = 0.25 * tempdens + resid
-  ) 
+  covariate_tempdens = rep(condition$beta_reg, condition$n_id) * tempdens + resid_dens
+  covariate_oustrength = rep(condition$beta_reg, condition$n_id) * outstrength + resid_cent
   
-  # Return data
-  return(ml_dat)
+  # Return data and true centralities
+  ret_data <- list(
+    data = ml_sim$Data,
+    covariate_tempdens = covariate_tempdens,
+    covariate_oustrength = covariate_oustrength,
+    true_cent = true_cent
+  )
+  return(ret_data)
   
   
 }
@@ -114,6 +145,13 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- Preparation
   SimDesign::Attach(fixed_objects)
   # Split data for idiographic models
+  data_list <- split(dat$data, dat$data$ID)
+  
+  # remove ID column in data_list explicitly by name, not by position
+  data_list <- lapply(data_list, function(x){
+    x <- dplyr::select(x, -ID)
+  })
+  
   
   
   #--- graphicalVAR
@@ -122,21 +160,25 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     graphicalVAR::graphicalVAR(x, 
                                nLambda = 50,
                                verbose = FALSE,
-                               gamma = 0.5, 
+                               gamma = 0, 
                                scale = FALSE)
   })
-  } 
+ 
   
   # Obtain centralities
   cent_gvar <- lapply(fit_gvar, function(x){
     centrality_gvar(x)
   })
-  dens_temp_gimme <- vapply(cent_gvar, function(x){
+  dens_temp_gvar <- vapply(cent_gvar, function(x){
     x$dens_temp
+  }, numeric(1))
+  outstrength_gvar <- vapply(cent_gvar, function(x){
+    x$outstrength[1]
   }, numeric(1))
   
   # Fit regression
-
+  reg_gvar_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_gvar)$coefficients[2][[1]]
+  reg_gvar_outstrength <- lm(dat$covariate_oustrength ~ outstrength_gvar)$coefficients[2][[1]]
   
   #--- GIMME
   
@@ -151,9 +193,16 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Obtain centralities
   cent_gimme <- centrality_gimme(fit_gimme)
+  dens_temp_gimme <- vapply(cent_gimme, function(x){
+    x$dens_temp
+  }, numeric(1))
+  outstrength_gimme <- vapply(cent_gimme, function(x){
+    x$outstrength[1]
+  }, numeric(1))
   
   # Fit regression
-
+  reg_gimme_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_gimme)$coefficients[2][[1]]
+  reg_gimme_outstrength <- lm(dat$covariate_oustrength ~ outstrength_gimme)$coefficients[2][[1]]
   
   #--- frequentist mlVAR
   
@@ -169,21 +218,64 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Obtain centralities
   cent_mlvar <- centrality_mlvar(fit_mlvar)
+  dens_temp_mlvar <- vapply(cent_mlvar, function(x){
+    x$dens_temp
+  }, numeric(1))
+  outstrength_mlvar <- vapply(cent_mlvar, function(x){
+    x$outstrength[1]
+  }, numeric(1))
   
   # Fit regression
-  
+  reg_mlvar_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_mlvar)$coefficients[2][[1]]
+  reg_mlvar_outstrength <- lm(dat$covariate_oustrength ~ outstrength_mlvar)$coefficients[2][[1]]
   
   #--- Bayesian mlVAR
   
   # Fit model
   
+  
   # Obtain centralities
+  # cent_bmlvar <- centrality_bmlvar(fit_bmlvar)
+  # dens_temp_bmlvar <- vapply(cent_bmlvar, function(x){
+  #   x$dens_temp
+  # }, numeric(1))
+  # outstrength_bmlvar <- vapply(cent_bmlvar, function(x){
+  #   x$outstrength[1]
+  # }, numeric(1))
   
-  # Fit regression
-  
+  # Obtain regression coefficients
+
   
   #--- Return Results
-  
+  # Also return true centralities for comparison later
+  ret_results <- list(
+    gvar = list(
+      dens_temp = dens_temp_gvar,
+      outstrength = outstrength_gvar,
+      reg_tempdens = reg_gvar_tempdens,
+      reg_outstrength = reg_gvar_outstrength
+    ),
+    gimme = list(
+      dens_temp = dens_temp_gimme,
+      outstrength = outstrength_gimme,
+      reg_tempdens = reg_gimme_tempdens,
+      reg_outstrength = reg_gimme_outstrength
+    ),
+    mlvar = list(
+      dens_temp = dens_temp_mlvar,
+      outstrength = outstrength_mlvar,
+      reg_tempdens = reg_mlvar_tempdens,
+      reg_outstrength = reg_mlvar_outstrength
+    ),
+    # bmlvar = list(
+    #   dens_temp = dens_temp_bmlvar,
+    #   outstrength = outstrength_bmlvar,
+    #   reg_tempdens = reg_bmlvar_tempdens,
+    #   reg_outstrength = reg_bmlvar_outstrength
+    # ),
+    true_cent = dat$true_cent
+  )
+  return(ret_results)
   
 }
 
@@ -193,16 +285,66 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 
 # Summary
 
+
+Helpers:
+
+```{r helpers}
+abs_mean <- function(x){
+  mean(abs(x), na.rm = TRUE)
+}
+abs_med <- function(x){
+  stats::median(abs(x), na.rm = TRUE)
+}
+
+abs_sum <- function(x){
+  sum(abs(x), na.rm = TRUE)
+}
+```
+
+
+
 ```{r summarize}
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
   SimDesign::Attach(fixed_objects)
   
+  # Loop over different analysis functions
+  for(m in 1:length(results[[1]])){
+    
+  
+  
+  
   #--- Centrality
+  # Bias
+  
+  
+  # MCSE
+  
+  
+  # Rank-Order between individuals
+  
+    
+  
+  # Most central within individuals
+   
+  
   
   
   #--- Regression
+  # Bias 
+  bias_reg_tempdens <- ""
+    
+  bias_reg_outstrength <- ""
+    
+    
+  # MCSE
+  biasmcse_reg_tempdens <- ""
+  biasmcse_reg_outstrength <- ""  
+  
+    
+  } # end loop over methods
+  #--- Return
   
   
   
@@ -215,19 +357,22 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # Executing Simulation
 
 ```{r run-sim}
+# For testing
+df_design_test <- df_design[1,]
+
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design, 
-                                    replications = 100, 
+                                    design = df_design_test, 
+                                    replications = 2, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise, 
                                     fixed_objects = sim_pars,
                                     # parallel = TRUE,
                                     # packages = c("tidyverse"),
-                                    # save_results = TRUE,
+                                    save_results = FALSE,
                                     # ncores = 2,
-                                    # debug = "summarise",
-                                    filename = "centrality-simulation.rds",
+                                    debug = "analyse"
+                                    # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
 
