@@ -197,7 +197,7 @@ centrality_mlvar_sim <- function(simobj){
   outstrength <- lapply(l_beta, function(x){
     rowSums(abs(x))
   })
-  instrngth <- lapply(l_beta, function(x){
+  instrength <- lapply(l_beta, function(x){
     colSums(abs(x))
   })
   strength <- lapply(l_pcor, function(x){
