@@ -7,6 +7,12 @@ This repository contains files for the project "Uncertainty is central for good 
 
 ## Scripts
 
+
+- **simulated_example.qmd** contains code to build up a simulation study
+- **functions.R** contains auxiliary functions
+- **MLVAR_dev.qmd** contains code to experiment with the mlVAR model
+- **VAR_unpooled_persons.qmd** contains code to fit a looped VAR model - redundant by now?
+
 ## Figures
 
 ## Output

@@ -1,9 +1,10 @@
 ---
-title: "Centrality"
+title: "mlVAR Centrality Experiments"
 format: html
 ---
 
 # Preparation
+
 
 ```{r setup, include = FALSE}
 # Libraries
