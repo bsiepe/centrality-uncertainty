@@ -39,7 +39,8 @@ TODO: The following does not work yet when we scale the variables, because the t
 Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
 ```{r sim-data}
 # Simulate data
-ml_sim <- mlVAR::mlVARsim(nPerson = n, 
+ml_sim <- mlVAR::mlVARsim(
+                nPerson = n, 
                 nNode = nvar, 
                 nTime = tp, 
                 lag = 1, 
@@ -197,6 +198,23 @@ var_lkj_fit <- var_lkj_model$sample(
 var_lkj_fit$time()$total
 ```
 
+
+Fit mlVAR
+```{r}
+# Combine data to data.frame
+Y <- do.call(rbind, ml_data)
+mlvar_res <- mlVAR::mlVAR(Y,
+                          vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
+                          idvar = "ID")
+
+# Get individual network
+net_1 <- mlVAR::getNet(mlvar_res, 
+                       subject = 1,
+                       type = "temporal")
+
+
+
+```
 
 
 
