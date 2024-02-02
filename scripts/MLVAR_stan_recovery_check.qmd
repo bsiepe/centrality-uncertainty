@@ -1,0 +1,268 @@
+---
+title: "Centrality"
+format: html
+---
+
+# Preparation
+
+```{r setup, include = FALSE}
+# Libraries
+library(tidyverse)
+library(rmarkdown)
+library(graphicalVAR)
+library(mlVAR)
+library(parallel)
+library(here)
+library(broom)
+library(gimme)
+library(cmdstanr)
+library(bayesplot)
+library(posterior)
+library(gridExtra)
+library(psych)
+
+source(here("scripts", "functions.R"))
+set.seed(35037)
+```
+
+# Simulate data
+
+## Simulate time series data with specific centrality/density
+We simulate data from a multilevel model for now.
+
+TODO: The following does not work yet when we scale the variables, because the true values are not scaled. Maybe we can just not scale the variables for LASSO, because the variances will be roughly equal anyway.
+
+Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
+```{r sim-data}
+I <- 100
+K <- 2
+n_t <- rep(200, I)
+
+# Simulate data
+ml_sim <- mlVAR::mlVARsim(
+                nPerson = I, 
+                nNode = K, 
+                nTime = n_t, 
+                lag = 1, 
+                thetaVar = rep(1,K),
+                DF_theta = K * 2, 
+                mu_SD = c(1, 1), 
+                init_beta_SD = c(0.1, 1), 
+                fixedMuSD = 1, 
+                shrink_fixed = 0.9, 
+                shrink_deviation = 0.9)
+# Obtain individual models and data
+ml_data <- ml_sim$Data %>%
+  group_by(ID) %>% 
+  # mutate(across(c(V1, V2, V3, V4, V5, V6), ~scale(.))) %>%
+  ungroup() %>% 
+  split(.$ID)
+
+# Response data for Stan
+Y <- do.call(rbind, ml_data) %>% 
+  select(-ID) %>% 
+  as.matrix()
+
+# Obtain parameters
+ml_beta <- ml_sim$model$Beta$subject
+ml_prec <- ml_sim$model$Theta$prec$subject
+ml_pcor <- ml_sim$model$Theta$pcor$subject
+
+
+# Obtain centrality and density
+# TODO double check the matrix formatting here
+# where are the DVs, where is the IV
+ml_outstrength <- lapply(ml_beta, function(x){colSums(abs(x))})
+ml_instrength <- lapply(ml_beta, function(x){rowSums(abs(x))})
+ml_strength <- lapply(ml_pcor, function(x){
+  diag(x) <- 0
+  x[lower.tri(x)] <- 0L
+  colSums(abs(x))
+})
+ml_temporal_density <- lapply(ml_beta, function(x)sum(abs(x)))
+# This should be equivalent to strength
+ml_contemporaneous_density <- lapply(ml_pcor, function(x){
+  diag(x) <- 0
+  x[lower.tri(x)] <- 0L
+  sum(abs(x))
+})
+```
+
+## Simulate regression data
+Simulate data from simple one-predictor regression model:
+```{r sim-covariate}
+# Extract temporal density as predictor
+tempdens <- unlist(ml_temporal_density)
+
+# Simulate linear model data with regression coefficient of 0.5
+eps <- 1
+
+# Simulate error
+resid <- rnorm(I, mean = 0, sd = eps)
+
+reg_data <- tibble(
+  ID = 1:I,
+  tempdens = tempdens,
+  depression = 0.25 * tempdens + resid
+) 
+```
+
+
+## Fit VAR Model in Stan
+```{r stan data & compilation, renv.ignore = TRUE}
+# prepare stan data
+stan_data <-
+  list(
+    K = K,
+    I = I,
+    N_total = nrow(Y),
+    n_t = n_t,
+    n_pc = K * (K - 1) / 2,
+    Y = as.array(Y),
+    outcome = reg_data$depression
+  )
+# Choose model to fit
+model_name <- "MLVAR_dev"
+# Compile model
+mlvar_model <- 
+  cmdstanr::cmdstan_model(
+    stan_file = here("scripts","models", paste0(model_name, ".stan")),
+    pedantic = TRUE#,
+    #quiet = FALSE
+    )
+```
+
+```{r sampling, message=FALSE, renv.ignore=TRUE}
+# number of MCMC chains
+n_chains <- 4
+# Run sampler
+mlvar_fit <- mlvar_model$sample(
+  data = stan_data,
+  seed = 2023,
+  chains = n_chains,
+  parallel_chains = n_chains,
+  iter_warmup = 500,
+  iter_sampling = 500,
+  refresh = 100,
+  thin = 1,
+  adapt_delta = .9,
+  init = .1
+)
+# time to fit
+mlvar_fit$time()$total
+
+#mlvar_fit$output(1)
+```
+
+
+```{r variational, message=FALSE, renv.ignore=TRUE}
+# Run sampler
+mlvar_fit <- var_lkj_model$variational(
+  data = stan_data,
+  seed = 2023,
+  init = 0,
+  adapt_engaged = FALSE,
+  eta = 0.1,
+  eval_elbo = 200,
+  tol_rel_obj = .01
+)
+
+```
+
+## Effective sample size (ESS) & Rhat Plots
+```{r ,  renv.ignore=TRUE}
+# color scheme
+color_scheme_set(scheme = "purple")
+# Effective sample sizes
+plot_neff <-
+  mcmc_neff_hist(bayesplot::neff_ratio(mlvar_fit), binwidth = .01) +
+  labs(title = "A") +
+  guides(color = "none", fill = "none") +
+  theme(
+    legend.text = element_blank(),
+    legend.key = element_blank(),
+    title = element_text(size = 16, face = "bold")
+  )
+# Rhat
+# BS: Why does this have missings?
+plot_rhat <-
+  bayesplot::mcmc_rhat_hist(bayesplot::rhat(mlvar_fit)) +
+  labs(title = "B") +
+  guides(color = "none", fill = "none") +
+  theme(
+    legend.text = element_blank(),
+    legend.key = element_blank(),
+    title = element_text(size = 16, face = "bold")
+  ) +
+  yaxis_text(on = TRUE)
+# Combined plot
+plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
+```
+
+```{r}
+#param_ests <- mlvar_fit$summary(c("B", "Rho","mu_B","sigma_B", "sigma_theta"))
+param_ests <- mlvar_fit$summary()
+```
+
+# Parameter Recovery
+
+### Betas
+```{r renv.ignore=TRUE}
+extract_stan_median_vec <- function(fit, par_name, n_var, n_person) {
+  # get medians from summary
+  medians <- fit$summary(par_name) %>%
+    dplyr::select(median) %>%
+    unlist()
+  # reshape into array of dim = c(K, K, I)
+  array <- array(NA, dim = c(K, K, I))
+  pos <- 1
+  for (col in 1:K) {
+    for (row in 1:K) {
+      for (i in 1:I) {
+        array[row, col, i] <- medians[pos]
+        pos <- pos + 1
+      }
+    }
+  }
+  # flatten array to matrix and then to vector
+  medians_vec <- draws_array2matrix(array, warmup = 0) %>%
+    as.vector()
+  return(medians_vec)
+}
+
+
+
+medians_beta <-
+  extract_stan_median_vec(
+    fit = mlvar_fit,
+    par_name = "Beta",
+    n_var = K,
+    n_person = I
+  )
+
+Beta_true_vec <- ml_beta %>% do.call(rbind, .) %>% as.vector()
+```
+
+```{r}
+plot(Beta_vec,Beta_true_vec)
+abline(a = 0, b = 1, col = "red")
+```
+
+## Regression
+```{r}
+bayesplot::mcmc_recover_intervals(
+  true = .25,
+  x = mlvar_fit$draws("reg_slope_density") %>% 
+    as_draws_matrix())
+
+```
+
+
+
+
+
+
+
+
+
+
