@@ -16,7 +16,8 @@ packages <- c(
   "posterior",
   "here",
   "graphicalVAR",
-  "cmdstanr"
+  "cmdstanr",
+  "gridExtra"
 )
 lapply(packages, library, character.only = TRUE)
 
@@ -32,18 +33,18 @@ l_graphs <- readRDS(here("data", "l_graphs.rds"))
 gvar_mod <- l_graphs$graph6
 
 # Add partial correlations
-gvar_mod$PCC <- -cov2cor(gvar_mod$kappa)
+gvar_mod$PCC <- -cov2cor(gvar_mod$kappa)[1:2,1:2]
 diag(gvar_mod$PCC) <- 0
 
 # Simulate data
-I <- 10
+I <- 100
 n_t <- rep(200, I)
 
 Y <-
   lapply(1:I, function(i) {
     graphicalVAR::graphicalVARsim(nTime = n_t[i],
-                                  beta = gvar_mod$beta,
-                                  kappa = gvar_mod$kappa) %>%
+                                  beta = gvar_mod$beta[1:4,1:4],
+                                  kappa = gvar_mod$kappa[1:4,1:4]) %>%
       apply(., 2, scale)
   }) %>%
   do.call(rbind, .)
@@ -58,21 +59,24 @@ outcome <- rnorm(I, 0, 1)
 ```{r stan data & compilation, renv.ignore = TRUE}
 # prepare stan data
 stan_data <-
-  list(K = K,
-       I = I,
-       N_total = N_total,
-       n_t = n_t,
-       Y = as.array(Y),
-       outcome = outcome
+  list(
+    K = K,
+    I = I,
+    N_total = N_total,
+    n_t = n_t,
+    n_pc = K * (K - 1) / 2,
+    Y = as.array(Y),
+    outcome = outcome
   )
 # Choose model to fit
-model_name <- "MLVAR"
+model_name <- "MLVAR_dev"
 # Compile model
-var_lkj_model <- cmdstanr::cmdstan_model(
-  stan_file = here("scripts", paste0(model_name, ".stan")),
-  pedantic = TRUE#, 
-  #quiet = FALSE
-  )
+var_lkj_model <- 
+  cmdstanr::cmdstan_model(
+    stan_file = here("scripts", paste0(model_name, ".stan")),
+    pedantic = TRUE#,
+    #quiet = FALSE
+    )
 
 ```
 
@@ -139,7 +143,7 @@ plot_rhat <-
   ) +
   yaxis_text(on = TRUE)
 # Combined plot
-plot_diagnostics <- gridExtra::grid.arrange(plot_neff, plot_rhat, ncol = 2)
+plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
 ```
 
 ```{r}
