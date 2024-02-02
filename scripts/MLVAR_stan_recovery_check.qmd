@@ -35,7 +35,11 @@ TODO: The following does not work yet when we scale the variables, because the t
 Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
 ```{r sim-data}
 I <- 100
-K <- 2
+K <- 8
+n_pc <-  K * (K - 1) / 2
+idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>% 
+  c() %>% 
+  which(.)
 n_t <- rep(200, I)
 
 # Simulate data
@@ -72,19 +76,19 @@ ml_pcor <- ml_sim$model$Theta$pcor$subject
 # Obtain centrality and density
 # TODO double check the matrix formatting here
 # where are the DVs, where is the IV
-ml_outstrength <- lapply(ml_beta, function(x){colSums(abs(x))})
-ml_instrength <- lapply(ml_beta, function(x){rowSums(abs(x))})
+ml_outstrength <- lapply(ml_beta, function(x){colMeans(abs(x))})
+ml_instrength <- lapply(ml_beta, function(x){rowMeans(abs(x))})
 ml_strength <- lapply(ml_pcor, function(x){
   diag(x) <- 0
   x[lower.tri(x)] <- 0L
-  colSums(abs(x))
+  colMeans(abs(x))
 })
-ml_temporal_density <- lapply(ml_beta, function(x)sum(abs(x)))
+ml_temporal_density <- lapply(ml_beta, function(x)mean(abs(x)))
 # This should be equivalent to strength
 ml_contemporaneous_density <- lapply(ml_pcor, function(x){
   diag(x) <- 0
   x[lower.tri(x)] <- 0L
-  sum(abs(x))
+  mean(abs(x))
 })
 ```
 
@@ -103,7 +107,7 @@ resid <- rnorm(I, mean = 0, sd = eps)
 reg_data <- tibble(
   ID = 1:I,
   tempdens = tempdens,
-  depression = 0.25 * tempdens + resid
+  depression = 0.3 * tempdens + resid
 ) 
 ```
 
@@ -117,12 +121,13 @@ stan_data <-
     I = I,
     N_total = nrow(Y),
     n_t = n_t,
-    n_pc = K * (K - 1) / 2,
-    Y = as.array(Y),
+    n_pc = n_pc,
+    idx_rho = idx_rho,
+    Y = Y,
     outcome = reg_data$depression
   )
 # Choose model to fit
-model_name <- "MLVAR_dev"
+model_name <- "MLVAR"
 # Compile model
 mlvar_model <- 
   cmdstanr::cmdstan_model(
@@ -132,7 +137,7 @@ mlvar_model <-
     )
 ```
 
-```{r sampling, message=FALSE, renv.ignore=TRUE}
+```{r sampling, message=FALSE, renv.ignore=TRUE, eval=FALSE}
 # number of MCMC chains
 n_chains <- 4
 # Run sampler
@@ -148,29 +153,23 @@ mlvar_fit <- mlvar_model$sample(
   adapt_delta = .9,
   init = .1
 )
-# time to fit
-mlvar_fit$time()$total
-
 #mlvar_fit$output(1)
 ```
 
-
 ```{r variational, message=FALSE, renv.ignore=TRUE}
-# Run sampler
-mlvar_fit <- var_lkj_model$variational(
+# Run variational
+mlvar_fit <- mlvar_model$variational(
   data = stan_data,
   seed = 2023,
-  init = 0,
+  init = .1,
   adapt_engaged = FALSE,
   eta = 0.1,
-  eval_elbo = 200,
-  tol_rel_obj = .01
+  eval_elbo = 200
 )
-
 ```
 
 ## Effective sample size (ESS) & Rhat Plots
-```{r ,  renv.ignore=TRUE}
+```{r ,  renv.ignore=TRUE, eval = FALSE}
 # color scheme
 color_scheme_set(scheme = "purple")
 # Effective sample sizes
@@ -200,12 +199,10 @@ plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
 ```
 
 ```{r}
-#param_ests <- mlvar_fit$summary(c("B", "Rho","mu_B","sigma_B", "sigma_theta"))
 param_ests <- mlvar_fit$summary()
 ```
 
 # Parameter Recovery
-
 ### Betas
 ```{r renv.ignore=TRUE}
 extract_stan_median_vec <- function(fit, par_name, n_var, n_person) {
@@ -232,7 +229,7 @@ extract_stan_median_vec <- function(fit, par_name, n_var, n_person) {
 
 
 
-medians_beta <-
+Beta_vec <-
   extract_stan_median_vec(
     fit = mlvar_fit,
     par_name = "Beta",
@@ -241,28 +238,96 @@ medians_beta <-
   )
 
 Beta_true_vec <- ml_beta %>% do.call(rbind, .) %>% as.vector()
-```
-
-```{r}
+# plot
 plot(Beta_vec,Beta_true_vec)
 abline(a = 0, b = 1, col = "red")
 ```
 
+
 ## Regression
 ```{r}
 bayesplot::mcmc_recover_intervals(
-  true = .25,
-  x = mlvar_fit$draws("reg_slope_density") %>% 
+  true = c(0,.25),
+  x = mlvar_fit$draws(c("reg_intercept", "reg_slope_density")) %>% 
     as_draws_matrix())
+```
+## Partial Correlations
+```{r}
+medians <- mlvar_fit$summary("Rho") %>%
+  dplyr::select(median) %>%
+  unlist()
+# reshape into array of dim = c(K, K, I)
+array <- array(NA, dim = c(K, K, I))
+pos <- 1
+for (col in 1:K) {
+  for (row in 1:K) {
+    for (i in 1:I) {
+      array[row, col, i] <- medians[pos]
+      pos <- pos + 1
+    }
+  }
+}
+list <- list(NA)
+for (i in 1:I) {
+  list[i] <- array[1, 2, i]
+}
+Rho_vec <- unlist(list)
 
+Rho_true_vec <- ml_pcor %>% map(function(x)
+  x[2, 1]) %>% unlist()
+
+# plot
+plot(Rho_vec, Rho_true_vec)
+abline(a = 0, b = 1, col = "red")
 ```
 
+### Density
+```{r}
+Beta_density <- mlvar_fit$summary("Beta_density") %>%
+  dplyr::select(median) %>%
+  unlist()
+Beta_density_true <- ml_temporal_density %>% unlist()
+# plot
+plot(Beta_density, Beta_density_true)
+abline(a = 0, b = 1, col = "red")
+```
 
+```{r}
+Rho_density <- mlvar_fit$summary("Rho_density") %>%
+  dplyr::select(median) %>%
+  unlist()
+Rho_density_true <- ml_contemporaneous_density %>% unlist()
+# plot
+plot(Rho_density, Rho_density_true)
+abline(a = 0, b = 1, col = "red")
+```
 
+```{r}
+in_strength <- mlvar_fit$summary("Beta_in_strength") %>%
+  dplyr::select(median) %>%
+  unlist()
+in_strength_true <- ml_outstrength %>% unlist()
+# plot
+plot(in_strength, in_strength_true)
+abline(a = 0, b = 1, col = "red")
+```
 
+```{r}
+out_strength <- mlvar_fit$summary("Beta_out_strength") %>%
+  dplyr::select(median) %>%
+  unlist()
+out_strength_true <- ml_outstrength %>% unlist()
+# plot
+plot(out_strength, out_strength_true)
+abline(a = 0, b = 1, col = "red")
+```
 
-
-
-
-
-
+```{r}
+Rho_strength <- mlvar_fit$summary("Rho_centrality") %>%
+  dplyr::select(median) %>%
+  unlist()
+Rho_strength_true <- ml_strength %>% unlist()
+# plot
+plot(Rho_strength, Rho_strength_true)
+abline(a = 0, b = 1, col = "red")
+```
