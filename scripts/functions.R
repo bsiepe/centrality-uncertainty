@@ -111,6 +111,52 @@ centrality_gimme <- function(fit){
 }
 
 
+centrality_mlvar <- function(fit){
+  
+  #--- Prepare
+  n_var <- length(fit$fit$var)
+  n_id <- length(fit$IDs)
+
+  #--- Obtain networks
+  l_beta <- lapply(1:n_id, function(i){
+    mlVAR::getNet(fit,
+                  subject = i,
+                  type = "temporal")
+  })
+  l_pcor <- lapply(1:n_id, function(i){
+    mlVAR::getNet(fit,
+                  subject = i,
+                  type = "contemporaneous")
+  })
+  
+  #--- Density
+  dens_temp <- lapply(l_beta, function(x){
+    sum(abs(x))
+  })
+  dens_cont <- lapply(l_pcor, function(x){
+    x <- x
+    diag(x) <- 0
+    x[lower.tri(x)] <- 0L
+    sum(abs(x))
+  })
+  
+  
+  #--- Centrality
+  # Important: in mlVAR, the lagged vars are rows, not columns
+  outstrength <- lapply(l_beta, function(x){
+    rowSums(abs(x))
+  })
+  instrength <- lapply(l_beta, function(x){
+    colSums(abs(x))
+  })
+  strength <- lapply(l_pcor, function(x){
+    colSums(abs(x))
+  })
+  
+}
+
+
+
 
 
 
