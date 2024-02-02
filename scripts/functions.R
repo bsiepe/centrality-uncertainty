@@ -5,26 +5,30 @@
 centrality_gvar <- function(fit){
   
   #--- Prepare matrices
+  n_var <- ncol(fit$kappa)
+  
+  
   beta <- abs(fit$beta[,-1])
   pcor <- abs(-cov2cor(fit$kappa))
   diag(pcor) <- 0
-  pcor[lower.tri(pcor)] <- 0L
+  # pcor[lower.tri(pcor)] <- 0L
   
   #--- Outstrength 
-  outstrength <- colSums(beta)
+  outstrength <- colSums(beta)/n_var
   
   #--- Instrength
-  instrength <- rowSums(beta)
+  instrength <- rowSums(beta)/n_var
   
   #--- Strength
-  strength <- colSums(pcor)
+  strength <- colSums(pcor)/n_var
   
   #--- Temporal Density
-  dens_temp <- sum(beta)
+  dens_temp <- sum(beta)/n_var^2
   
   #--- Contemporaneous Density
   # This should be equivalent to strength
-  dens_cont <- sum(pcor)
+  pcor[lower.tri(pcor)] <- 0L
+  dens_cont <- sum(pcor)/(n_var * (n_var-1)/2)
   
   #--- Return list
   return(list(outstrength = outstrength,
@@ -55,7 +59,7 @@ centrality_gimme <- function(fit){
       NA
     }
     else{
-      sum(abs(x[, temp_ind]))
+      sum(abs(x[, temp_ind]))/n_var
     }
   })
   
@@ -67,7 +71,7 @@ centrality_gimme <- function(fit){
       x <- x[, cont_ind]
       diag(x) <- 0
       x[lower.tri(x)] <- 0L
-      sum(abs(x))
+      sum(abs(x))/ (n_var * (n_var-1)/2)
     }
   })
 
@@ -77,7 +81,7 @@ centrality_gimme <- function(fit){
       NA
     }
     else{
-      colSums(abs(x[, temp_ind]))
+      colSums(abs(x[, temp_ind]))/n_var
     }
   })
   instrength <- lapply(fit$path_est_mats, function(x){
@@ -85,7 +89,7 @@ centrality_gimme <- function(fit){
       NA
     }
     else{
-      rowSums(abs(x[, temp_ind]))
+      rowSums(abs(x[, temp_ind]))/n_var
     }
   })
   strength <- lapply(fit$path_est_mats, function(x){
@@ -93,10 +97,10 @@ centrality_gimme <- function(fit){
       NA
     }
     else{
-      x <- x[, cont_ind]
-      diag(x) <- 0
-      x[lower.tri(x)] <- 0L
-      colSums(abs(x))
+      # x <- x[, cont_ind]
+      # diag(x) <- 0
+      # x[lower.tri(x)] <- 0L
+      colSums(abs(x))/n_var
     }
   })
   
@@ -134,26 +138,26 @@ centrality_mlvar <- function(fit){
   
   #--- Density
   dens_temp <- lapply(l_beta, function(x){
-    sum(abs(x))
+    sum(abs(x))/n_var^2
   })
   dens_cont <- lapply(l_pcor, function(x){
     x <- x
     diag(x) <- 0
     x[lower.tri(x)] <- 0L
-    sum(abs(x))
+    sum(abs(x))/(n_var * (n_var-1)/2)
   })
   
   
   #--- Centrality
   # Important: in mlVAR, the lagged vars are rows, not columns
   outstrength <- lapply(l_beta, function(x){
-    rowSums(abs(x))
+    rowSums(abs(x))/n_var
   })
   instrength <- lapply(l_beta, function(x){
-    colSums(abs(x))
+    colSums(abs(x))/n_var
   })
   strength <- lapply(l_pcor, function(x){
-    colSums(abs(x))
+    colSums(abs(x))/n_var
   })
   
   # return list
@@ -184,24 +188,24 @@ centrality_mlvar_sim <- function(simobj){
   
   #--- Density
   dens_temp <- lapply(l_beta, function(x){
-    sum(abs(x))
+    sum(abs(x))/n_var^2
   })
   dens_cont <- lapply(l_pcor, function(x){
     x <- x
     x[lower.tri(x)] <- 0L
-    sum(abs(x))
+    sum(abs(x))/(n_var * (n_var-1)/2)
   })
   
   #--- Centrality
   # Important: in mlVAR, the lagged vars are rows, not columns
   outstrength <- lapply(l_beta, function(x){
-    rowSums(abs(x))
+    rowSums(abs(x))/n_var
   })
   instrength <- lapply(l_beta, function(x){
-    colSums(abs(x))
+    colSums(abs(x))/n_var  
   })
   strength <- lapply(l_pcor, function(x){
-    colSums(abs(x))
+    colSums(abs(x))/n_var
   })
   
   # return list
