@@ -5,6 +5,8 @@ format: html
 
 # Preparation
 
+TODO add documentation to all of this.
+
 ```{r setup, include = FALSE}
 # Libraries
 packages <- c(
