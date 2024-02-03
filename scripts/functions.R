@@ -23,7 +23,7 @@ centrality_gvar <- function(fit){
   strength <- colSums(pcor)/n_var
   
   #--- Temporal Density
-  dens_temp <- sum(beta)/n_var^2
+  dens_temp <- sum(beta)/(n_var^2)
   
   #--- Contemporaneous Density
   # This should be equivalent to strength
@@ -59,7 +59,7 @@ centrality_gimme <- function(fit){
       NA
     }
     else{
-      sum(abs(x[, temp_ind]))/n_var
+      sum(abs(x[, temp_ind]))/(n_var^2)
     }
   })
   
@@ -138,7 +138,7 @@ centrality_mlvar <- function(fit){
   
   #--- Density
   dens_temp <- lapply(l_beta, function(x){
-    sum(abs(x))/n_var^2
+    sum(abs(x))/(n_var^2)
   })
   dens_cont <- lapply(l_pcor, function(x){
     x <- x
@@ -174,6 +174,7 @@ centrality_mlvar <- function(fit){
 centrality_mlvar_sim <- function(simobj){
   #--- Prepare
   n_id <- length(simobj$model$mu$subject)
+  n_var <- length(simobj$vars)
   
   #--- Obtain networks
   l_beta <- lapply(1:n_id, function(i){
@@ -188,7 +189,7 @@ centrality_mlvar_sim <- function(simobj){
   
   #--- Density
   dens_temp <- lapply(l_beta, function(x){
-    sum(abs(x))/n_var^2
+    sum(abs(x))/(n_var^2)
   })
   dens_cont <- lapply(l_pcor, function(x){
     x <- x
