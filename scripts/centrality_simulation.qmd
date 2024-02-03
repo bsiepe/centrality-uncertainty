@@ -48,6 +48,7 @@ reg_error_sd = 1
 # Number of individuals 
 n_id <- c(50, 150)
 
+
 # Number of variables
 n_var <- c(6, 9)
 
@@ -152,11 +153,14 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     x <- dplyr::select(x, -ID)
   })
   
-  
+  # for graphicalVAR only: standardize
+  data_list_scale <- lapply(data_list, function(x){
+    x <- scale(x)
+  })
   
   #--- graphicalVAR
   # Fit models
-  fit_gvar <- lapply(data_list, function(x){
+  fit_gvar <- lapply(data_list_scale, function(x){
     graphicalVAR::graphicalVAR(x, 
                                nLambda = 50,
                                verbose = FALSE,
@@ -169,12 +173,15 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   cent_gvar <- lapply(fit_gvar, function(x){
     centrality_gvar(x)
   })
-  dens_temp_gvar <- vapply(cent_gvar, function(x){
-    x$dens_temp
-  }, numeric(1))
-  outstrength_gvar <- vapply(cent_gvar, function(x){
-    x$outstrength[1]
-  }, numeric(1))
+  # dens_temp_gvar <- vapply(cent_gvar, function(x){
+  #   x$dens_temp
+  # }, numeric(1))
+  dens_temp_gvar <- unlist(cent_gvar$dens_temp)
+  
+  # outstrength_gvar <- vapply(cent_gvar, function(x){
+  #   x$outstrength[1]
+  # }, numeric(1))
+  outstrength_gvar <- sapply(cent_gvar$outstrength, `[`, 1)
   
   # Fit regression
   reg_gvar_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_gvar)$coefficients[2][[1]]
@@ -193,12 +200,14 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Obtain centralities
   cent_gimme <- centrality_gimme(fit_gimme)
-  dens_temp_gimme <- vapply(cent_gimme, function(x){
-    x$dens_temp
-  }, numeric(1))
-  outstrength_gimme <- vapply(cent_gimme, function(x){
-    x$outstrength[1]
-  }, numeric(1))
+  # dens_temp_gimme <- vapply(cent_gimme, function(x){
+  #   x$dens_temp
+  # }, numeric(1))
+  dens_temp_gimme <- unlist(cent_gimme$dens_temp)
+  # outstrength_gimme <- vapply(cent_gimme, function(x){
+  #   x$outstrength[1]
+  # }, numeric(1))
+  outstrength_gimme <- sapply(cent_gimme$outstrength, `[`, 1)
   
   # Fit regression
   reg_gimme_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_gimme)$coefficients[2][[1]]
@@ -207,7 +216,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- frequentist mlVAR
   
   # Fit model
-  fit_mlvar <- mlVAR::mlVAR(data, 
+  fit_mlvar <- mlVAR::mlVAR(dat$data, 
                             vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
                             idvar = "ID",
                             estimator = "lmer",
@@ -218,12 +227,14 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Obtain centralities
   cent_mlvar <- centrality_mlvar(fit_mlvar)
-  dens_temp_mlvar <- vapply(cent_mlvar, function(x){
-    x$dens_temp
-  }, numeric(1))
-  outstrength_mlvar <- vapply(cent_mlvar, function(x){
-    x$outstrength[1]
-  }, numeric(1))
+  # dens_temp_mlvar <- vapply(cent_mlvar, function(x){
+  #   x$dens_temp
+  # }, numeric(1))
+  dens_temp_mlvar <- unlist(cent_mlvar$dens_temp)
+  # outstrength_mlvar <- vapply(cent_mlvar, function(x){
+  #   x$outstrength[1]
+  # }, numeric(1))
+  outstrength_mlvar <- sapply(cent_mlvar$outstrength, `[`, 1)
   
   # Fit regression
   reg_mlvar_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_mlvar)$coefficients[2][[1]]
@@ -359,6 +370,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 ```{r run-sim}
 # For testing
 df_design_test <- df_design[1,]
+df_design_test$n_id[1] <- 50
+
 
 sim_results <- SimDesign::runSimulation(
                                     design = df_design_test, 
