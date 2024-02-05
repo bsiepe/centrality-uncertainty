@@ -15,6 +15,7 @@ library(graphicalVAR)
 library(gimme)
 library(here)
 source(here("scripts", "functions.R"))
+# source(here("scripts", "MLVAR_fit_stan_wrapper.qmd"))
 
 ```
 
@@ -78,7 +79,8 @@ sim_pars <- list(
   init_beta_SD = init_beta_SD,
   fixedMuSD = fixedMuSD,
   shrink_fixed = shrink_fixed,
-  shrink_deviation = shrink_deviation
+  shrink_deviation = shrink_deviation,
+  mlvar_model = mlvar_model
 )
 
 ```
@@ -243,7 +245,18 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- Bayesian mlVAR
   
   # Fit model
-  
+  # fit_blmvar <- fit_mlvar_stan(
+  #                response_data,
+  #                regression_outcome,
+  #                n_person = condition$n_id,
+  #                n_var = condition$n_var,
+  #                n_timepoints = condition$n_tp,
+  #                n_chains = 4,
+  #                n_cores = 1,
+  #                # "variational" or "sampling"
+  #                method = "variational",
+  #                stan_model_compiled = mlvar_model
+  #                )
   
   # Obtain centralities
   # cent_bmlvar <- centrality_bmlvar(fit_bmlvar)
@@ -261,24 +274,28 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # Also return true centralities for comparison later
   ret_results <- list(
     gvar = list(
+      fit_gvar = fit_gvar,
       dens_temp = dens_temp_gvar,
       outstrength = outstrength_gvar,
       reg_tempdens = reg_gvar_tempdens,
       reg_outstrength = reg_gvar_outstrength
     ),
     gimme = list(
+      fit_gimme = fit_gimme,
       dens_temp = dens_temp_gimme,
       outstrength = outstrength_gimme,
       reg_tempdens = reg_gimme_tempdens,
       reg_outstrength = reg_gimme_outstrength
     ),
     mlvar = list(
+      fit_mlvar = fit_mlvar,
       dens_temp = dens_temp_mlvar,
       outstrength = outstrength_mlvar,
       reg_tempdens = reg_mlvar_tempdens,
       reg_outstrength = reg_mlvar_outstrength
     ),
     # bmlvar = list(
+    #   fit_blmvar = fit_blmvar,
     #   dens_temp = dens_temp_bmlvar,
     #   outstrength = outstrength_bmlvar,
     #   reg_tempdens = reg_bmlvar_tempdens,
@@ -298,7 +315,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 
 
 Helpers:
-
+TODO maybe add na checks
 ```{r helpers}
 abs_mean <- function(x){
   mean(abs(x), na.rm = TRUE)
@@ -310,6 +327,26 @@ abs_med <- function(x){
 abs_sum <- function(x){
   sum(abs(x), na.rm = TRUE)
 }
+
+# Summary functions
+# Compute mean pairwise absolute bias for list of matrices
+abs_mean_bias_list <- function(x, y){
+  Map(function(x, y){
+    abs_mean(x - y)
+  }, x, y)
+}
+
+# Find most central node and compare to true centrality
+# for list of centralities
+most_cent_ident <- function(x, y){
+  Map(function(x, y){
+    which.max(x) == which.max(y)
+  }, x, y)
+}
+
+
+
+
 ```
 
 
@@ -325,39 +362,102 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     
   
   
-  
-  #--- Centrality
-  # Bias
-  
-  
-  # MCSE
-  
-  
-  # Rank-Order between individuals
+  #--- Parameter recovery  
+  # IMPORTANT: Keep in mind structure of mlVARsim object (rows vs. cols)
+  #-- Bias
+  #- LASSO GVAR
   
     
+  #- GIMME
+    
+    
+  #- mlVAR
+    
+  #- BmlVar
+    
+  #-- MCSE
+  #- LASSO GVAR
+    
+  #- GIMME
+    
+  #- mlVAR
+    
+  #- BmlVar 
+    
   
-  # Most central within individuals
+    
+  #--- Centrality
+  #-- Bias
+  #- LASSO GVAR
+    
+  #- GIMME
+    
+  #- mlVAR
+    
+  #- BmlVar
+  
+  #-- MCSE
+  #- LASSO GVAR
+    
+  #- GIMME
+    
+  #- mlVAR
+    
+  #- BmlVar
+  
    
+     
+  #-- Rank-Order between individuals
+  #- LASSO GVAR
+    
+  #- GIMME
+    
+  #- mlVAR
+    
+  #- BmlVar
+    
+  
+    
+  #-- Most central within individuals
+  #- LASSO GVAR
+    
+  #- GIMME
+    
+  #- mlVAR
+    
+  #- BmlVar 
   
   
   
   #--- Regression
-  # Bias 
+  #-- Bias 
+  #- LASSO GVAR
+    
+  #- GIMME
+    
+  #- mlVAR
+    
+  #- BmlVar
   bias_reg_tempdens <- ""
     
   bias_reg_outstrength <- ""
     
     
-  # MCSE
+  #-- MCSE
+  #- LASSO GVAR
+    
+  #- GIMME
+    
+  #- mlVAR
+    
+  #- BmlVar
   biasmcse_reg_tempdens <- ""
   biasmcse_reg_outstrength <- ""  
   
     
   } # end loop over methods
   #--- Return
-  
-  
+
   
 }
 
@@ -384,7 +484,7 @@ sim_results <- SimDesign::runSimulation(
                                     # packages = c("tidyverse"),
                                     save_results = FALSE,
                                     # ncores = 2,
-                                    debug = "analyse"
+                                    debug = "summarise"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
