@@ -9,7 +9,7 @@ data {
   array[n_pc] int idx_rho; // index for partial correlations
   array[I] int<lower=0> n_t; // number of time points per person
   array[N_total] vector[K] Y; // longitudinal responses for all persons
-  array[I] real outcome; // regression outcome
+  array[I] real reg_covariate; // regression outcome
 }
 ////////////////////////////////////////////////////////////////////////////////
 parameters {
@@ -76,7 +76,7 @@ transformed parameters{
     Sigma[i] = diag_pre_multiply(exp(theta_sd[i] + log(.5)), L_Theta[i]) * 
                diag_pre_multiply(exp(theta_sd[i] + log(.5)), L_Theta[i])'; 
     // Precision matrix from covariance matrix
-    matrix[K,K] Theta = inverse_spd(Sigma[i]); 
+    matrix[K,K] Theta = inverse_spd(Sigma[i, , ]); 
     // Partial correlation matrix
     for(j in 1:K){
       for(k in 1:K){
@@ -104,7 +104,8 @@ transformed parameters{
     Rho_density[i]  = mean(abs(Rho[i]));
     
     // Regression ////////////////////////////////////////////////////////
-    mu_regression[i] = reg_intercept +  reg_slope_density * Beta_density[i];
+    // mu_regression[i] = reg_intercept +  reg_slope_density * Beta_density[i];
+    mu_regression[i] = reg_intercept +  reg_slope_density * reg_covariate[i];
     
   } // end i
 } // end transformed parameters
@@ -175,7 +176,8 @@ model {
   } // end i
   
   // Regression
-    target += normal_lpdf(outcome | mu_regression, exp(reg_residual));
+    // target += normal_lpdf(reg_covariate | mu_regression, exp(reg_residual));
+    target += normal_lpdf(Beta_density | mu_regression, exp(reg_residual));
     
 } // end model
 ////////////////////////////////////////////////////////////////////////////////

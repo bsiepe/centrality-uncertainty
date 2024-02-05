@@ -1,0 +1,185 @@
+---
+title: "Centrality"
+format: html
+---
+
+# Preparation
+
+```{r setup, include = FALSE}
+# Libraries
+library(tidyverse)
+library(rmarkdown)
+library(graphicalVAR)
+library(mlVAR)
+library(parallel)
+library(here)
+library(broom)
+library(gimme)
+library(rstan)
+library(bayesplot)
+library(posterior)
+library(gridExtra)
+library(psych)
+library(imputeTS)
+
+source(here("scripts", "functions.R"))
+set.seed(35037)
+```
+
+### Load Data
+```{r}
+df_affect <-
+  read.csv(here("data", "rowland_wenzel_2020", "data_affect.csv")) %>%
+  mutate(id = subjno, .before = everything()) %>%
+  select(-subjno) %>%
+  mutate(group = group - 1)
+df_density <-
+  read.csv(here("data", "rowland_wenzel_2020", "data_net_density.csv")) 
+  # mutate(id = as.factor(subjno) %>% as.numeric(), .before = everything()) %>%
+  # select(-subjno)
+df <- full_join(df_net, df_cov)
+
+```
+
+
+### Missing Data Imputation
+```{r }
+df_imputed <-
+  lapply(5:12, function(x)
+    imputeTS::na_kalman(df[x])) %>%  
+  do.call(cbind, .) %>% 
+  cbind(df[1:4], .)
+```
+
+```{r}
+for(i in 5:12) {
+  print(
+    imputeTS::ggplot_na_imputations(
+      x_with_na = df[, i], 
+      x_with_imputations = df_imputed[, i])
+  )
+}
+```
+
+```{r}
+Y <- df_imputed[ ,5:12]
+
+I <- length(unique(df_imputed$id))
+K <- ncol(Y)
+n_pc <-  K * (K - 1) / 2
+idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>% 
+  c() %>% 
+  which(.)
+n_t <- df_imputed %>% 
+  group_by(id) %>% 
+  summarise(n = n()) %>% 
+  pull(n)
+
+mindfullness <- df %>% 
+  distinct(id, mind) %>% select(mind) %>% pull()
+```
+
+## Fit VAR Model in Stan
+```{r stan data & compilation, renv.ignore = TRUE}
+# prepare stan data
+stan_data <-
+  list(
+    K = K,
+    I = I,
+    N_total = nrow(Y),
+    n_t = n_t,
+    n_pc = n_pc,
+    idx_rho = idx_rho,
+    Y = Y,
+    reg_covariate = mindfullness
+  )
+# Choose model to fit
+model_name <- "MLVAR"
+# Compile model
+mlvar_model <-
+  rstan::stan_model(
+    file = here("scripts", "models", paste0(model_name, ".stan")),
+    model_name = model_name
+  )
+```
+
+```{r sampling, message=FALSE, renv.ignore=TRUE, eval=FALSE}
+# number of MCMC chains
+n_chains <- 4
+# Run sampler
+mlvar_fit <- rstan::sampling(
+  object = mlvar_model,
+  data = stan_data,
+  seed = 2023,
+  chains = n_chains,
+  cores = n_chains,
+  warmup = 500,
+  iter = 500,
+  init = .1,
+  control = list(adapt_delta = 0.9),
+  verbose = FALSE
+)
+saveRDS(mlvar_fit, here("fits", "mlvar_fit_rowland_wenzel_2020.rds"))
+```
+
+```{r variational, message=FALSE, renv.ignore=TRUE}
+# Run variational
+mlvar_fit <- 
+rstan::vb(
+      object = mlvar_model,
+      data = stan_data,
+      init = 0,
+      adapt_engaged = FALSE,
+      eta = 0.1,
+      eval_elbo = 200,
+      importance_resampling = F,
+    )
+```
+
+## Effective sample size (ESS) & Rhat Plots
+```{r ,  renv.ignore=TRUE, eval = FALSE}
+# color scheme
+color_scheme_set(scheme = "purple")
+# Effective sample sizes
+plot_neff <-
+  mcmc_neff_hist(bayesplot::neff_ratio(mlvar_fit), binwidth = .01) +
+  labs(title = "A") +
+  guides(color = "none", fill = "none") +
+  theme(
+    legend.text = element_blank(),
+    legend.key = element_blank(),
+    title = element_text(size = 16, face = "bold")
+  )
+# Rhat
+# BS: Why does this have missings?
+plot_rhat <-
+  bayesplot::mcmc_rhat_hist(bayesplot::rhat(mlvar_fit)) +
+  labs(title = "B") +
+  guides(color = "none", fill = "none") +
+  theme(
+    legend.text = element_blank(),
+    legend.key = element_blank(),
+    title = element_text(size = 16, face = "bold")
+  ) +
+  yaxis_text(on = TRUE)
+# Combined plot
+plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
+```
+
+```{r}
+param_ests <- mlvar_fit$summary()
+```
+
+# Parameter Recovery
+### Betas
+```{r renv.ignore=TRUE}
+bayesplot::mcmc_intervals(mlvar_fit, pars = "Beta")
+```
+
+
+## Regression
+```{r}
+bayesplot::mcmc_intervals(mlvar_fit, 
+                          c("reg_intercept", "reg_slope_density", "reg_residual")) %>% 
+  as_draws_matrix()
+```

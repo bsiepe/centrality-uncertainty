@@ -15,7 +15,7 @@ library(parallel)
 library(here)
 library(broom)
 library(gimme)
-library(cmdstanr)
+library(rstan)
 library(bayesplot)
 library(posterior)
 library(gridExtra)
@@ -34,13 +34,13 @@ TODO: The following does not work yet when we scale the variables, because the t
 
 Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
 ```{r sim-data}
-I <- 100
-K <- 6
+I <- 50
+K <- 8
 n_pc <-  K * (K - 1) / 2
 idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>% 
   c() %>% 
   which(.)
-n_t <- rep(200, I)
+n_t <- rep(100, I)
 
 # Simulate data
 ml_sim <- mlVAR::mlVARsim(
@@ -134,29 +134,38 @@ stan_data <-
 # Choose model to fit
 model_name <- "MLVAR"
 # Compile model
-mlvar_model <- 
-  cmdstanr::cmdstan_model(
-    stan_file = here("scripts","models", paste0(model_name, ".stan")),
-    pedantic = TRUE#,
-    #quiet = FALSE
-    )
+# mlvar_model <- 
+#   cmdstanr::cmdstan_model(
+#     stan_file = here("scripts","models", paste0(model_name, ".stan")),
+#     pedantic = TRUE#,
+#     #quiet = FALSE
+#     )
+
+mlvar_model <-
+  rstan::stan_model(
+    file = here("scripts", "models", paste0(model_name, ".stan")),
+    model_name = model_name,
+    verbose = TRUE,
+    warn_pedantic = TRUE,
+    warn_uninitialized  = TRUE
+  )
 ```
 
 ```{r sampling, message=FALSE, renv.ignore=TRUE, eval=FALSE}
 # number of MCMC chains
 n_chains <- 4
 # Run sampler
-mlvar_fit <- mlvar_model$sample(
+mlvar_fit <- rstan::sampling(
+  object = mlvar_model,
   data = stan_data,
   seed = 2023,
   chains = n_chains,
-  parallel_chains = n_chains,
-  iter_warmup = 500,
-  iter_sampling = 500,
-  refresh = 100,
-  thin = 1,
-  adapt_delta = .9,
-  init = .1
+  cores = n_chains,
+  warmup = 500,
+  iter = 1000,
+  init = .1,
+  control = list(adapt_delta = 0.9),
+  verbose = FALSE
 )
 saveRDS(mlvar_fit, here("fits", "mlvar_fit.rds"))
 ```
@@ -167,14 +176,16 @@ saveRDS(mlvar_fit, here("fits", "mlvar_fit.rds"))
 
 ```{r variational, message=FALSE, renv.ignore=TRUE}
 # Run variational
-mlvar_fit <- mlvar_model$variational(
-  data = stan_data,
-  seed = 2023,
-  init = .1,
-  adapt_engaged = FALSE,
-  eta = 0.1,
-  eval_elbo = 200
-)
+mlvar_fit <- 
+rstan::vb(
+      object = mlvar_model,
+      data = stan_data,
+      init = 0,
+      adapt_engaged = FALSE,
+      eta = 0.1,
+      eval_elbo = 200,
+      importance_resampling = F,
+    )
 ```
 
 ## Effective sample size (ESS) & Rhat Plots
@@ -216,8 +227,7 @@ param_ests <- mlvar_fit$summary()
 ```{r renv.ignore=TRUE}
 extract_stan_median_vec <- function(fit, par_name, n_var, n_person) {
   # get medians from summary
-  medians <- fit$summary(par_name) %>%
-    dplyr::select(median) %>%
+  medians <- rstan::summary(fit, pars =  par_name, probs = .5)[,3] %>% 
     unlist()
   # reshape into array of dim = c(K, K, I)
   array <- array(NA, dim = c(K, K, I))
@@ -259,7 +269,7 @@ abline(a = 0, b = 1, col = "red")
 ```{r}
 bayesplot::mcmc_recover_intervals(
   true = c(0,.25, log(eps)),
-  x = mlvar_fit$draws(c("reg_intercept", "reg_slope_density", "reg_residual")) %>% 
+  x = rstan::extract(object = mlvar_fit, c("reg_intercept", "reg_slope_density", "reg_residual")) %>% 
     as_draws_matrix())
 ```
 ## Partial Correlations
@@ -301,7 +311,7 @@ Beta_density_true <- ml_temporal_density %>% unlist()
 
 cor.test(Beta_density, Beta_density_true, method = "spearman")
 # plot
-plot(Beta_density, Beta_density_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(Beta_density, Beta_density_true, xlim = c(0, .5), ylim = c(0, .5))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -313,7 +323,7 @@ Rho_density_true <- ml_contemporaneous_density %>% unlist()
 
 cor.test(Rho_density, Rho_density_true, method = "spearman")
 # plot
-plot(Rho_density, Rho_density_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(Rho_density, Rho_density_true, xlim = c(0, .5), ylim = c(0, .5))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -324,7 +334,7 @@ in_strength <- mlvar_fit$summary("Beta_in_strength") %>%
 in_strength_true <- ml_outstrength %>% unlist()
 cor.test(in_strength, in_strength_true, method = "spearman")
 # plot
-plot(in_strength, in_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(in_strength, in_strength_true, xlim = c(0, .5), ylim = c(0, .5))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -335,7 +345,7 @@ out_strength <- mlvar_fit$summary("Beta_out_strength") %>%
 out_strength_true <- ml_outstrength %>% unlist()
 cor.test(out_strength, out_strength_true, method = "spearman")
 # plot
-plot(out_strength, out_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(out_strength, out_strength_true, xlim = c(0, .5), ylim = c(0, .5))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -346,6 +356,6 @@ Rho_strength <- mlvar_fit$summary("Rho_centrality") %>%
 Rho_strength_true <- ml_strength %>% unlist()
 cor.test(Rho_strength, Rho_strength_true, method = "spearman")
 # plot
-plot(Rho_strength, Rho_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(Rho_strength, Rho_strength_true, xlim = c(0, .5), ylim = c(0, .5))
 abline(a = 0, b = 1, col = "red")
 ```

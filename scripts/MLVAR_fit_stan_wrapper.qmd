@@ -15,7 +15,7 @@ library(parallel)
 library(here)
 library(broom)
 library(gimme)
-library(cmdstanr)
+library(rstan)
 library(bayesplot)
 library(posterior)
 library(gridExtra)
@@ -26,8 +26,11 @@ library(psych)
 # Choose model to fit
 model_name <- "MLVAR"
 # Compile model
-mlvar_model <-
-  cmdstanr::cmdstan_model(stan_file = here("scripts", "models", paste0(model_name, ".stan")))
+mlvar_model <- 
+  rstan::stan_model(
+    file = here("scripts","models", paste0(model_name, ".stan")),
+    model_name = model_name
+    )
   
 fit_mlvar_stan <- function(response_data,
                            regression_outcome,
@@ -63,31 +66,32 @@ fit_mlvar_stan <- function(response_data,
       n_pc = n_pc,
       idx_rho = idx_rho,
       Y = Y,
-      outcome = regression_outcome
+      reg_covariate = regression_outcome
     )
   
   # fit model
   # MCMC
   if (method == "sampling") {
     # Run sampler
-    mlvar_fit <- mlvar_model$sample(
+    mlvar_fit <- rstan::sampling(
+      object = stan_model_compiled,
       data = stan_data,
       chains = n_chains,
-      parallel_chains = n_cores,
-      iter_warmup = 500,
-      iter_sampling = 500,
-      refresh = 100,
-      thin = 1,
-      adapt_delta = .9,
-      init = .1
+      cores = n_cores,
+      warmup = 500,
+      iter = 1000,
+      control = list(adapt_delta = 0.9),
+      init = .1,
+      verbose = FALSE
     )
   }
   # variational Bayes
   if (method == "variational") {
     # Run variational
-    mlvar_fit <- mlvar_model$variational(
+    mlvar_fit <- rstan::vb(
+      object = stan_model_compiled,
       data = stan_data,
-      init = .1,
+      init = 0,
       adapt_engaged = FALSE,
       eta = 0.1,
       eval_elbo = 200
