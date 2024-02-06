@@ -57,7 +57,7 @@ simGraph <- function(
 # 1. fixed effects (means) for every parameter and a variance-covariance matrix.
 # 2. Generate Beta's 
 # 3. Shrink all beta's untill all eigens are in unit circle.
-mlVARsim <- function(
+mlVARsim_mod <- function(
   # Simulation setup:
   nPerson = 10, # # of persons.
   nNode = 5, # # of nodes 
@@ -70,10 +70,11 @@ mlVARsim <- function(
   fixedMuSD = 1,
   shrink_fixed = 0.9,
   shrink_deviation = 0.9,
-  sparsity = 0.5
+  pcor_sparsity = 0.5,
+  beta_sparsity = 0.5
 ){
   contemporaneous <- "wishart"
-  GGMsparsity = sparsity
+  GGMsparsity = pcor_sparsity
   
   if (length(nTime)==1){
     nTime <- rep(nTime,nPerson)
@@ -137,8 +138,9 @@ mlVARsim <- function(
   mu_fixed <- rnorm(nNode,0,fixedMuSD)
   # Generate fixed betas:
   beta_fixed <- rnorm(nTemporal,0)
-  # set weakest 50% to zero:
-  beta_fixed[order(abs(beta_fixed))[1:round(nTemporal/2)]] <- 0
+  # set weakest beta_sparsity% to zero:
+  beta_fixed[order(abs(beta_fixed))[1:round(nTemporal * beta_sparsity)]] <- 0
+  
   # Include auto-regressions:
   mat <- matrix(0,nNode,nNode*lag)
   diag(mat) <- 1
@@ -180,7 +182,7 @@ mlVARsim <- function(
           pars <- lapply(seq_len(lag),function(l)array(c(Betas[,,p]),c(nNode,nNode,lag))[,,l])
           # If lag > 0 simulate VAR:
           if (lag > 0){
-            res <- simulateVAR(pars, means = Mus[p,], lags = seq_len(lag), Nt = nTime[p],init = Mus[p,],burnin = 100,residuals = Theta[,,p]) 
+            res <- mlVAR::simulateVAR(pars, means = Mus[p,], lags = seq_len(lag), Nt = nTime[p],init = Mus[p,],burnin = 100,residuals = Theta[,,p]) 
           } else {
             res <- rmvnorm(nTime[p],Mus[p,],Theta[,,p])
           }
@@ -228,17 +230,17 @@ mlVARsim <- function(
   
   # Create the list:
   model <- list(
-    mu = modelArray(mean = mu_fixed, SD = mu_SD, subject = lapply(1:nrow(Mus),function(i)Mus[i,])),
-    Beta = modelArray(mean = array(beta_fixed,c(nNode,nNode,lag)), SD = array(sqrt(diag(Omega[-(1:nNode),-(1:nNode)])),c(nNode,nNode,lag)), 
+    mu = mlVAR:::modelArray(mean = mu_fixed, SD = mu_SD, subject = lapply(1:nrow(Mus),function(i)Mus[i,])),
+    Beta = mlVAR:::modelArray(mean = array(beta_fixed,c(nNode,nNode,lag)), SD = array(sqrt(diag(Omega[-(1:nNode),-(1:nNode)])),c(nNode,nNode,lag)), 
                       subject = lapply(1:nPerson, function(p)array(Betas[,,p],c(nNode,nNode,lag)))),
-    Omega_mu = modelCov(
-      cov = modelArray(mean = Omega[1:nNode,1:nNode])
+    Omega_mu = mlVAR:::modelCov(
+      cov = mlVAR:::modelArray(mean = Omega[1:nNode,1:nNode])
     ),
-    Theta = modelCov(
-      cov = modelArray(mean = Theta_fixed, subject = lapply(1:nPerson,function(p)Theta[,,p]))
+    Theta = mlVAR:::modelCov(
+      cov = mlVAR:::modelArray(mean = Theta_fixed, subject = lapply(1:nPerson,function(p)Theta[,,p]))
     ),
-    Omega = modelCov(
-      cov = modelArray(mean = Omega)
+    Omega = mlVAR:::modelCov(
+      cov = mlVAR:::modelArray(mean = Omega)
     )
     
   )
@@ -271,5 +273,13 @@ model=model
 }
 
 
+```
+
+
+# Test it
+
+```{r}
+set.seed(123)
+sim <- mlVARsim_mod(nPerson = 50,nNode = 5,nTime = 100, beta_sparsity = 0)
 ```
 
