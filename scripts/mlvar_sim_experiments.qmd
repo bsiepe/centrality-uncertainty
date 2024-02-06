@@ -5,6 +5,10 @@ format: html
 
 # Background
 In this document, we try to adapt the `mlVAR::mlVARsim` function to our purposes
+```{r}
+library(mvtnorm)
+```
+
 
 # Function 
 Copied from: https://github.com/SachaEpskamp/mlVAR/blob/master/R/mlVARmodel.R
@@ -182,7 +186,13 @@ mlVARsim_mod <- function(
           pars <- lapply(seq_len(lag),function(l)array(c(Betas[,,p]),c(nNode,nNode,lag))[,,l])
           # If lag > 0 simulate VAR:
           if (lag > 0){
-            res <- mlVAR::simulateVAR(pars, means = Mus[p,], lags = seq_len(lag), Nt = nTime[p],init = Mus[p,],burnin = 100,residuals = Theta[,,p]) 
+            res <- mlVAR::simulateVAR(pars, 
+                                      means = Mus[p,], 
+                                      lags = seq_len(lag), 
+                                      Nt = nTime[p],
+                                      init = Mus[p,],
+                                      burnin = 100,
+                                      residuals = Theta[,,p]) 
           } else {
             res <- rmvnorm(nTime[p],Mus[p,],Theta[,,p])
           }
@@ -194,7 +204,7 @@ mlVARsim_mod <- function(
         # Rbind data:
         Data <- do.call(rbind,DataList)
         
-        # 10. If any absolute > 10, go to 6a
+        # 10. If any absolute > 100, go to 6a
         if (!any(abs(Data[,1:nNode]) > 100)){
           break
         }
@@ -214,9 +224,7 @@ mlVARsim_mod <- function(
     
     # simulate VAR for every person:
     DataList <- lapply(1:nPerson,function(p){
-  
-
-        res <- as.data.frame(rmvnorm(nTime[p],Mus[p,],Theta[,,p]))
+      res <- as.data.frame(rmvnorm(nTime[p],Mus[p,],Theta[,,p]))
       colnames(res) <- paste0("V",1:nNode)
       res$ID <- p
       res
@@ -230,14 +238,20 @@ mlVARsim_mod <- function(
   
   # Create the list:
   model <- list(
-    mu = mlVAR:::modelArray(mean = mu_fixed, SD = mu_SD, subject = lapply(1:nrow(Mus),function(i)Mus[i,])),
-    Beta = mlVAR:::modelArray(mean = array(beta_fixed,c(nNode,nNode,lag)), SD = array(sqrt(diag(Omega[-(1:nNode),-(1:nNode)])),c(nNode,nNode,lag)), 
-                      subject = lapply(1:nPerson, function(p)array(Betas[,,p],c(nNode,nNode,lag)))),
+    mu = mlVAR:::modelArray(mean = mu_fixed, 
+                            SD = mu_SD, 
+                            subject = lapply(1:nrow(Mus), function(i)Mus[i,])),
+    Beta = mlVAR:::modelArray(mean = array(beta_fixed,c(nNode,nNode,lag)), 
+                              SD = array(sqrt(diag(Omega[-(1:nNode),-(1:nNode)])),c(nNode,nNode,lag)), 
+                              subject = lapply(1:nPerson, 
+                                               function(p)
+                                                 array(Betas[,,p],c(nNode,nNode,lag)))),
     Omega_mu = mlVAR:::modelCov(
       cov = mlVAR:::modelArray(mean = Omega[1:nNode,1:nNode])
     ),
     Theta = mlVAR:::modelCov(
-      cov = mlVAR:::modelArray(mean = Theta_fixed, subject = lapply(1:nPerson,function(p)Theta[,,p]))
+      cov = mlVAR:::modelArray(mean = Theta_fixed, 
+                               subject = lapply(1:nPerson,function(p)Theta[,,p]))
     ),
     Omega = mlVAR:::modelCov(
       cov = mlVAR:::modelArray(mean = Omega)
@@ -280,6 +294,6 @@ model=model
 
 ```{r}
 set.seed(123)
-sim <- mlVARsim_mod(nPerson = 50,nNode = 5,nTime = 100, beta_sparsity = 0)
+sim <- mlVARsim_mod(nPerson = 100, nNode = 7, nTime = 100, beta_sparsity = 0)
 ```
 
