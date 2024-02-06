@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 data {
   int<lower=0> K; // number of predictors
-  int<lower=0> I; // number of predictors
+  int<lower=0> I; // BS: number of respondents
   int<lower=0> N_total; // number of total response measurements
   int n_pc; // number of partial correlations
   array[n_pc] int idx_rho; // index for partial correlations
@@ -34,24 +34,25 @@ parameters {
   row_vector[K] mu_theta_sd; // means of the innovation SDs
   row_vector[K] sigma_theta_sd; // SDs of the innovation SDs
   // Regression
-  real reg_intercept;
-  real reg_slope_density;
-  real reg_residual;
+  real reg_intercept;   // Intercept of Regression
+  real reg_slope_density; // Slope of Regression
+  real reg_residual;  // Residual term of Regression
   
 } // end parameters
 ////////////////////////////////////////////////////////////////////////////////
 transformed parameters{
   // Non-centered parameterization for Beta matrix
-  array[I] matrix[K,K] Beta;
+  array[I] matrix[K,K] Beta;  // BS: estimated Beta coefficients
   matrix[I,K] Intercepts; // raw intercepts
+  
   // Covariance matrix from cholesky corr matrix and SDs
   array[I]matrix[K,K] Sigma; 
   // Partial correlation matrix
   array[I] matrix[K,K] Rho;
-  matrix[I, n_pc] rho_loc;
-  matrix[I, n_pc] rho_var;
-  matrix[I,K] theta_sd;
-  //  Centrality
+  matrix[I, n_pc] rho_loc;   // BS: location of partial correlations
+  matrix[I, n_pc] rho_var;   // BS: scale of partial correlations
+  matrix[I,K] theta_sd;      // 
+  //  Centrality for each individual
   array[I] vector[K] Beta_out_strength; 
   array[I] vector[K] Beta_in_strength;
   array[I] vector[K] Rho_centrality;
@@ -66,6 +67,7 @@ transformed parameters{
   
   // Temporal //////////////////////////////////////////////////////////  
     // Beta ~ cauchy(mu_Beta, sigma_Beta)
+    // BS: Explanation?
     Beta[i] = mu_Beta + exp(sigma_Beta + log(.5)) .* tan(Beta_raw[i]); 
     Intercepts[i,] = mu_Intercepts' + exp(sigma_Intercepts' + log(.5)) .* Intercepts_raw[i, ];
   
@@ -78,6 +80,7 @@ transformed parameters{
     // Precision matrix from covariance matrix
     matrix[K,K] Theta = inverse_spd(Sigma[i, , ]); 
     // Partial correlation matrix
+    // computed from off-diagonal elements of precision matrix
     for(j in 1:K){
       for(k in 1:K){
         if(j != k){
