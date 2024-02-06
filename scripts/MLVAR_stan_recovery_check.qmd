@@ -129,7 +129,7 @@ stan_data <-
     n_pc = n_pc,
     idx_rho = idx_rho,
     Y = Y,
-    outcome = reg_data$depression
+    reg_covariate = reg_data$depression
   )
 # Choose model to fit
 model_name <- "MLVAR"

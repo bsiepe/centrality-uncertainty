@@ -76,7 +76,7 @@ n_t <- df_imputed %>%
   pull(n)
 
 mindfullness <- df %>% 
-  distinct(id, mind) %>% select(mind) %>% pull()
+  distinct(id, smaas) %>% select(smaas) %>% mutate(smaas = scale(smaas))  %>% unlist()
 ```
 
 ## Fit VAR Model in Stan
@@ -114,7 +114,7 @@ mlvar_fit <- rstan::sampling(
   chains = n_chains,
   cores = n_chains,
   warmup = 500,
-  iter = 500,
+  iter = 1000,
   init = .1,
   control = list(adapt_delta = 0.9),
   verbose = FALSE
@@ -124,16 +124,24 @@ saveRDS(mlvar_fit, here("fits", "mlvar_fit_rowland_wenzel_2020.rds"))
 
 ```{r variational, message=FALSE, renv.ignore=TRUE}
 # Run variational
-mlvar_fit <- 
-rstan::vb(
-      object = mlvar_model,
-      data = stan_data,
-      init = 0,
-      adapt_engaged = FALSE,
-      eta = 0.1,
-      eval_elbo = 200,
-      importance_resampling = F,
-    )
+mlvar_fit <-
+  rstan::vb(
+    object = mlvar_model,
+    data = stan_data,
+    pars = c(
+      "Beta",
+      "Beta_density", 
+      "Rho",
+      "reg_intercept",
+      "reg_slope_density"
+    ),
+    include = TRUE,
+    init = 0,
+    adapt_engaged = FALSE,
+    eta = 0.1,
+    eval_elbo = 200,
+    importance_resampling = F,
+  )
 ```
 
 ## Effective sample size (ESS) & Rhat Plots
@@ -167,19 +175,36 @@ plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
 ```
 
 ```{r}
-param_ests <- mlvar_fit$summary()
+#param_ests <- summarise_draws(mlvar_fit)
 ```
 
 # Parameter Recovery
 ### Betas
 ```{r renv.ignore=TRUE}
-bayesplot::mcmc_intervals(mlvar_fit, pars = "Beta")
+t_oad <- df %>% 
+  distinct(id, t_oad) %>% select(t_oad) %>% pull()
+
+draws_beta_dens <- rstan::extract(mlvar_fit, "Beta", permuted = FALSE) %>% as_draws_array()
+
+bayesplot::mcmc_recover_scatter(x = draws_beta_dens,
+                                true = t_oad)
+
+```
+
+```{r renv.ignore=TRUE}
+t_oad <- df %>% 
+  distinct(id, t_oad) %>% select(t_oad) %>% pull()
+
+draws_beta_dens <- rstan::extract(mlvar_fit, "Beta_density", permuted = FALSE) %>% as_draws_array()
+
+bayesplot::mcmc_recover_scatter(x = draws_beta_dens,
+                                true = t_oad)
+
 ```
 
 
 ## Regression
 ```{r}
 bayesplot::mcmc_intervals(mlvar_fit, 
-                          c("reg_intercept", "reg_slope_density", "reg_residual")) %>% 
-  as_draws_matrix()
+                          pars = c("reg_intercept", "reg_slope_density"))
 ```

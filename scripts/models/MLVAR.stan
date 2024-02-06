@@ -3,7 +3,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 data {
   int<lower=0> K; // number of predictors
-  int<lower=0> I; // BS: number of respondents
+  int<lower=0> I; // number of respondents
   int<lower=0> N_total; // number of total response measurements
   int n_pc; // number of partial correlations
   array[n_pc] int idx_rho; // index for partial correlations
@@ -42,15 +42,15 @@ parameters {
 ////////////////////////////////////////////////////////////////////////////////
 transformed parameters{
   // Non-centered parameterization for Beta matrix
-  array[I] matrix[K,K] Beta;  // BS: estimated Beta coefficients
+  array[I] matrix[K,K] Beta;  // estimated Beta coefficients
   matrix[I,K] Intercepts; // raw intercepts
   
   // Covariance matrix from cholesky corr matrix and SDs
   array[I]matrix[K,K] Sigma; 
   // Partial correlation matrix
   array[I] matrix[K,K] Rho;
-  matrix[I, n_pc] rho_loc;   // BS: location of partial correlations
-  matrix[I, n_pc] rho_var;   // BS: scale of partial correlations
+  matrix[I, n_pc] rho_loc;   // location of partial correlations
+  matrix[I, n_pc] rho_var;   // scale of partial correlations
   matrix[I,K] theta_sd;      // 
   //  Centrality for each individual
   array[I] vector[K] Beta_out_strength; 
@@ -66,8 +66,9 @@ transformed parameters{
   for(i in 1:I) {
   
   // Temporal //////////////////////////////////////////////////////////  
-    // Beta ~ cauchy(mu_Beta, sigma_Beta)
-    // BS: Explanation?
+    // Implied: Beta ~ cauchy(mu_Beta, sigma_Beta)
+    // exp(sigma_Beta + log(.5)) implies that the mode of the hyper-prior 
+    // for sigma_Beta is at 0.5
     Beta[i] = mu_Beta + exp(sigma_Beta + log(.5)) .* tan(Beta_raw[i]); 
     Intercepts[i,] = mu_Intercepts' + exp(sigma_Intercepts' + log(.5)) .* Intercepts_raw[i, ];
   
