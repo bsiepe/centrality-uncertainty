@@ -58,7 +58,7 @@ mlVARsim_mod <- function(
   # Generate fixed contemporaneous:
   if (contemporaneous=="wishart"){
     # Theta_fixed <- genPositiveDefMat(nNode, "onion", rangeVar = c(1,1))$Sigma
-    Theta_fixed <- cov2cor(solve(diag(nNode)-mlVAR::simGraph(nNode)))
+    Theta_fixed <- cov2cor(solve(diag(nNode)-mlVAR:::simGraph(nNode)))
     Theta_fixed <- diag(sqrt(thetaVar)) %*% Theta_fixed %*% diag(sqrt(thetaVar))
     
     # 2. Generate residual covariance matrices:
