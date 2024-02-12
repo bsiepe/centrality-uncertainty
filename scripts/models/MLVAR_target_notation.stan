@@ -127,38 +127,38 @@ model {
     Rho_vec[position_rho:(position_rho - 1 + n_pc)] = to_vector(Rho[i])[idx_rho];
     position_rho += n_pc; // increment position counter
   } // end i
-  Beta_raw_vec ~ uniform(-pi()/2, pi()/2); // prior on Beta
-  to_vector(mu_Beta) ~ std_normal(); // prior on mu_Beta
-  to_vector(sigma_Beta) ~ std_normal(); // prior on sigma_Beta
-  to_vector(Intercepts_raw) ~ std_normal(); // prior on Intercepts
-  mu_Intercepts ~ std_normal(); // prior on mu_Intercepts
-  sigma_Intercepts ~ std_normal(); // prior on sigma_Intercepts
+  target+= uniform_lpdf(Beta_raw_vec | -pi()/2, pi()/2); // prior on Beta
+  target+= std_normal_lpdf(to_vector(mu_Beta)); // prior on mu_Beta
+  target+= std_normal_lpdf(to_vector(sigma_Beta)); // prior on sigma_Beta
+  target += std_normal_lpdf(to_vector(Intercepts_raw)); // prior on Intercepts
+  target += std_normal_lpdf(mu_Intercepts); // prior on mu_Intercepts
+  target += std_normal_lpdf(sigma_Intercepts); // prior on sigma_Intercepts
   
   // Priors Contemporaneous ///////////////////////////////////////////////////
   // Theta
-  to_vector(theta_sd_raw) ~ std_normal(); // prior on sigma_theta
-  mu_theta_sd ~ std_normal();             // prior on mu_theta_sd
-  sigma_theta_sd ~ std_normal();          // prior on sigma_theta_sd
+  target+= std_normal_lpdf(to_vector(theta_sd_raw)); // prior on sigma_theta
+  target+= std_normal_lpdf(mu_theta_sd);             // prior on mu_theta_sd
+  target+= std_normal_lpdf(sigma_theta_sd);          // prior on sigma_theta_sd
   
   // Partial correlations 
-  (Rho_vec / 2 + 0.5) ~ beta_proportion(to_vector(rho_loc'), to_vector(rho_var'));
-  to_vector(rho_loc_raw) ~ std_normal(); // prior on rho_loc_raw
-  to_vector(rho_var_raw) ~ std_normal(); // prior on rho_var_raw
-  mu_rho_loc ~ std_normal(); // prior on mu_rho_loc
-  sigma_rho_loc ~ std_normal(); // prior on sigma_rho_loc
-  mu_rho_var ~ std_normal(); // prior on mu_rho_var
-  sigma_rho_var ~ std_normal(); // prior on sigma_rho_var
+  target+= beta_proportion_lpdf(Rho_vec / 2 + 0.5 | to_vector(rho_loc'), to_vector(rho_var'));
+  target+= std_normal_lpdf(to_vector(rho_loc_raw)); // prior on rho_loc_raw
+  target+= std_normal_lpdf(to_vector(rho_var_raw)); // prior on rho_var_raw
+  target+= std_normal_lpdf(mu_rho_loc); // prior on mu_rho_loc
+  target+= std_normal_lpdf(sigma_rho_loc); // prior on sigma_rho_loc
+  target+= std_normal_lpdf(mu_rho_var); // prior on mu_rho_var
+  target+= std_normal_lpdf(sigma_rho_var); // prior on sigma_rho_var
   
   // Regression
-  reg_intercept ~ student_t(3, 0, 2); // prior on reg_intercept
-  reg_slope_density ~ student_t(3, 0, 2); // prior on reg_slope_density
-  reg_residual ~ student_t(3, 0, 1); // prior on reg_residual
+  target+= student_t_lpdf(reg_intercept | 3, 0, 2); // prior on reg_intercept
+  target+= student_t_lpdf(reg_slope_density | 3, 0, 2); // prior on reg_slope_density
+  target+= student_t_lpdf(reg_residual | 3, 0, 1); // prior on reg_residual
   
   
   int position_Y = 1; // position counter for the data
   for (i in 1:I) {
     // Precision Matrix prior
-    L_Theta[i] ~ lkj_corr_cholesky(1); // prior on L_Theta
+    target+= lkj_corr_cholesky_lpdf(L_Theta[i] | 1); // prior on L_Theta
     
     //// Likelihood //////////////////////////////////////////////////////////
     
@@ -176,11 +176,11 @@ model {
       } // end t
       
     // Network
-    Y_temp[2:n_t[i]] ~ multi_normal_cholesky(mu_network, Sigma_chol);
+    target += multi_normal_cholesky_lpdf(Y_temp[2:n_t[i]] | mu_network, Sigma_chol);
   } // end i
   
   // Regression
-    reg_covariate ~ normal(mu_regression, exp(reg_residual));
+    target += normal_lpdf(reg_covariate | mu_regression, exp(reg_residual));
     // target += normal_lpdf(Beta_density | mu_regression, exp(reg_residual));
     
 } // end model

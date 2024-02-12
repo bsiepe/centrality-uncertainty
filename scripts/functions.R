@@ -484,6 +484,18 @@ draws_matrix2list <- function(draws_matrix) {
   return(iterations_list)
 }
 
+# Helper function to transform point estimates array of matrices into a list of matrices for Beta or Sigma
+estimates_array2list <- function(draws_array) {
+  est_list <-
+    lapply(
+      X = 1:length(draws_array),
+      FUN = function(X) {
+        draws_array[[X]][,,1]
+      }
+    )
+  return(est_list)
+}
+
 # Helper function to transform draws array into a draws matrix
 draws_matrix2array <- function(draws_matrix) {
   array <-
