@@ -20,6 +20,7 @@ library(bayesplot)
 library(posterior)
 library(gridExtra)
 library(psych)
+library(bayestestR)
 
 source(here("scripts", "functions.R"))
 set.seed(35037)
@@ -34,13 +35,13 @@ TODO: The following does not work yet when we scale the variables, because the t
 
 Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
 ```{r sim-data}
-I <- 50
-K <- 2
+I <- 200
+K <- 6
 n_pc <-  K * (K - 1) / 2
 idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>% 
   c() %>% 
   which(.)
-n_t <- rep(100, I)
+n_t <- rep(150, I)
 
 # Simulate data
 ml_sim <- mlVAR::mlVARsim(
@@ -101,7 +102,9 @@ ml_contemporaneous_density <- lapply(ml_pcor, function(x) {
 Simulate data from simple one-predictor regression model:
 ```{r sim-covariate}
 # Extract temporal density as predictor
-tempdens <- unlist(ml_temporal_density)
+tempdens <- unlist(ml_temporal_density) %>% scale()
+contemp_dens <- unlist(ml_contemporaneous_density) %>% scale()
+out_strength_1 <- ml_outstrength %>% map_dbl(1) %>% scale()
 
 # Simulate linear model data with regression coefficient of 0.5
 eps <- 1
@@ -109,37 +112,63 @@ eps <- 1
 # Simulate error
 resid <- rnorm(I, mean = 0, sd = eps)
 
-reg_data <- tibble(
-  ID = 1:I,
-  tempdens = tempdens,
-  depression = 0.3 * tempdens + resid
-) 
+# correlation matrix of true effects
+rho <- c(1, .2, .4,
+         .2, 1, 0,
+         .4, 0, 1) %>% matrix(3, 3, byrow = T)
+# cholesky decomposition of rho
+L <- chol(rho)
+
+# Simulate data for outcomes
+outcome_temp_dens <- cbind(tempdens, rnorm(I), rnorm(I))
+outcome_contemp_dens <- cbind(contemp_dens, rnorm(I), rnorm(I))
+outcome_out_strength <- cbind(out_strength_1, rnorm(I), rnorm(I))
+
+# rotate outcomes to correlate with predictors and check resulting correlations
+outcome_temp_dens <- outcome_temp_dens %*% L
+(cor(outcome_temp_dens) - rho) %>% round(2)
+lm(outcome_temp_dens[, 2] ~ tempdens) %>% coef() %>% .[2]
+lm(outcome_temp_dens[, 3] ~ tempdens) %>% coef() %>% .[2]
+
+outcome_contemp_dens <- outcome_contemp_dens %*% L
+(cor(outcome_contemp_dens) - rho) %>% round(2)
+lm(outcome_contemp_dens[, 2] ~ contemp_dens) %>% coef() %>% .[2]
+lm(outcome_contemp_dens[, 3] ~ contemp_dens) %>% coef() %>% .[2]
+
+outcome_out_strength <- outcome_out_strength %*% L
+(cor(outcome_out_strength) - rho) %>% round(2)
+lm(outcome_out_strength[, 2] ~ out_strength_1) %>% coef() %>% .[2]
+lm(outcome_out_strength[, 3] ~ out_strength_1) %>% coef() %>% .[2]
+
+# define regression data
+reg_data <-
+  cbind(outcome_temp_dens[, 2:3],
+        outcome_contemp_dens[, 2:3],
+        outcome_out_strength[, 2:3])
+
 ```
 
 ## Fit VAR Model in Stan
-```{r stan data & compilation, renv.ignore = TRUE}
+```{r stan data, renv.ignore = TRUE}
 # prepare stan data
 stan_data <-
   list(
     K = K,
     I = I,
+    P = 6,
     N_total = nrow(Y),
     n_t = n_t,
     n_pc = n_pc,
-    idx_rho = idx_rho,
+    idx_rho = array(idx_rho, dim = length(idx_rho)),
     Y = Y,
-    reg_covariate = reg_data$depression
+    reg_covariate = reg_data
   )
+```
+
+```{r compile, renv.ignore = TRUE}
 # Choose model to fit
 model_name <- "MLVAR"
 # Compile model
-# mlvar_model <- 
-#   cmdstanr::cmdstan_model(
-#     stan_file = here("scripts","models", paste0(model_name, ".stan")),
-#     pedantic = TRUE#,
-#     #quiet = FALSE
-#     )
-
 mlvar_model <-
   rstan::stan_model(
     file = here("scripts", "models", paste0(model_name, ".stan")),
@@ -158,36 +187,25 @@ mlvar_fit <- rstan::sampling(
   object = mlvar_model,
   data = stan_data,
   seed = 2023,
-  chains = n_chains,
+  chains = 4,
   cores = n_chains,
   warmup = 500,
   iter = 1000,
-  init = 0,
-  control = list(adapt_delta = 0.8),
+  init = 0.001,
+  control = list(adapt_delta = 0.9),
   verbose = FALSE
 )
+rstan::get_elapsed_time(mlvar_fit) %>% 
+  as.data.frame() %>% 
+  rowMeans() %>% 
+  max()/60
 
 saveRDS(mlvar_fit, here("fits", "mlvar_fit.rds"))
 ```
-
-```{r load fit, eval=FALSE}
-#mlvar_fit$output(1)
+```{r}
+mlvar_fit <- readRDS(here("fits", "mlvar_fit.rds"))
 ```
 
-```{r variational, message=FALSE, renv.ignore=TRUE}
-# Run variational
-mlvar_fit <- 
-rstan::vb(
-      object = mlvar_model,
-      data = stan_data,
-      init = 0,
-      adapt_engaged = FALSE,
-      eta = 0.1,
-      eval_elbo = 200,
-      tol_rel_obj = .001,
-      importance_resampling = T,
-    )
-```
 
 ## Effective sample size (ESS) & Rhat Plots
 ```{r ,  renv.ignore=TRUE, eval = FALSE}
@@ -218,12 +236,16 @@ plot_rhat <-
 # Combined plot
 plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
 ```
+```{r}
+rstan::check_hmc_diagnostics(mlvar_fit)
+
+```
 
 ```{r}
 param_ests <- summary(mlvar_fit)$summary
 ```
 
-# Parameter Recovery
+## Parameter Recovery
 ### Betas
 ```{r renv.ignore=TRUE}
 Beta_vec <-
@@ -232,9 +254,10 @@ Beta_vec <-
 
 Beta_true_vec <- ml_beta %>% estimates_array2list() %>% map(function(x) t(x)) %>% unlist()
 
+cor.test(Beta_vec, Beta_true_vec, method = "pearson")
 cor.test(Beta_vec, Beta_true_vec, method = "spearman")
 # plot
-plot(Beta_vec,Beta_true_vec, xlim = c(-1, 1), ylim = c(-1, 1))
+plot(Beta_vec,Beta_true_vec, xlim = c(-1.5, 1.5), ylim = c(-1.5, 1.5))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -242,16 +265,31 @@ abline(a = 0, b = 1, col = "red")
 ## Regression
 ```{r}
 bayesplot::mcmc_recover_intervals(
-  true = c(0, .25),
-  x = rstan::extract(object = mlvar_fit, c("reg_intercept", "reg_slope_density")) %>%
+  true = rep(c(.2, .4),3),
+  x = rstan::extract(object = mlvar_fit, "reg_slope_density") %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 
 bayesplot::mcmc_intervals(
-  x = rstan::extract(object = mlvar_fit, c("reg_intercept", "reg_slope_density")) %>%
+  x = rstan::extract(object = mlvar_fit, "reg_slope_density") %>% do.call(cbind, .) %>%
+    as_draws_matrix()
+)
+
+```
+
+```{r}
+bayesplot::mcmc_recover_intervals(
+  true = rep(0,6),
+  x = rstan::extract(object = mlvar_fit, c("reg_intercept")) %>% do.call(cbind, .) %>%
+    as_draws_matrix()
+)
+
+bayesplot::mcmc_intervals(
+  x = rstan::extract(object = mlvar_fit, c("reg_intercept")) %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 ```
+
 ## Partial Correlations
 ```{r}
 Rho_vec <- 
@@ -277,7 +315,7 @@ Beta_density_true <- ml_temporal_density %>% unlist()
 cor.test(Beta_density, Beta_density_true, method = "pearson")
 cor.test(Beta_density, Beta_density_true, method = "spearman")
 # plot
-plot(Beta_density, Beta_density_true, xlim = c(0.1, 0.3), ylim = c(0.1, 0.3))
+plot(Beta_density, Beta_density_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -290,7 +328,7 @@ Rho_density_true <- ml_contemporaneous_density %>% unlist()
 cor.test(Rho_density, Rho_density_true, method = "pearson")
 cor.test(Rho_density, Rho_density_true, method = "spearman")
 # plot
-plot(Rho_density, Rho_density_true, xlim = c(0, .5), ylim = c(0, .5))
+plot(Rho_density, Rho_density_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -304,7 +342,7 @@ in_strength_true <- ml_instrength%>% unlist()
 cor.test(in_strength, in_strength_true, method = "pearson")
 cor.test(in_strength, in_strength_true, method = "spearman")
 # plot
-plot(in_strength, in_strength_true, xlim = c(0, .5), ylim = c(0, .5))
+plot(in_strength, in_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -316,7 +354,7 @@ out_strength_true <- ml_outstrength %>% unlist()
 cor.test(out_strength, out_strength_true, method = "pearson")
 cor.test(out_strength, out_strength_true, method = "spearman")
 # plot
-plot(out_strength, out_strength_true, xlim = c(0, .5), ylim = c(0, .5))
+plot(out_strength, out_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -328,6 +366,146 @@ Rho_strength_true <- ml_strength %>% unlist()
 cor.test(Rho_strength, Rho_strength_true, method = "pearson")
 cor.test(Rho_strength, Rho_strength_true, method = "spearman")
 # plot
-plot(Rho_strength, Rho_strength_true, xlim = c(0, .5), ylim = c(0, .5))
+plot(Rho_strength, Rho_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+abline(a = 0, b = 1, col = "red")
+```
+
+# Variational Bayes
+```{r variational, message=FALSE, renv.ignore=TRUE}
+# Run variational
+mlvar_fit_vb <- 
+rstan::vb(
+      object = mlvar_model,
+      data = stan_data,
+      init = .0001,
+      adapt_engaged = FALSE,
+      eta = 0.1,
+      eval_elbo = 200,
+      tol_rel_obj = .01,
+      importance_resampling = T,
+    )
+```
+
+## Parameter Recovery
+### Betas
+```{r renv.ignore=TRUE}
+Beta_vec <-
+  rstan::summary(mlvar_fit_vb, pars =  "Beta", probs = .5)[["summary"]][,4] %>%
+    unlist()
+
+Beta_true_vec <- ml_beta %>% estimates_array2list() %>% map(function(x) t(x)) %>% unlist()
+
+cor.test(Beta_vec, Beta_true_vec, method = "spearman")
+# plot
+plot(Beta_vec,Beta_true_vec, xlim = c(-1, 1), ylim = c(-1, 1))
+abline(a = 0, b = 1, col = "red")
+```
+
+
+## Regression
+```{r}
+bayesplot::mcmc_recover_intervals(
+  true = rep(c(.2, .4),3),
+  x = rstan::extract(object = mlvar_fit_vb, "reg_slope_density") %>% do.call(cbind, .) %>%
+    as_draws_matrix()
+)
+
+bayesplot::mcmc_intervals(
+  x = rstan::extract(object = mlvar_fit_vb, "reg_slope_density") %>% do.call(cbind, .) %>%
+    as_draws_matrix()
+)
+
+```
+
+```{r}
+bayesplot::mcmc_recover_intervals(
+  true = rep(0,6),
+  x = rstan::extract(object = mlvar_fit_vb, c("reg_intercept")) %>% do.call(cbind, .) %>%
+    as_draws_matrix()
+)
+
+bayesplot::mcmc_intervals(
+  x = rstan::extract(object = mlvar_fit_vb, c("reg_intercept")) %>% do.call(cbind, .) %>%
+    as_draws_matrix()
+)
+```
+
+## Partial Correlations
+```{r}
+Rho_vec <- 
+  rstan::summary(mlvar_fit_vb, pars =  "Rho", probs = .5)[["summary"]][,4] %>%
+    unlist()
+
+Rho_true_vec <- ml_pcor %>%  unlist()
+cor.test(Rho_vec, Rho_true_vec, method = "pearson")
+cor.test(Rho_vec, Rho_true_vec, method = "spearman")
+# plot
+plot(Rho_vec, Rho_true_vec, xlim = c(-1, 1), ylim = c(-1, 1))
+abline(a = 0, b = 1, col = "red")
+```
+
+### Density
+```{r}
+Beta_density <-
+  rstan::summary(mlvar_fit_vb, pars =  "Beta_density", probs = .5)[["summary"]][, 4] %>%
+  unlist()
+
+Beta_density_true <- ml_temporal_density %>% unlist()
+
+cor.test(Beta_density, Beta_density_true, method = "pearson")
+cor.test(Beta_density, Beta_density_true, method = "spearman")
+# plot
+plot(Beta_density, Beta_density_true, xlim = c(0, 1), ylim = c(0, 1))
+abline(a = 0, b = 1, col = "red")
+```
+
+```{r}
+Rho_density <-  rstan::summary(mlvar_fit_vb, pars =  "Rho_density", probs = .5)[["summary"]][, 4] %>%
+  unlist()
+
+Rho_density_true <- ml_contemporaneous_density %>% unlist()
+
+cor.test(Rho_density, Rho_density_true, method = "pearson")
+cor.test(Rho_density, Rho_density_true, method = "spearman")
+# plot
+plot(Rho_density, Rho_density_true, xlim = c(0, 1), ylim = c(0, 1))
+abline(a = 0, b = 1, col = "red")
+```
+
+```{r}
+in_strength <-  rstan::summary(mlvar_fit_vb, pars =  "Beta_in_strength", probs = .5)[["summary"]][, 4] %>%
+  unlist()
+
+in_strength_true <- ml_instrength%>% unlist()
+
+
+cor.test(in_strength, in_strength_true, method = "pearson")
+cor.test(in_strength, in_strength_true, method = "spearman")
+# plot
+plot(in_strength, in_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+abline(a = 0, b = 1, col = "red")
+```
+
+```{r}
+out_strength <- rstan::summary(mlvar_fit_vb, pars =  "Beta_out_strength", probs = .5)[["summary"]][, 4] %>%
+  unlist()
+
+out_strength_true <- ml_outstrength %>% unlist()
+cor.test(out_strength, out_strength_true, method = "pearson")
+cor.test(out_strength, out_strength_true, method = "spearman")
+# plot
+plot(out_strength, out_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+abline(a = 0, b = 1, col = "red")
+```
+
+```{r}
+Rho_strength <- rstan::summary(mlvar_fit_vb, pars =  "Rho_centrality", probs = .5)[["summary"]][, 4] %>%
+  unlist()
+
+Rho_strength_true <- ml_strength %>% unlist()
+cor.test(Rho_strength, Rho_strength_true, method = "pearson")
+cor.test(Rho_strength, Rho_strength_true, method = "spearman")
+# plot
+plot(Rho_strength, Rho_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```

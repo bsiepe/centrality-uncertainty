@@ -5,11 +5,12 @@ data {
   int<lower=0> K; // number of predictors
   int<lower=0> I; // number of respondents
   int<lower=0> N_total; // number of total response measurements
+  int<lower=0> P; // number of covariates
   int n_pc; // number of partial correlations
   array[n_pc] int idx_rho; // index for partial correlations
   array[I] int<lower=0> n_t; // number of time points per person
   array[N_total] vector[K] Y; // longitudinal responses for all persons
-  array[I] real reg_covariate; // regression outcome
+  matrix[I,P] reg_covariate; // regression outcome
 }
 ////////////////////////////////////////////////////////////////////////////////
 parameters {
@@ -34,9 +35,9 @@ parameters {
   row_vector[K] mu_theta_sd; // means of the innovation SDs
   row_vector[K] sigma_theta_sd; // SDs of the innovation SDs
   // Regression
-  real reg_intercept;   // Intercept of Regression
-  real reg_slope_density; // Slope of Regression
-  real reg_residual;  // Residual term of Regression
+  vector[P] reg_intercept;   // Intercept of Regression
+  vector[P] reg_slope_density; // Slope of Regression
+  vector[P] reg_residual;  // Residual term of Regression
   
 } // end parameters
 ////////////////////////////////////////////////////////////////////////////////
@@ -53,13 +54,16 @@ transformed parameters{
   matrix[I, n_pc] rho_var;   // scale of partial correlations
   matrix[I,K] theta_sd;      // 
   //  Centrality for each individual
-  array[I] vector[K] Beta_out_strength; 
-  array[I] vector[K] Beta_in_strength;
-  array[I] vector[K] Rho_centrality;
-  array[I] real Beta_density;
-  array[I] real Rho_density;
+  matrix[I,K] Beta_out_strength;
+  matrix[I,K] Beta_out_strength_z;
+  matrix[I,K] Beta_in_strength;
+  matrix[I,K] Rho_centrality;
+  vector[I]  Beta_density;
+  vector[I]  Beta_density_z;
+  vector[I]  Rho_density;
+  vector[I]  Rho_density_z;
   // Regression
-  array[I] real mu_regression;
+  matrix[I,P] mu_regression;
 
   
   // loop over respondents
@@ -101,17 +105,28 @@ transformed parameters{
     for(k in 1:K){
       Beta_out_strength[i,k] = mean(abs(Beta[i, ,k]));
       Beta_in_strength[i,k]  = mean(abs(Beta[i,k, ]));
-      Rho_centrality[i, k]   = mean(abs(Rho[i, ,k]));
+      Rho_centrality[i,k]   = mean(abs(Rho[i, ,k]));
     } // end k
     // Density
     Beta_density[i] = mean(abs(Beta[i]));
     Rho_density[i]  = mean(abs(Rho[i]));
-    
-    // Regression ////////////////////////////////////////////////////////
-    mu_regression[i] = reg_intercept +  reg_slope_density * Beta_density[i];
-   // mu_regression[i] = reg_intercept +  reg_slope_density * reg_covariate[i];
-    
   } // end i
+  
+  // Standardize Aggregate Statistics
+  for(k in 1:K){
+    Beta_out_strength_z[,k] = (Beta_out_strength[,k] - mean(Beta_out_strength[,k])) / sd(Beta_out_strength[,k]);
+  }
+  Beta_density_z = (Beta_density - mean(Beta_density)) / sd(Beta_density);
+  Rho_density_z = (Rho_density - mean(Rho_density)) / sd(Rho_density);
+  
+  // Regression ////////////////////////////////////////////////////////
+    mu_regression[,1] = reg_intercept[1] + reg_slope_density[1] * Beta_density_z;
+    mu_regression[,2] = reg_intercept[2] + reg_slope_density[2] * Beta_density_z;
+    mu_regression[,3] = reg_intercept[3] + reg_slope_density[3] * Rho_density_z;
+    mu_regression[,4] = reg_intercept[4] + reg_slope_density[4] * Rho_density_z;
+    mu_regression[,5] = reg_intercept[5] + reg_slope_density[5] * Beta_out_strength_z[,1];
+    mu_regression[,6] = reg_intercept[6] + reg_slope_density[6] * Beta_out_strength_z[,1];
+
 } // end transformed parameters
 ////////////////////////////////////////////////////////////////////////////////
 model {
@@ -180,8 +195,9 @@ model {
   } // end i
   
   // Regression
-    reg_covariate ~ normal(mu_regression, exp(reg_residual));
-    // target += normal_lpdf(Beta_density | mu_regression, exp(reg_residual));
+  for(p in 1:P){
+    reg_covariate[,p] ~ normal(mu_regression[,p], exp(reg_residual[p]));
+  } // end p
     
 } // end model
 ////////////////////////////////////////////////////////////////////////////////
