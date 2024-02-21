@@ -442,6 +442,22 @@
       ],
       "Hash": "156158a60d3d9c9e41837cb62d12a287"
     },
+    "bayestestR": {
+      "Package": "bayestestR",
+      "Version": "0.13.2",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "datawizard",
+        "graphics",
+        "insight",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "4a6a2eebe2db1dfb1c792c4ed91e73dc"
+    },
     "beepr": {
       "Package": "beepr",
       "Version": "1.3",
@@ -825,6 +841,19 @@
         "stringi"
       ],
       "Hash": "d7602f0f55e0335b83f2353337848d6f"
+    },
+    "datawizard": {
+      "Package": "datawizard",
+      "Version": "0.9.1",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "insight",
+        "stats",
+        "utils"
+      ],
+      "Hash": "51cf8172b52cfa5b4b988c73c37accfa"
     },
     "dbplyr": {
       "Package": "dbplyr",
@@ -1653,6 +1682,19 @@
         "methods"
       ],
       "Hash": "1deaf1de3eac7e1d3377954b3a283652"
+    },
+    "insight": {
+      "Package": "insight",
+      "Version": "0.19.8",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "adcc19435135a4d211e5aa2e48e4f6b7"
     },
     "isoband": {
       "Package": "isoband",
