@@ -10,7 +10,7 @@ library(mvtnorm)
 ```
 
 
-# Function 
+# Trying mlVARsim_mod 
 Copied from: https://github.com/SachaEpskamp/mlVAR/blob/master/R/mlVARmodel.R
 
 ```{r}
@@ -62,12 +62,15 @@ simGraph <- function(
 # 2. Generate Beta's 
 # 3. Shrink all beta's until all eigenvalues are in unit circle.
 # If I simulate with fixed effects variance of 1, then the effects are standardized?
+
+# Now also implemented taking temporal fixed effects and means from a fitted mlVAR model
 mlVARsim_mod <- function(
   # Simulation setup:
   nPerson = 10, # # of persons.
   nNode = 5, # # of nodes 
   nTime = 100, # Or vector with time points per person. 
   lag = 1,
+  empirical_model = NULL, # use fitted mlVAR model fixed effects coefficients
   thetaVar = rep(1,nNode),
   DF_theta = nNode*2,
   mu_SD = c(1,1),
@@ -89,7 +92,7 @@ mlVARsim_mod <- function(
   # Number of temporal effects:
   nTemporal <- nNode^2 * lag
   
-  # 1. Generate structures:
+  # 1. Generate structures
   # Generate Omega:
 
   # Simulate mu means:
@@ -139,8 +142,8 @@ mlVARsim_mod <- function(
     }
   }
  
-  
-  
+  # if no empirical model is provided
+  if(is.null(empirical_model)){
   # Generate fixed means:
   mu_fixed <- rnorm(nNode,0,fixedMuSD)
   # Generate fixed betas:
@@ -152,9 +155,18 @@ mlVARsim_mod <- function(
   mat <- matrix(0,nNode,nNode*lag)
   diag(mat) <- 1
   beta_fixed[c(mat)==1] <- runif(sum(c(mat)==1),0,1)
+  }
+  # If empirical model is provided for fixed effects
+  if(!is.null(empirical_model)){
+    mu_fixed <- empirical_model$results$mu$mean
+    beta_fixed <- empirical_model$results$Beta$mean
+  }
+  
   
   # 3. Generate random parameter sets:
   if (lag > 0){
+    try <- 1 
+    maxtry <- 5000
     repeat{
       Pars <- rmvnorm(nPerson, c(mu_fixed,beta_fixed), sigma = Omega)
       Mus <- Pars[,1:nNode]
@@ -218,9 +230,14 @@ mlVARsim_mod <- function(
       D <- diag(sqrt(diag(Omega)))
       D[-(1:nNode),-(1:nNode)] <- shrink_deviation * D[-(1:nNode),-(1:nNode)] 
       Omega <- D %*% cov2cor(Omega) %*% D
-    }
     
-  } else {
+      try <- try + 1
+      if (try > maxtry){
+        stop("Maximum number of tries reached.")
+      }
+    }
+  }
+    else {   # if lag = 0
     Pars <- rmvnorm(nPerson, mu_fixed, sigma = Omega)
     Mus <- Pars[,1:nNode]
     Betas <- array(dim = c(0,0,nPerson))
@@ -269,6 +286,7 @@ mlVARsim_mod <- function(
     vars = paste0("V",1:nNode),
     idvar = "ID",
     lag=lag,
+    try = try,
 model=model
   )
   
@@ -281,18 +299,21 @@ model=model
 ```
 
 
-# Test it
+## Test mlVARsim_mod
 
 ```{r}
 set.seed(123)
 sim <- mlVARsim_mod(nPerson = 100, 
-                    nNode = 6, 
-                    nTime = 100, 
-                    # beta_sparsity = 0,
-                    init_beta_SD = c(2,2),
-                    shrink_deviation = .99,
+                    nNode = 9, 
+                    nTime = 200, 
+                    empirical_model = res3,
+                    init_beta_SD = c(.1,4),
+                    mu_SD = c(.1, .3),
+                    shrink_deviation = 0.999,
                     fixedMuSD = 0.3,
-                    fixedBetaSD = 2
+                    fixedBetaSD = 1, 
+                    pcor_sparsity = 0,
+                    beta_sparsity = 0
                     # DF_theta = 1*6
                     )
 
@@ -323,32 +344,192 @@ apply(simplify2array(ml_pcor), c(1,2), sd)
 sd_beta
 sd_pcor
 ```
+
+
+# Trying simMLgvar
+
 ```{r}
+library(graphicalVAR)
 set.seed(2024)
-library(mlVAR)
-sim <- mlVARsim(
-  nPerson = 100, 
-  nNode = 4, 
-  nTime = 100, 
-  init_beta_SD = c(2, 2),
-  shrink_deviation = .9999,
-  )
-sim$model$Beta$SD[,,1]
+sim_mlgvar <- simMLgvar(
+                       nTime = 150, 
+                       nVar = 6, 
+                       nPerson = 200, 
+                       propPositive = 0.5, 
+                       kappaRange = c(0.25, 0.5),
+                       betaRange = c(0.25, 0.5), 
+                       betweenRange = c(0.25, 0.5),
+                       rewireWithin = 0, 
+                       betweenVar = 1, 
+                       withinVar = 0.25,
+                       temporalOffset = 2)
 
 ```
+This does not look nice - cannot modify as much as I would like to. 
 
 
+# Writing own function
+Try to create a function that uses a fitted fixed-effects structure to simulate data with a specific random effects variance. 
 
-Estimate the network to double check:
+## Fit model on empirical data
+Here, I use code by Mansueto et al. (2022) to obtain the mlVAR network and extract coefficients to simulate from. 
+It's based on https://osf.io/7fpw5, data can be obtained from https://osf.io/5a2ub. Same code was used in Siepe, Kloft & Heck (2024).
+
+### Preparation
 ```{r}
-fit <- mlVAR::mlVAR(data = sim$Data,
-                    idvar = sim$idvar,
-                    vars = sim$vars,
-                    lag = sim$lag)
+set.seed(35037)
+library(lme4)
+library(mlVAR)
+library(lm.beta)
+load(here::here("data/clean_network.RData"))
+Data5b <- Data2
+
+# Alpha to detrend:
+alpha <- 0.05
+
+# Variables to investigate:
+vars <- c("Q1","Q2","Q3","Q4","Q5","Q6","Q7","Q8","Q9","Q10","Q11","Q12","Q13","Q14","Q15","Q16","Q17","Q18")
+
+# Labels:
+varLabs <- c("Relax","Irritable","Worry","Nervous","Future","Anhedonia",
+             "Tired","Hungry","Alone","Angry","Social_offline","Social_online","Music",
+             "Procrastinate","Outdoors","C19_occupied","C19_worry","Home")
+
+
+names(Data5b)[names(Data5b) %in% vars] <- varLabs
+
+# Remove items:
+Data5b <- Data5b %>% 
+  dplyr::select(!c(Hungry,Angry,Music,Procrastinate))
+varLabs <- varLabs[!varLabs %in% c("Hungry","Angry","Music","Procrastinate")]
+
+# Data frame with empty values for fitted effects (all):
+fitted_all <- expand.grid(
+  beep = seq(min(Data5b$beep),max(Data5b$beep)),
+  day = seq(min(Data5b$day),max(Data5b$day))
+)
+
+# Data frame with empty values for day trends:
+fitted_day <- data.frame(
+  day = seq(min(Data5b$day),max(Data5b$day))
+)
+
+# Data frame with empty values for beeps:
+fitted_beep <- data.frame(
+  beep = seq(min(Data5b$beep),max(Data5b$beep))
+)
+
+# Data frame to store p-values:
+p_values <- data.frame(
+  var = c("day", "beep")
+)
+
+# Also empty data frame list for test statistics:
+testStatistics <- list()
+coefficients <- list()
+stdcoefficients <- list()
+
+# Make the beep variable factor in dataset:
+Data5b$beepFactor <- factor(Data5b$beep, levels = 0:3, labels = c("09:00 - 12:00","12:00 - 15:00","15:00 - 18:00","18:00 - 21:00"))
+fitted_all$beepFactor <- factor(fitted_all$beep, levels = 0:3, labels = c("09:00 - 12:00","12:00 - 15:00","15:00 - 18:00","18:00 - 21:00"))
+fitted_beep$beepFactor <- factor(fitted_beep$beep, levels = 0:3, labels = c("09:00 - 12:00","12:00 - 15:00","15:00 - 18:00","18:00 - 21:00"))
+
+# Make day variable for dates:
+Data5b$date <- as.Date("2020-03-15") + Data5b$day
+fitted_all$date <- as.Date("2020-03-15") + fitted_all$day
+fitted_day$date <- as.Date("2020-03-15") + fitted_day$day
+
+# Add the midpoints as time variable:
+Data5b$midTime <- as.character(factor(Data5b$beep, levels = 0:3, labels = c("10:30","13:30","16:30","19:30")))
+Data5b$midTime <- as.POSIXct(paste(Data5b$date,Data5b$midTime), format = "%Y-%m-%d %H:%M", tz = "Europe/Amsterdam")
+
+fitted_all$midTime <- as.character(factor(fitted_all$beep, levels = 0:3, labels = c("10:30","13:30","16:30","19:30")))
+fitted_all$midTime <- as.POSIXct(paste(fitted_all$date,fitted_all$midTime), format = "%Y-%m-%d %H:%M", tz = "Europe/Amsterdam")
+
+# Data frame to store detrended data:
+data_detrended <- Data5b
+
+# Fix curves:
+for (v in seq_along(varLabs)){
+  formula <- as.formula(paste0(varLabs[v], " ~ 1 + day + factor(beep)")) #why 1? With or without 1 results seem to be the same
+  lmRes <- lm(formula, data = Data5b)
+  
+  # Fixed effects:
+  fixed <- coef(lmRes)
+  
+  # make zero if not significant at alpha:
+  p_values[[varLabs[v]]] <- anova(lmRes)[["Pr(>F)"]][1:2]
+  if (p_values[[varLabs[v]]][1] > alpha){
+    fixed[2] <- 0
+  }
+  if (p_values[[varLabs[v]]][2] > alpha){
+    fixed[3:5] <- 0
+  }
+  
+  # Add to DFs:
+  fitted_all[,varLabs[v]] <- fixed[1] + fixed[2] * fitted_all[["day"]]  +  fixed[3] * (fitted_all[["beep"]] == 1)  + 
+  fixed[4] * (fitted_all[["beep"]] == 2) + fixed[5] *  (fitted_all[["beep"]] == 3)
+  
+  fitted_day[,varLabs[v]] <- fixed[1] + fixed[2] * fitted_day[["day"]]
+  
+  fitted_beep[,varLabs[v]] <- fixed[1] + fixed[2] * median(fitted_day[["day"]]) +  fixed[3] * (fitted_beep[["beep"]] == 1)  + 
+    fixed[4] * (fitted_beep[["beep"]] == 2) + fixed[5] *  (fitted_beep[["beep"]] == 3)
+  
+  # Detrend data:
+  data_detrended[,varLabs[v]] <- Data5b[,varLabs[v]] - (fixed[1] + fixed[2] * Data5b[["day"]]  +  fixed[3] * (Data5b[["beep"]] == 1)  + 
+    fixed[4] * (Data5b[["beep"]] == 2) + fixed[5] *  (Data5b[["beep"]] == 3))
+  
+  # Test statistic dataframe:
+  ids <- rownames(anova(lmRes))
+  testStatistics[[v]] <- cbind(data.frame(var = varLabs[v], effect = ids), anova(lmRes))
+  
+  coefficients[[v]] <- data.frame(
+    var = varLabs[v],
+    type = names(coef(lmRes)),
+    coef = coef(lmRes),
+    std = coef(lm.beta(lmRes))
+  )
+}
+
+
 ```
 
+### Fitting
+```{r}
+data_detrended$Anxiety <- rowMeans(dplyr::select(data_detrended, Irritable, Worry, Nervous, Relax), na.rm = FALSE)
+data_detrended$Depression <- rowMeans(dplyr::select(data_detrended, Anhedonia, Future, Tired), na.rm = FALSE)
 
+varLabs3 <- c("Anxiety", "Depression", "Alone","Social_offline","Social_online",
+             "Outdoors","C19_occupied","C19_worry","Home")
 
+# Run mlVAR (correlated):
+res3 <- mlVAR(data_detrended,
+              vars=varLabs3,
+              idvar="id",
+              dayvar="day",
+              beepvar="beep",
+              lags = 1,
+              temporal = "correlated",
+              contemporaneous = "correlated",
+              nCores = 13)
+
+# # # delete irrelevant data storage
+res3 <- res3[res3!="data"]
+saveRDS(res3, here("data/network_fried2020_9n.RData"))
+# # load model
+# res3<-readRDS(here("data/network_correlated_Fried2020_9n_final.RData"))
+
+# Names for the Plot :
+ names <- c("Anxiety", "Depression", "Alone", 
+            "Social Offline", "Social Online", "Outdoors",
+            "C19 Occupied", "C19 Worry", "Home") 
+
+# Get the contemporaneous and temporal networks:
+cont6 <- getNet(res3, "contemporaneous", layout = "spring", nonsig = "hide", rule = "and")
+#bet6 <- getNet(res3, "between", nonsig = "hide", rule = "and")
+temp6 <- getNet(res3, "temporal", nonsig = "hide")
+
+```
 
 
 
