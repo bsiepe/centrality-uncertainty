@@ -7,6 +7,8 @@ format: html
 In this document, we try to adapt the `mlVAR::mlVARsim` function to our purposes
 ```{r}
 library(mvtnorm)
+library(here)
+library(mlVAR)
 ```
 
 
@@ -368,10 +370,9 @@ sim_mlgvar <- simMLgvar(
 This does not look nice - cannot modify as much as I would like to. 
 
 
-# Writing own function
-Try to create a function that uses a fitted fixed-effects structure to simulate data with a specific random effects variance. 
 
-## Fit model on empirical data
+
+# Fit model on empirical data
 Here, I use code by Mansueto et al. (2022) to obtain the mlVAR network and extract coefficients to simulate from. 
 It's based on https://osf.io/7fpw5, data can be obtained from https://osf.io/5a2ub. Same code was used in Siepe, Kloft & Heck (2024).
 
@@ -531,5 +532,93 @@ temp6 <- getNet(res3, "temporal", nonsig = "hide")
 
 ```
 
+# Writing own function
+Try to create a function that uses a fitted fixed-effects structure to simulate data with a specific random effects variance, but uses a graphicalVAR structure for each individual.
+Taken from here: https://github.com/bsiepe/var-compare/blob/main/true-networks.Rmd
+```{r}
+# Graph to simulate from
+graph_nonsparse <- readRDS(here("data/graph5.RDS"))
+```
+
+This function should:
+1. Take the fixed effects structure for beta and kappa
+2. Create random effects for beta and for kappa 
+3. Simulate data for each individual using the graphicalVAR 
+
+TODO I don't think the matrix call within rnorm() works, need to check that.
+
+```{r}
+sim_gvar <- function(graph,
+                     beta_sd,
+                     kappa_sd,
+                     n_person,
+                     n_time,
+                     n_node,
+                     max_try = 1000){
+  
+  # Create a list to store the data for each person
+  data <- vector("list", n_person)
+  
+  
+  for(i in 1:n_person){
+    counter <- 0
+    repeat {
+      counter <- counter + 1
+      if(counter > max_try) stop("Exceeded maximum number of attempts to generate stable beta matrix.")
+      
+      # Generate beta matrix using graph$beta as mean
+      beta <- array(rnorm(n_node*n_node*n_person, mean = graph$beta, sd = beta_sd), c(n_node, n_node, n_person))
+      
+      # Check if beta matrix is stable
+      if(all(Re(eigen(beta[,,i])$values)^2 + Im(eigen(beta[,,i])$values)^2 < 1)) break
+    }
+    
+    counter <- 0
+    repeat {
+      counter <- counter + 1
+      if(counter > max_try) stop("Exceeded maximum number of attempts to generate semi-positive definite kappa matrix.")
+      
+      # Generate kappa matrix using graph$kappa as mean
+      kappa <- array(rnorm(n_node*n_node*n_person, mean = graph$kappa, sd = kappa_sd), c(n_node, n_node, n_person))
+      
+      # Make kappa matrix symmetric
+      kappa <- Matrix::forceSymmetric(kappa[,,i])
+      
+      # Check if kappa matrix is semi-positive definite
+      if(all(eigen(kappa)$values >= 0)) break
+    }
+    
+    # Simulate data for the person
+    data[[i]] <- graphicalVAR::graphicalVARsim(nTime = n_time,
+                                               beta = beta[,,i],
+                                               kappa = kappa
+                                               )
+  }
+  
+  # Return the list of simulated data
+  # Also return the parameters used in the simulation
+  ret <- list()
+  ret$data <- data
+  ret$beta <- beta
+  ret$kappa <- kappa
+  return(ret)
+
+}
+```
+
+Try the function
+```{r}
+sim_data <- sim_gvar(graph = graph_nonsparse,
+                     beta_sd = 0.1,
+                     kappa_sd = 0.1,
+                     n_person = 30,
+                     n_time = 150,
+                     n_node = 6)
+```
+
+```{r}
+
+sim_data$beta
+```
 
 
