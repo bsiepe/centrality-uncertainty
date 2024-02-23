@@ -1833,6 +1833,16 @@
       ],
       "Hash": "e2fca3e12e4db979dccc6e519b10a7ee"
     },
+    "lm.beta": {
+      "Package": "lm.beta",
+      "Version": "1.7-2",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "xtable"
+      ],
+      "Hash": "09e504a5f457860795f70739bba15a3e"
+    },
     "lme4": {
       "Package": "lme4",
       "Version": "1.1-35.1",
