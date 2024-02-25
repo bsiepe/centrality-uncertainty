@@ -555,13 +555,13 @@ sim_gvar <- function(graph,
                      n_time,
                      n_node,
                      max_try = 1000){
+  # browser()
   
   # Create a list to store the data for each person
   data <- vector("list", n_person)
   
   
-  for(i in 1:n_person){
-    counter <- 0
+  counter <- 0
     repeat {
       counter <- counter + 1
       if(counter > max_try) stop("Exceeded maximum number of attempts to generate stable beta matrix.")
@@ -570,7 +570,11 @@ sim_gvar <- function(graph,
       beta <- array(rnorm(n_node*n_node*n_person, mean = graph$beta, sd = beta_sd), c(n_node, n_node, n_person))
       
       # Check if beta matrix is stable
-      if(all(Re(eigen(beta[,,i])$values)^2 + Im(eigen(beta[,,i])$values)^2 < 1)) break
+      ev_b <- sapply(seq_len(n_person),function(i){
+          eigen(beta[,,i])$values
+        })
+      if(all(Re(ev_b)^2 + Im(ev_b)^2 < 1)) break
+      
     }
     
     counter <- 0
@@ -582,18 +586,29 @@ sim_gvar <- function(graph,
       kappa <- array(rnorm(n_node*n_node*n_person, mean = graph$kappa, sd = kappa_sd), c(n_node, n_node, n_person))
       
       # Make kappa matrix symmetric
-      kappa <- Matrix::forceSymmetric(kappa[,,i])
+      # but keep as array
+      force_symmetric <- function(mat) {
+              as.matrix(Matrix::forceSymmetric(mat))
+          }
+      
+      kappa <- array(apply(kappa, MARGIN = 3, FUN = force_symmetric), dim = dim(kappa)) 
       
       # Check if kappa matrix is semi-positive definite
-      if(all(eigen(kappa)$values >= 0)) break
+      ev_k <- sapply(seq_len(n_person),function(i){
+          eigen(kappa[,,i])$values
+        })
+      
+      if(all(ev_k >= 0)) break
     }
     
-    # Simulate data for the person
-    data[[i]] <- graphicalVAR::graphicalVARsim(nTime = n_time,
+    # Simulate data for each person
+    for(i in seq_len(n_person)){
+    data[[i]] <- tryCatch({graphicalVAR::graphicalVARsim(nTime = n_time,
                                                beta = beta[,,i],
-                                               kappa = kappa
-                                               )
-  }
+                                               kappa = kappa[,,i]
+                                               )}, error = function(e) NA)
+    }
+  
   
   # Return the list of simulated data
   # Also return the parameters used in the simulation
@@ -615,10 +630,4 @@ sim_data <- sim_gvar(graph = graph_nonsparse,
                      n_time = 150,
                      n_node = 6)
 ```
-
-```{r}
-
-sim_data$beta
-```
-
 
