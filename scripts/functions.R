@@ -467,6 +467,48 @@ centrality_mlvar_sim <- function(simobj){
 # beta_mean <- ml_sim$model$Beta$mean[,,1]
 # beta_arr_mean - beta_mean
 
+#------------------------------------------------------------------------------>
+# Simulation Helper Functions
+#------------------------------------------------------------------------------>
+abs_mean <- function(x){
+  mean(abs(x), na.rm = TRUE)
+}
+abs_med <- function(x){
+  stats::median(abs(x), na.rm = TRUE)
+}
+
+abs_sum <- function(x){
+  sum(abs(x), na.rm = TRUE)
+}
+
+# Summary functions
+# Compute mean pairwise RMSE for list of matrices
+rmse_mean_list <- function(x, y){
+  Map(function(x, y){
+    mean(sqrt((x-y)^2), na.rm = TRUE)
+  }, x, y)
+}
+
+
+# Compute mean pairwise absolute bias for list of matrices
+abs_mean_bias_list <- function(x, y){
+  Map(function(x, y){
+    abs_mean(x - y)
+  }, x, y)
+}
+
+# Find most central node and compare to true centrality
+# for list of centralities
+most_cent_ident <- function(x, y){
+  Map(function(x, y){
+    which.max(x) == which.max(y)
+  }, x, y)
+}
+
+
+
+
+
 
 #------------------------------------------------------------------------------>
 # Helper functions to transform between different draws formats

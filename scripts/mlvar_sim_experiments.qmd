@@ -7,10 +7,13 @@ format: html
 In this document, we try to adapt the `mlVAR::mlVARsim` function to our purposes
 ```{r}
 library(mvtnorm)
+library(here)
+library(mlVAR)
+library(tidyverse)
 ```
 
 
-# Function 
+# Trying mlVARsim_mod 
 Copied from: https://github.com/SachaEpskamp/mlVAR/blob/master/R/mlVARmodel.R
 
 ```{r}
@@ -60,23 +63,29 @@ simGraph <- function(
 
 # 1. fixed effects (means) for every parameter and a variance-covariance matrix.
 # 2. Generate Beta's 
-# 3. Shrink all beta's untill all eigens are in unit circle.
+# 3. Shrink all beta's until all eigenvalues are in unit circle.
+# If I simulate with fixed effects variance of 1, then the effects are standardized?
+
+# Now also implemented taking temporal fixed effects and means from a fitted mlVAR model
 mlVARsim_mod <- function(
   # Simulation setup:
   nPerson = 10, # # of persons.
   nNode = 5, # # of nodes 
   nTime = 100, # Or vector with time points per person. 
   lag = 1,
+  empirical_model = NULL, # use fitted mlVAR model fixed effects coefficients
   thetaVar = rep(1,nNode),
   DF_theta = nNode*2,
   mu_SD = c(1,1),
   init_beta_SD = c(0.1,1),
   fixedMuSD = 1,
+  fixedBetaSD = 1,
   shrink_fixed = 0.9,
   shrink_deviation = 0.9,
   pcor_sparsity = 0.5,
   beta_sparsity = 0.5
 ){
+  # browser()
   contemporaneous <- "wishart"
   GGMsparsity = pcor_sparsity
   
@@ -86,33 +95,33 @@ mlVARsim_mod <- function(
   # Number of temporal effects:
   nTemporal <- nNode^2 * lag
   
-  # 1. Generate structures:
+  # 1. Generate structures
   # Generate Omega:
 
   # Simulate mu means:
   Omega_mu <- cov2cor(solve(diag(nNode)-simGraph(nNode)))
-  # Omega_mu <- genPositiveDefMat(nNode, "onion", rangeVar = c(1,1))$Sigma
   # Simulate temporal:
   Omega_Beta <- cov2cor(solve(diag(nTemporal)-simGraph(nTemporal)))
   
-#   mat <- Omega_mu
-#   diag(mat) <- 0
-#   rowSums(mat)
-#   
+
   Omega <- rbind(
     cbind(Omega_mu, matrix(0,nNode,nTemporal)),
     cbind(matrix(0,nTemporal,nNode), Omega_Beta)
   )
 
-  # Omega <- genPositiveDefMat(nNode + nTemporal, "onion", rangeVar = c(1,1))$Sigma
   
   # Generate SD and scale:
-  SD <- runif(nNode + nTemporal, c(rep(mu_SD[1],nNode),rep(init_beta_SD[1],nNode)), c(rep(mu_SD[2],nNode),rep(init_beta_SD[2],nNode)))
+  # BS: I think the nNode here may be wrong? it should be nNode + nTemporal
+  # SD <- runif(nNode + nTemporal, c(rep(mu_SD[1],nNode),rep(init_beta_SD[1],nNode)), c(rep(mu_SD[2],nNode),rep(init_beta_SD[2],nNode)))
+  SD <- runif(nNode + nTemporal, c(rep(mu_SD[1],nNode),rep(init_beta_SD[1],nTemporal)), c(rep(mu_SD[2],nNode),rep(init_beta_SD[2],nTemporal)))
+  
+
   Omega <- diag(SD) %*%Omega %*% diag(SD)
+  
+
 
   # Generate fixed contemporaneous:
   if (contemporaneous=="wishart"){
-    # Theta_fixed <- genPositiveDefMat(nNode, "onion", rangeVar = c(1,1))$Sigma
     Theta_fixed <- cov2cor(solve(diag(nNode)-simGraph(nNode)))
     Theta_fixed <- diag(sqrt(thetaVar)) %*% Theta_fixed %*% diag(sqrt(thetaVar))
     
@@ -136,12 +145,12 @@ mlVARsim_mod <- function(
     }
   }
  
-  
-  
+  # if no empirical model is provided
+  if(is.null(empirical_model)){
   # Generate fixed means:
   mu_fixed <- rnorm(nNode,0,fixedMuSD)
   # Generate fixed betas:
-  beta_fixed <- rnorm(nTemporal,0)
+  beta_fixed <- rnorm(nTemporal,0, fixedBetaSD)
   # set weakest beta_sparsity% to zero:
   beta_fixed[order(abs(beta_fixed))[1:round(nTemporal * beta_sparsity)]] <- 0
   
@@ -149,9 +158,18 @@ mlVARsim_mod <- function(
   mat <- matrix(0,nNode,nNode*lag)
   diag(mat) <- 1
   beta_fixed[c(mat)==1] <- runif(sum(c(mat)==1),0,1)
+  }
+  # If empirical model is provided for fixed effects
+  if(!is.null(empirical_model)){
+    mu_fixed <- empirical_model$results$mu$mean
+    beta_fixed <- empirical_model$results$Beta$mean
+  }
+  
   
   # 3. Generate random parameter sets:
   if (lag > 0){
+    try <- 1 
+    maxtry <- 5000
     repeat{
       Pars <- rmvnorm(nPerson, c(mu_fixed,beta_fixed), sigma = Omega)
       Mus <- Pars[,1:nNode]
@@ -215,9 +233,14 @@ mlVARsim_mod <- function(
       D <- diag(sqrt(diag(Omega)))
       D[-(1:nNode),-(1:nNode)] <- shrink_deviation * D[-(1:nNode),-(1:nNode)] 
       Omega <- D %*% cov2cor(Omega) %*% D
-    }
     
-  } else {
+      try <- try + 1
+      if (try > maxtry){
+        stop("Maximum number of tries reached.")
+      }
+    }
+  }
+    else {   # if lag = 0
     Pars <- rmvnorm(nPerson, mu_fixed, sigma = Omega)
     Mus <- Pars[,1:nNode]
     Betas <- array(dim = c(0,0,nPerson))
@@ -263,21 +286,10 @@ mlVARsim_mod <- function(
   # Data generated! Now return in sensible list:
   Results <- list(
     Data = Data,
-#     beta_fixed = array(beta_fixed,c(nNode,nNode,lag)),
-#     beta_SD = array(sqrt(diag(Omega[-(1:nNode),-(1:nNode)])),c(nNode,nNode,lag)),
-#     mu_fixed = mu_fixed,
-#     mu_SD = sqrt(diag(Omega[1:nNode,1:nNode])),
-#     Theta_fixed = Theta_fixed,
-#     DF_theta = DF_theta,
-#     Omega = Omega,
-#     Omega_mu = Omega[1:nNode,1:nNode],
-#     Omega_beta = Omega[-(1:nNode),-(1:nNode)],
-#     Theta = Theta,
-#     Mus = Mus,
-#     Betas = Betas,
     vars = paste0("V",1:nNode),
     idvar = "ID",
     lag=lag,
+    try = try,
 model=model
   )
   
@@ -290,10 +302,450 @@ model=model
 ```
 
 
-# Test it
+## Test mlVARsim_mod
 
 ```{r}
 set.seed(123)
-sim <- mlVARsim_mod(nPerson = 100, nNode = 7, nTime = 100, beta_sparsity = 0)
+sim <- mlVARsim_mod(nPerson = 100, 
+                    nNode = 9, 
+                    nTime = 200, 
+                    empirical_model = res3,
+                    init_beta_SD = c(.1,4),
+                    mu_SD = c(.1, .3),
+                    shrink_deviation = 0.999,
+                    fixedMuSD = 0.3,
+                    fixedBetaSD = 1, 
+                    pcor_sparsity = 0,
+                    beta_sparsity = 0
+                    # DF_theta = 1*6
+                    )
+
+sim_old <- mlVAR::mlVARsim(nPerson = 100, 
+                    nNode = 6, 
+                    nTime = 100, 
+                    init_beta_SD = c(2,2)
+                    )
+
 ```
+
+Investigate heterogeneity of individual networks. Simulating with more heterogeneity does not really work. It seems like for the betas, only every second column is affected.
+
+```{r}
+ml_beta <- sim$model$Beta$subject
+ml_pcor <- sim$model$Theta$pcor$subject
+
+# across all matrices in the list, compute the element-wise sd
+sd_beta <- sim$model$Beta$SD
+sd_pcor <- sim$model$Theta$pcor$SD
+
+# these are the empirical values
+apply(simplify2array(ml_beta), c(1,2), sd)
+apply(simplify2array(ml_pcor), c(1,2), sd)
+
+
+# These are the simulation values
+sd_beta
+sd_pcor
+```
+
+
+# Trying simMLgvar
+
+```{r}
+library(graphicalVAR)
+set.seed(2024)
+sim_mlgvar <- simMLgvar(
+                       nTime = 150, 
+                       nVar = 6, 
+                       nPerson = 200, 
+                       propPositive = 0.5, 
+                       kappaRange = c(0.25, 0.5),
+                       betaRange = c(0.25, 0.5), 
+                       betweenRange = c(0.25, 0.5),
+                       rewireWithin = 0, 
+                       betweenVar = 1, 
+                       withinVar = 0.25,
+                       temporalOffset = 2)
+
+```
+This does not look nice - cannot modify as much as I would like to. 
+
+
+
+
+# Fit model on empirical data
+Here, I use code by Mansueto et al. (2022) to obtain the mlVAR network and extract coefficients to simulate from. 
+It's based on https://osf.io/7fpw5, data can be obtained from https://osf.io/5a2ub. Same code was used in Siepe, Kloft & Heck (2024).
+
+### Preparation
+```{r}
+set.seed(35037)
+library(lme4)
+library(mlVAR)
+library(lm.beta)
+load(here::here("data/clean_network.RData"))
+Data5b <- Data2
+
+# Alpha to detrend:
+alpha <- 0.05
+
+# Variables to investigate:
+vars <- c("Q1","Q2","Q3","Q4","Q5","Q6","Q7","Q8","Q9","Q10","Q11","Q12","Q13","Q14","Q15","Q16","Q17","Q18")
+
+# Labels:
+varLabs <- c("Relax","Irritable","Worry","Nervous","Future","Anhedonia",
+             "Tired","Hungry","Alone","Angry","Social_offline","Social_online","Music",
+             "Procrastinate","Outdoors","C19_occupied","C19_worry","Home")
+
+
+names(Data5b)[names(Data5b) %in% vars] <- varLabs
+
+# Remove items:
+Data5b <- Data5b %>% 
+  dplyr::select(!c(Hungry,Angry,Music,Procrastinate))
+varLabs <- varLabs[!varLabs %in% c("Hungry","Angry","Music","Procrastinate")]
+
+# Data frame with empty values for fitted effects (all):
+fitted_all <- expand.grid(
+  beep = seq(min(Data5b$beep),max(Data5b$beep)),
+  day = seq(min(Data5b$day),max(Data5b$day))
+)
+
+# Data frame with empty values for day trends:
+fitted_day <- data.frame(
+  day = seq(min(Data5b$day),max(Data5b$day))
+)
+
+# Data frame with empty values for beeps:
+fitted_beep <- data.frame(
+  beep = seq(min(Data5b$beep),max(Data5b$beep))
+)
+
+# Data frame to store p-values:
+p_values <- data.frame(
+  var = c("day", "beep")
+)
+
+# Also empty data frame list for test statistics:
+testStatistics <- list()
+coefficients <- list()
+stdcoefficients <- list()
+
+# Make the beep variable factor in dataset:
+Data5b$beepFactor <- factor(Data5b$beep, levels = 0:3, labels = c("09:00 - 12:00","12:00 - 15:00","15:00 - 18:00","18:00 - 21:00"))
+fitted_all$beepFactor <- factor(fitted_all$beep, levels = 0:3, labels = c("09:00 - 12:00","12:00 - 15:00","15:00 - 18:00","18:00 - 21:00"))
+fitted_beep$beepFactor <- factor(fitted_beep$beep, levels = 0:3, labels = c("09:00 - 12:00","12:00 - 15:00","15:00 - 18:00","18:00 - 21:00"))
+
+# Make day variable for dates:
+Data5b$date <- as.Date("2020-03-15") + Data5b$day
+fitted_all$date <- as.Date("2020-03-15") + fitted_all$day
+fitted_day$date <- as.Date("2020-03-15") + fitted_day$day
+
+# Add the midpoints as time variable:
+Data5b$midTime <- as.character(factor(Data5b$beep, levels = 0:3, labels = c("10:30","13:30","16:30","19:30")))
+Data5b$midTime <- as.POSIXct(paste(Data5b$date,Data5b$midTime), format = "%Y-%m-%d %H:%M", tz = "Europe/Amsterdam")
+
+fitted_all$midTime <- as.character(factor(fitted_all$beep, levels = 0:3, labels = c("10:30","13:30","16:30","19:30")))
+fitted_all$midTime <- as.POSIXct(paste(fitted_all$date,fitted_all$midTime), format = "%Y-%m-%d %H:%M", tz = "Europe/Amsterdam")
+
+# Data frame to store detrended data:
+data_detrended <- Data5b
+
+# Fix curves:
+for (v in seq_along(varLabs)){
+  formula <- as.formula(paste0(varLabs[v], " ~ 1 + day + factor(beep)")) #why 1? With or without 1 results seem to be the same
+  lmRes <- lm(formula, data = Data5b)
+  
+  # Fixed effects:
+  fixed <- coef(lmRes)
+  
+  # make zero if not significant at alpha:
+  p_values[[varLabs[v]]] <- anova(lmRes)[["Pr(>F)"]][1:2]
+  if (p_values[[varLabs[v]]][1] > alpha){
+    fixed[2] <- 0
+  }
+  if (p_values[[varLabs[v]]][2] > alpha){
+    fixed[3:5] <- 0
+  }
+  
+  # Add to DFs:
+  fitted_all[,varLabs[v]] <- fixed[1] + fixed[2] * fitted_all[["day"]]  +  fixed[3] * (fitted_all[["beep"]] == 1)  + 
+  fixed[4] * (fitted_all[["beep"]] == 2) + fixed[5] *  (fitted_all[["beep"]] == 3)
+  
+  fitted_day[,varLabs[v]] <- fixed[1] + fixed[2] * fitted_day[["day"]]
+  
+  fitted_beep[,varLabs[v]] <- fixed[1] + fixed[2] * median(fitted_day[["day"]]) +  fixed[3] * (fitted_beep[["beep"]] == 1)  + 
+    fixed[4] * (fitted_beep[["beep"]] == 2) + fixed[5] *  (fitted_beep[["beep"]] == 3)
+  
+  # Detrend data:
+  data_detrended[,varLabs[v]] <- Data5b[,varLabs[v]] - (fixed[1] + fixed[2] * Data5b[["day"]]  +  fixed[3] * (Data5b[["beep"]] == 1)  + 
+    fixed[4] * (Data5b[["beep"]] == 2) + fixed[5] *  (Data5b[["beep"]] == 3))
+  
+  # Test statistic dataframe:
+  ids <- rownames(anova(lmRes))
+  testStatistics[[v]] <- cbind(data.frame(var = varLabs[v], effect = ids), anova(lmRes))
+  
+  coefficients[[v]] <- data.frame(
+    var = varLabs[v],
+    type = names(coef(lmRes)),
+    coef = coef(lmRes),
+    std = coef(lm.beta(lmRes))
+  )
+}
+
+
+```
+
+### Fitting
+```{r}
+data_detrended$Anxiety <- rowMeans(dplyr::select(data_detrended, Irritable, Worry, Nervous, Relax), na.rm = FALSE)
+data_detrended$Depression <- rowMeans(dplyr::select(data_detrended, Anhedonia, Future, Tired), na.rm = FALSE)
+
+varLabs3 <- c("Anxiety", "Depression", "Alone","Social_offline","Social_online",
+             "Outdoors","C19_occupied","C19_worry","Home")
+
+# Run mlVAR (correlated):
+res3 <- mlVAR(data_detrended,
+              vars=varLabs3,
+              idvar="id",
+              dayvar="day",
+              beepvar="beep",
+              lags = 1,
+              temporal = "correlated",
+              contemporaneous = "correlated",
+              nCores = 13)
+
+# # # delete irrelevant data storage
+res3 <- res3[res3!="data"]
+saveRDS(res3, here("data/network_fried2020_9n.RData"))
+# # load model
+# res3<-readRDS(here("data/network_correlated_Fried2020_9n_final.RData"))
+
+# Names for the Plot :
+ names <- c("Anxiety", "Depression", "Alone", 
+            "Social Offline", "Social Online", "Outdoors",
+            "C19 Occupied", "C19 Worry", "Home") 
+
+# Get the contemporaneous and temporal networks:
+cont6 <- getNet(res3, "contemporaneous", layout = "spring", nonsig = "hide", rule = "and")
+#bet6 <- getNet(res3, "between", nonsig = "hide", rule = "and")
+temp6 <- getNet(res3, "temporal", nonsig = "hide")
+
+```
+
+# Writing own function
+Try to create a function that uses a fitted fixed-effects structure to simulate data with a specific random effects variance, but uses a graphicalVAR structure for each individual.
+Taken from here: https://github.com/bsiepe/var-compare/blob/main/true-networks.Rmd
+```{r}
+# Graph to simulate from
+graph_nonsparse <- readRDS(here("data/graph5.RDS"))
+```
+
+This function should:
+1. Take the fixed effects structure for beta and kappa
+2. Create random effects for beta and for kappa 
+3. Simulate data for each individual using the graphicalVAR 
+
+
+```{r}
+sim_gvar <- function(graph,
+                     beta_sd,
+                     kappa_sd,
+                     n_person,
+                     n_time,
+                     n_node,
+                     max_try = 1000){
+  # browser()
+  
+  # Create a list to store the data for each person
+  data <- vector("list", n_person)
+  
+  
+  counter <- 0
+    repeat {
+      counter <- counter + 1
+      if(counter > max_try) stop("Exceeded maximum number of attempts to generate stable beta matrix.")
+      
+      # Generate beta matrix using graph$beta as mean
+      beta <- array(rnorm(n_node*n_node*n_person, mean = graph$beta, sd = beta_sd), c(n_node, n_node, n_person))
+      
+      # Check if beta matrix is stable
+      ev_b <- sapply(seq_len(n_person),function(i){
+          eigen(beta[,,i])$values
+        })
+      if(all(Re(ev_b)^2 + Im(ev_b)^2 < 1)) break
+      
+    }
+    
+    counter <- 0
+    repeat {
+      counter <- counter + 1
+      if(counter > max_try) stop("Exceeded maximum number of attempts to generate semi-positive definite kappa matrix.")
+      
+      # Generate kappa matrix using graph$kappa as mean
+      kappa <- array(rnorm(n_node*n_node*n_person, mean = graph$kappa, sd = kappa_sd), c(n_node, n_node, n_person))
+      
+      # Make kappa matrix symmetric
+      # but keep as array
+      force_symmetric <- function(mat) {
+              as.matrix(Matrix::forceSymmetric(mat))
+          }
+      
+      kappa <- array(apply(kappa, MARGIN = 3, FUN = force_symmetric), dim = dim(kappa)) 
+      
+      # Check if kappa matrix is semi-positive definite
+      ev_k <- sapply(seq_len(n_person),function(i){
+          eigen(kappa[,,i])$values
+        })
+      
+      if(all(ev_k >= 0)) break
+    }
+    
+    # Simulate data for each person
+    for(i in seq_len(n_person)){
+    data[[i]] <- tryCatch({graphicalVAR::graphicalVARsim(nTime = n_time,
+                                               beta = beta[,,i],
+                                               kappa = kappa[,,i]
+                                               )}, error = function(e) NA)
+    }
+  
+  
+  # Return the list of simulated data
+  # Also return the parameters used in the simulation
+  ret <- list()
+  ret$data <- data
+  ret$beta <- beta
+  ret$kappa <- kappa
+  return(ret)
+
+}
+```
+
+Try the function
+```{r}
+sim_data <- sim_gvar(graph = graph_nonsparse,
+                     beta_sd = 0.1,
+                     kappa_sd = 0.1,
+                     n_person = 100,
+                     n_time = 150,
+                     n_node = 6,
+                     max_try = 10000)
+```
+
+This still does not work with a larger amount of beta sd
+
+
+
+## With for-loop approach
+
+Idea: In the function above (`sim_gvar`), all beta and kappa matrices are generated at once.Instead, we could generate the beta and kappa matrices for each individual separately. This would allow us to check for stability and semi-positive definiteness for each individual separately. 
+
+```{r}
+sim_gvar_loop <- function(graph,
+                     beta_sd,
+                     kappa_sd,
+                     n_person,
+                     n_time,
+                     n_node,
+                     max_try = 1000){
+  # browser()
+  
+  # Create a list to store the data for each person
+  data <- vector("list", n_person)
+  beta <- array(NA, c(n_node, n_node, n_person))
+  kappa <- array(NA, c(n_node, n_node, n_person))
+  
+  # Simulate data for each person
+  for(i in seq_len(n_person)){
+  
+  counter <- 0
+    repeat {
+      counter <- counter + 1
+      if(counter > max_try) stop("Exceeded maximum number of attempts to generate stable beta matrix.")
+      
+      # Generate beta matrix using graph$beta as mean
+      beta[,,i] <- graph$beta + matrix(rnorm(n_node*n_node, 
+                                             mean = 0, 
+                                             sd = beta_sd), 
+                                             nrow = n_node, ncol = n_node)
+      
+      # Check if beta matrix is stable
+      ev_b <- eigen(beta[,,i])$values
+      if(all(Re(ev_b)^2 + Im(ev_b)^2 < 1)) break
+      
+    }
+    
+    counter <- 0
+    repeat {
+      counter <- counter + 1
+      if(counter > max_try) stop("Exceeded maximum number of attempts to generate semi-positive definite kappa matrix.")
+      
+      # Generate kappa matrix using graph$kappa as mean
+      kappa[,,i] <- as.matrix(Matrix::forceSymmetric(graph$kappa + matrix(rnorm(n_node*n_node, 
+                                                                                mean = 0, 
+                                                                                sd = kappa_sd),
+                                                                          nrow = n_node, ncol = n_node)))
+      
+
+      # Check if kappa matrix is semi-positive definite
+      ev_k <- eigen(kappa[,,i])$values
+      
+      if(all(ev_k >= 0)) break
+    }
+    
+
+    data[[i]] <- tryCatch({graphicalVAR::graphicalVARsim(nTime = n_time,
+                                               beta = beta[,,i],
+                                               kappa = kappa[,,i]
+                                               )}, error = function(e) NA)
+    }
+  
+  
+  # Return the list of simulated data
+  # Also return the parameters used in the simulation
+  ret <- list()
+  ret$data <- data
+  ret$beta <- beta
+  ret$kappa <- kappa
+  return(ret)
+
+}
+
+
+```
+
+
+Try the function
+```{r}
+sim_data_loop <- sim_gvar_loop(graph = graph_nonsparse,
+                     beta_sd = 0.75,
+                     kappa_sd = 0.3,
+                     n_person = 100,
+                     n_time = 150,
+                     n_node = 6,
+                     max_try = 10000)
+
+```
+
+Try if it can be fitted
+```{r}
+data_loop <- sim_data_loop$data %>% 
+  # convert each array in list to dataframe
+  map(~as.data.frame(.x)) %>%
+  bind_rows(.id = "id") 
+  
+var_labs <- c("V1", "V2", "V3", "V4", "V5", "V6")
+
+
+loop_test_fit <- mlVAR(data_loop,
+              vars=var_labs,
+              idvar="id",
+              lags = 1,
+              temporal = "correlated",
+              contemporaneous = "correlated",
+              nCores = 13)
+```
+
+
+
 

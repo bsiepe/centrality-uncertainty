@@ -29,12 +29,14 @@ source(here("scripts", "functions.R"))
 # Settings for data simulation
 # for mlvar sim
 thetaVar = 1
-DF_theta = 2.5
+DF_theta = 2
 mu_SD = c(1, 1)
 init_beta_SD = c(0.3, 1.5) 
 fixedMuSD = 1
 shrink_fixed = 0.9
 shrink_deviation = 0.9
+pcor_sparsity = 0.5
+beta_sparsity = 0.5
 
 # for regression
 reg_error_sd = 1
@@ -47,20 +49,23 @@ reg_error_sd = 1
 ```{r params}
 # Simulation parameters
 # Number of individuals 
-n_id <- c(50, 150)
-
+n_id <- 200
 
 # Number of variables
-n_var <- c(6, 9)
+n_var <- 6
 
 # Number of timepoints
-n_tp <- c(75, 150)
+n_tp <- 150
 
 # Type of DGP
-# dgp <- c("sparse", "dense")
+dgp <- c("sparse", "dense")
 
-# Strength of regression association
+# Heterogeneity
+heterogeneity <- c("low", "high")
+
+# Strength of the correlation
 beta_reg <- c(0.25, 5)
+
 
 
 # Design
@@ -79,10 +84,9 @@ sim_pars <- list(
   init_beta_SD = init_beta_SD,
   fixedMuSD = fixedMuSD,
   shrink_fixed = shrink_fixed,
-  shrink_deviation = shrink_deviation,
-  mlvar_model = mlvar_model
+  shrink_deviation = shrink_deviation
+  # mlvar_model = mlvar_model
 )
-
 ```
 
 
@@ -95,7 +99,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
   SimDesign::Attach(fixed_objects)
   
   # Simulate data
-  ml_sim <- mlVAR::mlVARsim(
+  ml_sim <- mlVARsim_mod(
                 nPerson = condition$n_id, 
                 nNode = condition$n_var, 
                 nTime = condition$n_tp, 
@@ -106,13 +110,17 @@ sim_generate <- function(condition, fixed_objects = NULL){
                 init_beta_SD = init_beta_SD, 
                 fixedMuSD = fixedMuSD, 
                 shrink_fixed = shrink_fixed, 
-                shrink_deviation = shrink_deviation)
+                shrink_deviation = shrink_deviation,
+                beta_sparsity = beta_sparsity,
+                pcor_sparsity = pcor_sparsity)
   
   # Obtain true centralities
   true_cent <- centrality_mlvar_sim(ml_sim)
   
-  tempdens <- unlist(true_cent$dens_temp)
-  outstrength <- sapply(true_cent$outstrength, `[`, 1)
+  # TODO think about if scaling is okay here
+  tempdens <- unlist(true_cent$dens_temp) %>% scale()
+  outstrength <- sapply(true_cent$outstrength, `[`, 1) %>% scale()
+  contdens <- unlist(true_cent$dens_cont) %>% scale()
   
   
   # Simulate covariate with certain error
@@ -122,16 +130,45 @@ sim_generate <- function(condition, fixed_objects = NULL){
   resid_dens <- rnorm(condition$n_id, mean = 0, sd = eps_sd)
   resid_cent <- rnorm(condition$n_id, mean = 0, sd = eps_sd)
 
-  covariate_tempdens = rep(condition$beta_reg, condition$n_id) * tempdens + resid_dens
-  covariate_oustrength = rep(condition$beta_reg, condition$n_id) * outstrength + resid_cent
+  # covariate_tempdens = rep(condition$beta_reg, condition$n_id) * tempdens + resid_dens
+  # covariate_oustrength = rep(condition$beta_reg, condition$n_id) * outstrength + resid_cent
+  # correlation matrix of true effects
+  rho <- c(
+          1, 0, .2, .4,
+          0, 1, 0, 0,
+         .2, 0, 1, 0,
+         .4, 0 , 0, 1) %>% matrix(4, 4, byrow = T)
+  
+  # cholesky decomposition of rho
+  L <- chol(rho)
+  
+  # Generate covariates with multiple levels of correlation
+  covariate_temp_dens <- cbind(tempdens, 
+                               rnorm(condition$n_id), 
+                               rnorm(condition$n_id),
+                               rnorm(condition$n_id))
+  covariate_cont_dens <- cbind(contdens, 
+                               rnorm(condition$n_id), 
+                               rnorm(condition$n_id),
+                               rnorm(condition$n_id))
+  covariate_out_strength <- cbind(outstrength, 
+                                  rnorm(condition$n_id), 
+                                  rnorm(condition$n_id),
+                                  rnorm(condition$n_id))
+  
+  covariate_temp_dens <- covariate_temp_dens %*% L
+  covariate_cont_dens <- covariate_cont_dens %*% L
+  covariate_out_strength <- covariate_out_strength %*% L
   
   # Return data and true centralities
   ret_data <- list(
     data = ml_sim$Data,
-    covariate_tempdens = covariate_tempdens,
-    covariate_oustrength = covariate_oustrength,
+    covariate_temp_dens = covariate_temp_dens,
+    covariate_out_strength = covariate_out_strength,
+    covariate_cont_dens = covariate_cont_dens,
     true_cent = true_cent
   )
+  
   return(ret_data)
   
   
@@ -178,16 +215,20 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # dens_temp_gvar <- vapply(cent_gvar, function(x){
   #   x$dens_temp
   # }, numeric(1))
-  dens_temp_gvar <- unlist(cent_gvar$dens_temp)
+  dens_temp_gvar <- lapply(cent_gvar, function(x){
+    x$dens_temp
+  })
   
   # outstrength_gvar <- vapply(cent_gvar, function(x){
   #   x$outstrength[1]
   # }, numeric(1))
+  
+  # PROBABLY DOES NOT WORK YET; INCORRECT LIST INDEXING
   outstrength_gvar <- sapply(cent_gvar$outstrength, `[`, 1)
   
   # Fit regression
-  reg_gvar_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_gvar)$coefficients[2][[1]]
-  reg_gvar_outstrength <- lm(dat$covariate_oustrength ~ outstrength_gvar)$coefficients[2][[1]]
+  reg_gvar_temp_dens <- lm(dat$covariate_temp_dens ~ dens_temp_gvar)$coefficients[2][[1]]
+  reg_gvar_out_strength <- lm(dat$covariate_out_strength ~ outstrength_gvar)$coefficients[2][[1]]
   
   #--- GIMME
   
@@ -212,8 +253,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   outstrength_gimme <- sapply(cent_gimme$outstrength, `[`, 1)
   
   # Fit regression
-  reg_gimme_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_gimme)$coefficients[2][[1]]
-  reg_gimme_outstrength <- lm(dat$covariate_oustrength ~ outstrength_gimme)$coefficients[2][[1]]
+  reg_gimme_temp_dens <- lm(dat$covariate_temp_dens ~ dens_temp_gimme)$coefficients[2][[1]]
+  reg_gimme_out_strength <- lm(dat$covariate_out_strength ~ outstrength_gimme)$coefficients[2][[1]]
   
   #--- frequentist mlVAR
   
@@ -232,15 +273,15 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # dens_temp_mlvar <- vapply(cent_mlvar, function(x){
   #   x$dens_temp
   # }, numeric(1))
-  dens_temp_mlvar <- unlist(cent_mlvar$dens_temp)
+  temp_dens_mlvar <- unlist(cent_mlvar$dens_temp)
   # outstrength_mlvar <- vapply(cent_mlvar, function(x){
   #   x$outstrength[1]
   # }, numeric(1))
   outstrength_mlvar <- sapply(cent_mlvar$outstrength, `[`, 1)
   
   # Fit regression
-  reg_mlvar_tempdens <- lm(dat$covariate_tempdens ~ dens_temp_mlvar)$coefficients[2][[1]]
-  reg_mlvar_outstrength <- lm(dat$covariate_oustrength ~ outstrength_mlvar)$coefficients[2][[1]]
+  reg_mlvar_temp_dens <- lm(dat$covariate_temp_dens ~ temp_dens_mlvar)$coefficients[2][[1]]
+  reg_mlvar_out_strength <- lm(dat$covariate_out_strength ~ out_strength_mlvar)$coefficients[2][[1]]
   
   #--- Bayesian mlVAR
   
@@ -301,7 +342,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     #   reg_tempdens = reg_bmlvar_tempdens,
     #   reg_outstrength = reg_bmlvar_outstrength
     # ),
-    true_cent = dat$true_cent
+    true_cent = dat$true_cent,
+    data = data_list
   )
   return(ret_results)
   
@@ -314,56 +356,118 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 # Summary
 
 
-Helpers:
-TODO maybe add na checks
-```{r helpers}
-abs_mean <- function(x){
-  mean(abs(x), na.rm = TRUE)
-}
-abs_med <- function(x){
-  stats::median(abs(x), na.rm = TRUE)
-}
-
-abs_sum <- function(x){
-  sum(abs(x), na.rm = TRUE)
-}
-
-# Summary functions
-# Compute mean pairwise absolute bias for list of matrices
-abs_mean_bias_list <- function(x, y){
-  Map(function(x, y){
-    abs_mean(x - y)
-  }, x, y)
-}
-
-# Find most central node and compare to true centrality
-# for list of centralities
-most_cent_ident <- function(x, y){
-  Map(function(x, y){
-    which.max(x) == which.max(y)
-  }, x, y)
-}
-
-
-
-
-```
-
-
-
 ```{r summarize}
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
   SimDesign::Attach(fixed_objects)
-  
-  # Loop over different analysis functions
-  for(m in 1:length(results[[1]])){
-    
-  
-  
+
   #--- Parameter recovery  
   # IMPORTANT: Keep in mind structure of mlVARsim object (rows vs. cols)
+  #-- RMSE
+  #- LASSO GVAR
+  # TODO IMPORTANT! THINK ABOUT SCALING
+  # Temporal
+  rmse_beta_gvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$gvar$fit_gvar)){
+      return(NA)
+    } 
+    else{
+      # TODO THINK ABOUT SCALING HERE
+      rmse_mean_list(results[[i]]$gvar$fit_gvar$XXX, results[[i]]$XXX)
+    }
+
+  })
+  # Contemporaneous
+  rmse_pcor_gvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$gvar$fit_gvar)){
+      return(NA)
+    } 
+    else{
+      # TODO THINK ABOUT SCALING HERE
+      rmse_mean_list(results[[i]]$gvar$fit_gvar$XXX, results[[i]]$XXX)
+    }
+  })
+    
+  #- GIMME
+  # Temporal
+  rmse_beta_gimme <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$gimme$fit_gimme)){
+      return(NA)
+    } 
+    else{
+      # TODO THINK ABOUT SCALING HERE
+      rmse_mean_list(results[[i]]$gimme$fit_gimme$XXX, results[[i]]$XXX)
+    }
+  })
+  # Contemporaneous  
+  rmse_pcor_gimme <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$gimme$fit_gimme)){
+      return(NA)
+    } 
+    else{
+      # TODO THINK ABOUT SCALING HERE
+      rmse_mean_list(results[[i]]$gimme$fit_gimme$XXX, results[[i]]$XXX)
+    }
+  })
+  
+    
+  #- mlVAR
+  # Temporal
+  rmse_beta_mlvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$mlvar$fit_mlvar)){
+      return(NA)
+    } 
+    else{
+      # TODO THINK ABOUT SCALING HERE
+      rmse_mean_list(results[[i]]$mlvar$fit_mlvar$XXX, results[[i]]$XXX)
+    }
+  })
+  # Contemporaneous
+  rmse_pcor_mlvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$mlvar$fit_mlvar)){
+      return(NA)
+    } 
+    else{
+      # TODO THINK ABOUT SCALING HERE
+      rmse_mean_list(results[[i]]$mlvar$fit_mlvar$XXX, results[[i]]$XXX)
+    }
+  })
+    
+  #- BmlVAR
+  # Temporal
+  rmse_beta_bmlvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$bmlvar$fit_bmlvar)){
+      return(NA)
+    } 
+    else{
+      # TODO THINK ABOUT SCALING HERE
+      rmse_mean_list(results[[i]]$bmlvar$fit_bmlvar$XXX, results[[i]]$XXX)
+    }
+  })
+  # Contemporaneous
+  rmse_pcor_bmlvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$bmlvar$fit_bmlvar)){
+      return(NA)
+    } 
+    else{
+      # TODO THINK ABOUT SCALING HERE
+      rmse_mean_list(results[[i]]$bmlvar$fit_bmlvar$XXX, results[[i]]$XXX)
+    }
+  })
+    
+  #-- MCSE
+  #- LASSO GVAR
+    
+  #- GIMME
+    
+  #- mlVAR
+    
+  #- BmlVar 
+    
+    
+    
+    
   #-- Bias
   #- LASSO GVAR
   
@@ -430,17 +534,19 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   
   #--- Regression
-  #-- Bias 
+  #-- RMSE
   #- LASSO GVAR
+  
+  
     
   #- GIMME
     
   #- mlVAR
     
   #- BmlVar
-  bias_reg_tempdens <- ""
+  rmse_reg_tempdens <- ""
     
-  bias_reg_outstrength <- ""
+  rmse_reg_outstrength <- ""
     
     
   #-- MCSE
@@ -451,11 +557,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   #- mlVAR
     
   #- BmlVar
-  biasmcse_reg_tempdens <- ""
-  biasmcse_reg_outstrength <- ""  
+  rmsemcse_reg_tempdens <- ""
+  rmsemcse_reg_outstrength <- ""  
   
     
-  } # end loop over methods
   #--- Return
 
   
@@ -478,17 +583,18 @@ sim_results <- SimDesign::runSimulation(
                                     replications = 2, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
-                                    summarise = sim_summarise, 
+                                    summarise = NA,
                                     fixed_objects = sim_pars,
                                     # parallel = TRUE,
                                     # packages = c("tidyverse"),
-                                    save_results = FALSE,
+                                    save_results = TRUE,
                                     # ncores = 2,
-                                    debug = "summarise"
+                                    debug = "generate"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
 
+SimClean()
 
 ```
 
