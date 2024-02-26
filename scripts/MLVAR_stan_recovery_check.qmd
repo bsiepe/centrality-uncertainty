@@ -8,6 +8,7 @@ format: html
 ```{r setup, include = FALSE}
 # Libraries
 library(tidyverse)
+library(plyr)
 library(rmarkdown)
 library(graphicalVAR)
 library(mlVAR)
@@ -35,8 +36,10 @@ TODO: The following does not work yet when we scale the variables, because the t
 
 Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
 ```{r sim-data}
-I <- 200
-K <- 6
+I <- 50
+K <- 2
+# number of regression outcomes
+P <- 9
 n_pc <-  K * (K - 1) / 2
 idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>% 
   c() %>% 
@@ -113,38 +116,44 @@ eps <- 1
 resid <- rnorm(I, mean = 0, sd = eps)
 
 # correlation matrix of true effects
-rho <- c(1, .2, .4,
-         .2, 1, 0,
-         .4, 0, 1) %>% matrix(3, 3, byrow = T)
+rho <- c(1,  0, .2, .4,
+         0,  1,  0,  0,
+         .2, 0,  1,  0,
+         .4, 0,  0,  1) %>% matrix(4, 4, byrow = T)
 # cholesky decomposition of rho
 L <- chol(rho)
 
 # Simulate data for outcomes
-outcome_temp_dens <- cbind(tempdens, rnorm(I), rnorm(I))
-outcome_contemp_dens <- cbind(contemp_dens, rnorm(I), rnorm(I))
-outcome_out_strength <- cbind(out_strength_1, rnorm(I), rnorm(I))
+outcome_temp_dens <- cbind(tempdens, rnorm(I), rnorm(I), rnorm(I))
+outcome_contemp_dens <- cbind(contemp_dens, rnorm(I), rnorm(I), rnorm(I))
+outcome_out_strength <- cbind(out_strength_1, rnorm(I), rnorm(I), rnorm(I))
 
 # rotate outcomes to correlate with predictors and check resulting correlations
 outcome_temp_dens <- outcome_temp_dens %*% L
 (cor(outcome_temp_dens) - rho) %>% round(2)
 lm(outcome_temp_dens[, 2] ~ tempdens) %>% coef() %>% .[2]
 lm(outcome_temp_dens[, 3] ~ tempdens) %>% coef() %>% .[2]
+lm(outcome_temp_dens[, 4] ~ tempdens) %>% coef() %>% .[2]
+
 
 outcome_contemp_dens <- outcome_contemp_dens %*% L
 (cor(outcome_contemp_dens) - rho) %>% round(2)
 lm(outcome_contemp_dens[, 2] ~ contemp_dens) %>% coef() %>% .[2]
 lm(outcome_contemp_dens[, 3] ~ contemp_dens) %>% coef() %>% .[2]
+lm(outcome_contemp_dens[, 4] ~ contemp_dens) %>% coef() %>% .[2]
 
 outcome_out_strength <- outcome_out_strength %*% L
 (cor(outcome_out_strength) - rho) %>% round(2)
 lm(outcome_out_strength[, 2] ~ out_strength_1) %>% coef() %>% .[2]
 lm(outcome_out_strength[, 3] ~ out_strength_1) %>% coef() %>% .[2]
+lm(outcome_out_strength[, 4] ~ out_strength_1) %>% coef() %>% .[2]
 
-# define regression data
+
+# define regression data and standardize
 reg_data <-
-  cbind(outcome_temp_dens[, 2:3],
-        outcome_contemp_dens[, 2:3],
-        outcome_out_strength[, 2:3])
+  cbind(outcome_temp_dens[, 2:4] %>% apply(2, scale),
+        outcome_contemp_dens[, 2:4] %>% apply(2, scale),
+        outcome_out_strength[, 2:4] %>% apply(2, scale))
 
 ```
 
@@ -155,7 +164,7 @@ stan_data <-
   list(
     K = K,
     I = I,
-    P = 6,
+    P = P,
     N_total = nrow(Y),
     n_t = n_t,
     n_pc = n_pc,
@@ -163,6 +172,52 @@ stan_data <-
     Y = Y,
     reg_covariate = reg_data
   )
+```
+
+#### Strating Values
+```{r  renv.ignore = TRUE}
+# # initial values
+# beta_start <-
+#   rho_start <-
+#   map(ml_data, function(x) {
+#     cov(x[, 1:K])
+#   }) %>% estimates_matrix_list2array()
+# intercept_start <-
+#   map(ml_data, function(x)
+#     colMeans(x[, 1:K])) %>% do.call(rbind, .)
+# theta_start <- map(ml_data, function(x) {
+#     cov(x[, 1:K]) %>% chol() %>% t()
+#   }) %>% estimates_matrix_list2array()
+# n_chains <- 4
+# 
+# init_values <- 
+#   lapply(1:n_chains, function(x) {
+#     list(
+#       # beta matrix
+#       Beta_raw = beta_start,
+#       mu_Beta = matrix(0, K, K),
+#       sigma_Beta = matrix(0, K, K),
+#       # network intercepts
+#       Intercepts = intercept_start,
+#       mu_Intercepts = rep(0, K),
+#       sigma_Intercepts = matrix(0, K, K),
+#       # matrix of innovations
+#       L_Theta = theta_start,
+#       rho_loc_raw = matrix(rep(0.5, I * n_pc), I, n_pc),
+#       rho_var_raw = matrix(rep(sqrt(0.5), I * n_pc), I, n_pc),
+#       mu_rho_loc = rep(0.5, n_pc),
+#       sigma_rho_loc = rep(1, n_pc),
+#       mu_rho_var = rep(sqrt(0.5), n_pc),
+#       sigma_rho_var = rep(0, n_pc),
+#       theta_sd_raw = matrix(rep(0, I * K), I, K),
+#       mu_theta_sd = rep(0, K),
+#       sigma_theta_sd = rep(0, K),
+#       # regression
+#       reg_intercept = rep(0, P),
+#       reg_slope_density = rep(0, P),
+#       reg_residual = rep(0, P)
+#     )
+#   })
 ```
 
 ```{r compile, renv.ignore = TRUE}
@@ -191,7 +246,7 @@ mlvar_fit <- rstan::sampling(
   cores = n_chains,
   warmup = 500,
   iter = 1000,
-  init = 0.001,
+  init = 0,
   control = list(adapt_delta = 0.9),
   verbose = FALSE
 )
@@ -202,10 +257,10 @@ rstan::get_elapsed_time(mlvar_fit) %>%
 
 saveRDS(mlvar_fit, here("fits", "mlvar_fit.rds"))
 ```
+
 ```{r}
 mlvar_fit <- readRDS(here("fits", "mlvar_fit.rds"))
 ```
-
 
 ## Effective sample size (ESS) & Rhat Plots
 ```{r ,  renv.ignore=TRUE, eval = FALSE}
@@ -238,11 +293,10 @@ plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
 ```
 ```{r}
 rstan::check_hmc_diagnostics(mlvar_fit)
-
 ```
 
 ```{r}
-param_ests <- summary(mlvar_fit)$summary
+param_ests <- summary(mlvar_fit)$summary %>% as.data.frame()
 ```
 
 ## Parameter Recovery
@@ -266,12 +320,12 @@ abline(a = 0, b = 1, col = "red")
 ```{r}
 bayesplot::mcmc_recover_intervals(
   true = rep(c(.2, .4),3),
-  x = rstan::extract(object = mlvar_fit, "reg_slope_density") %>% do.call(cbind, .) %>%
+  x = rstan::extract(object = mlvar_fit, "reg_slope_density_z") %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 
 bayesplot::mcmc_intervals(
-  x = rstan::extract(object = mlvar_fit, "reg_slope_density") %>% do.call(cbind, .) %>%
+  x = rstan::extract(object = mlvar_fit, "reg_slope_density_z") %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 

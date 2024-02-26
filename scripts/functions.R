@@ -523,9 +523,15 @@ draws_array2matrix <- function(array_3d,
   return(matrix)
 }
 
-
-
-
+# transform list of matrices into a 3D array
+estimates_matrix_list2array <- function(estimates_list) {
+  array <-
+    array(0, dim = c(length(estimates_list), dim(estimates_list[[1]])))
+  for (i in 1:length(estimates_list)) {
+    array[i, ,] <- estimates_list[[i]]
+  }
+  return(array)
+}
 
 # Compare fit to DGP ------------------------------------------------------
 array_compare_dgp <- function(post_samples,
