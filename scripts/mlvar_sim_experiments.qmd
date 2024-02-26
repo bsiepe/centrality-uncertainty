@@ -9,6 +9,7 @@ In this document, we try to adapt the `mlVAR::mlVARsim` function to our purposes
 library(mvtnorm)
 library(here)
 library(mlVAR)
+library(tidyverse)
 ```
 
 
@@ -545,7 +546,6 @@ This function should:
 2. Create random effects for beta and for kappa 
 3. Simulate data for each individual using the graphicalVAR 
 
-TODO I don't think the matrix call within rnorm() works, need to check that.
 
 ```{r}
 sim_gvar <- function(graph,
@@ -626,8 +626,126 @@ Try the function
 sim_data <- sim_gvar(graph = graph_nonsparse,
                      beta_sd = 0.1,
                      kappa_sd = 0.1,
-                     n_person = 30,
+                     n_person = 100,
                      n_time = 150,
-                     n_node = 6)
+                     n_node = 6,
+                     max_try = 10000)
 ```
+
+This still does not work with a larger amount of beta sd
+
+
+
+## With for-loop approach
+
+Idea: In the function above (`sim_gvar`), all beta and kappa matrices are generated at once.Instead, we could generate the beta and kappa matrices for each individual separately. This would allow us to check for stability and semi-positive definiteness for each individual separately. 
+
+```{r}
+sim_gvar_loop <- function(graph,
+                     beta_sd,
+                     kappa_sd,
+                     n_person,
+                     n_time,
+                     n_node,
+                     max_try = 1000){
+  # browser()
+  
+  # Create a list to store the data for each person
+  data <- vector("list", n_person)
+  beta <- array(NA, c(n_node, n_node, n_person))
+  kappa <- array(NA, c(n_node, n_node, n_person))
+  
+  # Simulate data for each person
+  for(i in seq_len(n_person)){
+  
+  counter <- 0
+    repeat {
+      counter <- counter + 1
+      if(counter > max_try) stop("Exceeded maximum number of attempts to generate stable beta matrix.")
+      
+      # Generate beta matrix using graph$beta as mean
+      beta[,,i] <- graph$beta + matrix(rnorm(n_node*n_node, 
+                                             mean = 0, 
+                                             sd = beta_sd), 
+                                             nrow = n_node, ncol = n_node)
+      
+      # Check if beta matrix is stable
+      ev_b <- eigen(beta[,,i])$values
+      if(all(Re(ev_b)^2 + Im(ev_b)^2 < 1)) break
+      
+    }
+    
+    counter <- 0
+    repeat {
+      counter <- counter + 1
+      if(counter > max_try) stop("Exceeded maximum number of attempts to generate semi-positive definite kappa matrix.")
+      
+      # Generate kappa matrix using graph$kappa as mean
+      kappa[,,i] <- as.matrix(Matrix::forceSymmetric(graph$kappa + matrix(rnorm(n_node*n_node, 
+                                                                                mean = 0, 
+                                                                                sd = kappa_sd),
+                                                                          nrow = n_node, ncol = n_node)))
+      
+
+      # Check if kappa matrix is semi-positive definite
+      ev_k <- eigen(kappa[,,i])$values
+      
+      if(all(ev_k >= 0)) break
+    }
+    
+
+    data[[i]] <- tryCatch({graphicalVAR::graphicalVARsim(nTime = n_time,
+                                               beta = beta[,,i],
+                                               kappa = kappa[,,i]
+                                               )}, error = function(e) NA)
+    }
+  
+  
+  # Return the list of simulated data
+  # Also return the parameters used in the simulation
+  ret <- list()
+  ret$data <- data
+  ret$beta <- beta
+  ret$kappa <- kappa
+  return(ret)
+
+}
+
+
+```
+
+
+Try the function
+```{r}
+sim_data_loop <- sim_gvar_loop(graph = graph_nonsparse,
+                     beta_sd = 0.75,
+                     kappa_sd = 0.3,
+                     n_person = 100,
+                     n_time = 150,
+                     n_node = 6,
+                     max_try = 10000)
+
+```
+
+Try if it can be fitted
+```{r}
+data_loop <- sim_data_loop$data %>% 
+  # convert each array in list to dataframe
+  map(~as.data.frame(.x)) %>%
+  bind_rows(.id = "id") 
+  
+var_labs <- c("V1", "V2", "V3", "V4", "V5", "V6")
+
+
+loop_test_fit <- mlVAR(data_loop,
+              vars=var_labs,
+              idvar="id",
+              lags = 1,
+              temporal = "correlated",
+              contemporaneous = "correlated",
+              nCores = 13)
+```
+
+
+
 
