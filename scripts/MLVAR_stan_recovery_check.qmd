@@ -319,7 +319,7 @@ abline(a = 0, b = 1, col = "red")
 ## Regression
 ```{r}
 bayesplot::mcmc_recover_intervals(
-  true = rep(c(.2, .4),3),
+  true = rep(c(0, .2, .4),3),
   x = rstan::extract(object = mlvar_fit, "reg_slope_density_z") %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
@@ -333,7 +333,7 @@ bayesplot::mcmc_intervals(
 
 ```{r}
 bayesplot::mcmc_recover_intervals(
-  true = rep(0,6),
+  true = rep(0,9),
   x = rstan::extract(object = mlvar_fit, c("reg_intercept")) %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )

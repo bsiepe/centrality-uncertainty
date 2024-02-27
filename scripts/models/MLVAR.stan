@@ -142,7 +142,7 @@ model {
   to_vector(mu_Beta) ~ std_normal(); // prior on mu_Beta
   to_vector(sigma_Beta) ~ std_normal(); // prior on sigma_Beta
   to_vector(Intercepts_raw) ~ std_normal(); // prior on Intercepts
-  mu_Intercepts ~ std_normal(); // prior on mu_Intercepts
+  mu_Intercepts ~ student_t(3, 0, 2); // prior on mu_Intercepts
   sigma_Intercepts ~ std_normal(); // prior on sigma_Intercepts
   
   // Priors Contemporaneous ///////////////////////////////////////////////////
@@ -186,7 +186,7 @@ model {
     
     // network predictions: loop over time points
     for(t in 1:(n_t[i]-1)){
-      mu_network[t] = Intercepts[i, ]' + Beta[i] * Y_temp[t,]; // predictions for the network
+      mu_network[t] = to_vector(Intercepts[i, ]) + Beta[i] * (Y_temp[t,] - to_vector(Intercepts[i, ])); // predictions for the network
       } // end t
       
     // Network
