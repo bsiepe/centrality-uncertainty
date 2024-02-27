@@ -1,6 +1,8 @@
+fits/
+fits/mlvar_fit.rds
+
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
-fits/
-fits/mlvar_fit.rds
+
