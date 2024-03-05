@@ -501,12 +501,12 @@ for (v in seq_along(varLabs)){
 data_detrended$Anxiety <- rowMeans(dplyr::select(data_detrended, Irritable, Worry, Nervous, Relax), na.rm = FALSE)
 data_detrended$Depression <- rowMeans(dplyr::select(data_detrended, Anhedonia, Future, Tired), na.rm = FALSE)
 
-varLabs3 <- c("Anxiety", "Depression", "Alone","Social_offline","Social_online",
-             "Outdoors","C19_occupied","C19_worry","Home")
+varLabs6 <- c("Anxiety", "Depression", "Alone","Social_offline","Social_online",
+             "Outdoors")
 
 # Run mlVAR (correlated):
-res3 <- mlVAR(data_detrended,
-              vars=varLabs3,
+res6 <- mlVAR(data_detrended,
+              vars=varLabs6,
               idvar="id",
               dayvar="day",
               beepvar="beep",
@@ -516,26 +516,56 @@ res3 <- mlVAR(data_detrended,
               nCores = 13)
 
 # # # delete irrelevant data storage
-res3 <- res3[res3!="data"]
-saveRDS(res3, here("data/network_fried2020_9n.RData"))
+# res3 <- res3[res3!="data"]
+saveRDS(res6, here("data/network_fried2020_6n.RData"))
 # # load model
-# res3<-readRDS(here("data/network_correlated_Fried2020_9n_final.RData"))
+# res3<-readRDS(here("data/network_fried2020_9n.RData"))
 
 # Names for the Plot :
- names <- c("Anxiety", "Depression", "Alone", 
+names <- c("Anxiety", "Depression", "Alone", 
             "Social Offline", "Social Online", "Outdoors",
             "C19 Occupied", "C19 Worry", "Home") 
 
 # Get the contemporaneous and temporal networks:
-cont6 <- getNet(res3, "contemporaneous", layout = "spring", nonsig = "hide", rule = "and")
+cont6 <- getNet(res6, "contemporaneous", layout = "spring", nonsig = "hide", rule = "and")
 #bet6 <- getNet(res3, "between", nonsig = "hide", rule = "and")
-temp6 <- getNet(res3, "temporal", nonsig = "hide")
+temp6 <- getNet(res6, "temporal", nonsig = "hide")
+
 
 ```
+
+Create sparse graph (see https://github.com/bsiepe/var-compare/blob/main/true-networks.Rmd)
+```{r}
+# beta 
+beta_6n <- res6$results$Beta$mean[,,1] * t(temp6 != 0)
+
+# partial correlations
+omega_6n <- res6$results$Theta$pcor$mean * (cont6 != 0)
+
+# precision matrix
+theta_6n <- res6$results$Theta$prec$mean * (cont6 != 0 | diag(ncol(cont6)) == 1)
+
+graph_sparse <- list(beta = beta_6n, pcor = omega_6n, kappa = theta_6n)
+saveRDS(graph_sparse, here("data/graph_sparse.RDS"))
+
+```
+
+Create nonsparse graph
+```{r}
+beta_6n <- res6$results$Beta$mean[,,1]
+omega_6n <- res6$results$Theta$pcor$mean
+theta_6n <- res6$results$Theta$prec$mean
+graph_nonsparse <- list(beta = beta_6n, pcor = omega_6n, kappa = theta_6n)
+saveRDS(graph_nonsparse, here("data/graph_nonsparse.RDS"))
+
+```
+
+
 
 # Writing own function
 Try to create a function that uses a fitted fixed-effects structure to simulate data with a specific random effects variance, but uses a graphicalVAR structure for each individual.
 Taken from here: https://github.com/bsiepe/var-compare/blob/main/true-networks.Rmd
+
 ```{r}
 # Graph to simulate from
 graph_nonsparse <- readRDS(here("data/graph5.RDS"))
@@ -717,7 +747,8 @@ sim_gvar_loop <- function(graph,
 
 Try the function
 ```{r}
-sim_data_loop <- sim_gvar_loop(graph = graph_nonsparse,
+sim_data_loop <- sim_gvar_loop(
+                     graph = graph_nonsparse,
                      beta_sd = 0.75,
                      kappa_sd = 0.3,
                      n_person = 100,
