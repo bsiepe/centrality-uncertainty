@@ -1,3 +1,91 @@
+# GVAR based ML sim function ----------------------------------------------
+sim_gvar_loop <- function(graph,
+                          beta_sd,
+                          kappa_sd,
+                          n_person,
+                          n_time,
+                          n_node,
+                          max_try = 1000,
+                          failsafe = TRUE) {
+  # Create a list to store the data for each person
+  data <- vector("list", n_person)
+  beta <- array(NA, c(n_node, n_node, n_person))
+  kappa <- array(NA, c(n_node, n_node, n_person))
+  pcor <- array(NA, c(n_node, n_node, n_person))
+  
+  # Simulate data for each person
+  for (i in seq_len(n_person)) {
+    counter <- 0
+    repeat {
+      counter <- counter + 1
+      if (counter > max_try)
+        stop("Exceeded maximum number of attempts to generate stable beta matrix.")
+      
+      # Generate beta matrix using graph$beta as mean
+      beta[, , i] <- graph$beta + matrix(rnorm(n_node * n_node,
+                                               mean = 0,
+                                               sd = beta_sd),
+                                         nrow = n_node,
+                                         ncol = n_node)
+      
+      # Check if beta matrix is stable
+      ev_b <- eigen(beta[, , i])$values
+      if (all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1))
+        break
+    }
+    
+    counter <- 0
+    repeat {
+      counter <- counter + 1
+      if (counter > max_try)
+        stop(
+          "Exceeded maximum number of attempts to generate semi-positive definite kappa matrix."
+        )
+      
+      # Generate kappa matrix using graph$kappa as mean
+      kappa[, , i] <-
+        as.matrix(Matrix::forceSymmetric(graph$kappa + matrix(
+          rnorm(n_node * n_node,
+                mean = 0,
+                sd = kappa_sd),
+          nrow = n_node,
+          ncol = n_node
+        )))
+      
+      # Check if kappa matrix is semi-positive definite
+      ev_k <- eigen(kappa[, , i])$values
+      
+      if (all(ev_k >= 0))
+        pcor[, , i] <- -stats::cov2cor(kappa[, , i])
+        diag(pcor[, , i]) <- 0
+        break
+    }
+    
+    if (failsafe) {
+      data[[i]] <-
+        tryCatch({
+          graphicalVAR::graphicalVARsim(nTime = n_time,
+                                        beta = beta[, , i],
+                                        kappa = kappa[, , i])
+        }, error = function(e)
+          NA)
+    } else {
+      data[[i]] <- graphicalVAR::graphicalVARsim(nTime = n_time,
+                                                 beta = beta[, , i],
+                                                 kappa = kappa[, , i])
+    }
+  }
+  
+  # Return the list of simulated data
+  # Also return the parameters used in the simulation
+  ret <- list()
+  ret$data <- data
+  ret$beta <- beta
+  ret$kappa <- kappa
+  ret$pcor <- pcor
+  return(ret)
+}
+
 # -------------------------------------------------------------------------
 # mlVAR simulation function -----------------------------------------------
 # -------------------------------------------------------------------------
@@ -409,22 +497,45 @@ centrality_mlvar <- function(fit){
 
 
 # Obtain centrality of simulated mlVAR object
-centrality_mlvar_sim <- function(simobj){
-  #--- Prepare
-  n_id <- length(simobj$model$mu$subject)
-  n_var <- length(simobj$vars)
+# works with mlvar_sim or sim_gvar_loop
+centrality_mlvar_sim <- function(simobj,
+                                 sim_fn = "sim_gvar_loop"){
   
-  #--- Obtain networks
-  l_beta <- lapply(1:n_id, function(i){
-    simobj$model$Beta$subject[[i]][,,1]
-  })
-  
-  l_pcor <- lapply(1:n_id, function(i){
-    x <- simobj$model$Theta$pcor$subject[[i]]
-    diag(x) <- 0
-    x
-  })
-  
+  if(sim_fn == "mlvar_sim"){
+    #--- Prepare
+    n_id <- length(simobj$model$mu$subject)
+    n_var <- length(simobj$vars)
+    
+    #--- Obtain networks
+    l_beta <- lapply(1:n_id, function(i){
+      simobj$model$Beta$subject[[i]][,,1]
+    })
+    
+    l_pcor <- lapply(1:n_id, function(i){
+      x <- simobj$model$Theta$pcor$subject[[i]]
+      diag(x) <- 0
+      x
+    })
+    
+  }
+  if(sim_fn == "sim_gvar_loop"){
+    #--- Prepare
+    n_id <- dim(simobj$beta)[3]
+    n_var <- dim(simobj$beta)[2]
+    
+    #--- Obtain networks
+    l_beta <- lapply(1:n_id, function(i){
+      simobj$beta[,,i]
+    })
+    
+    l_pcor <- lapply(1:n_id, function(i){
+      x <- simobj$pcor[,,i]
+      diag(x) <- 0
+      x
+    })
+    
+  }
+
   #--- Density
   dens_temp <- lapply(l_beta, function(x){
     sum(abs(x))/(n_var^2)
@@ -565,15 +676,9 @@ draws_array2matrix <- function(array_3d,
   return(matrix)
 }
 
-# transform list of matrices into a 3D array
-estimates_matrix_list2array <- function(estimates_list) {
-  array <-
-    array(0, dim = c(length(estimates_list), dim(estimates_list[[1]])))
-  for (i in 1:length(estimates_list)) {
-    array[i, ,] <- estimates_list[[i]]
-  }
-  return(array)
-}
+
+
+
 
 # Compare fit to DGP ------------------------------------------------------
 array_compare_dgp <- function(post_samples,
