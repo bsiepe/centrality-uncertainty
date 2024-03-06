@@ -144,9 +144,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
                                     sim_fn = "sim_gvar_loop")
   
   # TODO think about if scaling is okay here
-  tempdens <- unlist(true_cent$dens_temp) %>% scale()
-  outstrength <- sapply(true_cent$outstrength, `[`, 1) %>% scale()
-  contdens <- unlist(true_cent$dens_cont) %>% scale()
+  tempdens <- unlist(true_cent$dens_temp) |> scale()
+  outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale()
+  contdens <- unlist(true_cent$dens_cont) |> scale()
   
   
   # Simulate covariate with certain error
@@ -163,7 +163,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
           1, 0, .2, .4,
           0, 1, 0, 0,
          .2, 0, 1, 0,
-         .4, 0 , 0, 1) %>% matrix(4, 4, byrow = T)
+         .4, 0 , 0, 1) |> matrix(4, 4, byrow = T)
   
   # cholesky decomposition of rho
   L <- chol(rho)
@@ -204,6 +204,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 
 
 # Analysis
+TODO somehow GIMME does repeat without end here
 
 ```{r data-analysis}
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
@@ -224,9 +225,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # })
   
   # Concatenate list of data into dataframe with id column
-  df_data <- dat$data %>% 
-    map(~as_tibble(.)) %>% 
-    dplyr::bind_rows(., .id = "ID") 
+  df_data <- dplyr::bind_rows(purrr::map(dat$data, dplyr::as_tibble, .id = "ID")) 
   
   
   
@@ -261,57 +260,57 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- GIMME
   
   # Fit model
-  fit_gimme <- gimme::gimme(dat$data,
-                            ar = TRUE,
-                            subgroup = TRUE,
-                            plot = FALSE,
-                            hybrid = FALSE,
-                            groupcutoff = .50,
-                            subcutoff = .50)
-
-  # Obtain centralities
-  cent_gimme <- centrality_gimme(fit_gimme)
-  dens_temp_gimme <- sapply(cent_gimme, function(x){
-    x$dens_temp
-  })
-  dens_cont_gimme <- sapply(cent_gimme, function(x){
-    x$dens_cont
-  })
-  outstrength_gimme <- sapply(cent_gimme, function(x) unname(x$outstrength[1]))
-
-  # Fit regression
-  reg_gimme_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_gimme))
-  reg_gimme_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_gimme))
-  reg_gvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gimme))
+  # fit_gimme <- gimme::gimme(dat$data,
+  #                           ar = TRUE,
+  #                           subgroup = TRUE,
+  #                           plot = FALSE,
+  #                           hybrid = FALSE,
+  #                           groupcutoff = .50,
+  #                           subcutoff = .50)
+  # 
+  # # Obtain centralities
+  # cent_gimme <- centrality_gimme(fit_gimme)
+  # dens_temp_gimme <- sapply(cent_gimme, function(x){
+  #   x$dens_temp
+  # })
+  # dens_cont_gimme <- sapply(cent_gimme, function(x){
+  #   x$dens_cont
+  # })
+  # outstrength_gimme <- sapply(cent_gimme, function(x) unname(x$outstrength[1]))
+  # 
+  # # Fit regression
+  # reg_gimme_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_gimme))
+  # reg_gimme_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_gimme))
+  # reg_gvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gimme))
 
   # #--- frequentist mlVAR
-  # 
-  # # Fit model
-  # fit_mlvar <- mlVAR::mlVAR(df_data, 
-  #                           vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
-  #                           idvar = "ID",
-  #                           estimator = "lmer",
-  #                           contemporaneous = "correlated",
-  #                           temporal = "correlated",
-  #                           nCores = 1,
-  #                           scale = FALSE)
-  # 
-   # Obtain centralities
-  # cent_mlvar <- centrality_mlvar(fit_mlvar)
-  # temp_dens_mlvar <- sapply(cent_mlvar, function(x){
-  #   x$temporal_dens
-  # })
-  # cont_dens_mlvar <- sapply(cent_mlvar, function(x){
-  #   x$contemporaneous_dens
-  # })
-  # outstrength_mlvar <- sapply(cent_mlvar, function(x){
-  #   x$outstrength[1]
-  # })
-  # 
-  # # Fit regression 
-  # reg_mlvar_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ temp_dens_mlvar))
-  # reg_mlvar_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ cont_dens_mlvar))
-  # reg_mlvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_mlvar))
+
+  # Fit model
+  fit_mlvar <- mlVAR::mlVAR(df_data,
+                            vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
+                            idvar = "ID",
+                            estimator = "lmer",
+                            contemporaneous = "correlated",
+                            temporal = "correlated",
+                            nCores = 1,
+                            scale = FALSE)
+
+  # Obtain centralities
+  cent_mlvar <- centrality_mlvar(fit_mlvar)
+  temp_dens_mlvar <- sapply(cent_mlvar, function(x){
+    x$temporal_dens
+  })
+  cont_dens_mlvar <- sapply(cent_mlvar, function(x){
+    x$contemporaneous_dens
+  })
+  outstrength_mlvar <- sapply(cent_mlvar, function(x){
+    x$outstrength[1]
+  })
+
+  # Fit regression
+  reg_mlvar_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ temp_dens_mlvar))
+  reg_mlvar_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ cont_dens_mlvar))
+  reg_mlvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_mlvar))
   # 
   #--- Bayesian mlVAR
   
@@ -648,12 +647,15 @@ sim_results <- SimDesign::runSimulation(
                                     replications = 2, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
-                                    summarise = NA,
+                                    summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    # parallel = TRUE,
-                                    # packages = c("tidyverse"),
+                                    parallel = TRUE,
+                                    packages = c("tidyverse", 
+                                                 "gimme",
+                                                 "mlVAR",
+                                                 "graphicalVAR"),
                                     save_results = TRUE,
-                                    # ncores = 2,
+                                    ncores = 2,
                                     debug = "analyse"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
