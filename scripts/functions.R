@@ -6,7 +6,8 @@ sim_gvar_loop <- function(graph,
                           n_time,
                           n_node,
                           max_try = 1000,
-                          failsafe = TRUE) {
+                          failsafe = TRUE,
+                          listify = FALSE) {
   # Create a list to store the data for each person
   data <- vector("list", n_person)
   beta <- array(NA, c(n_node, n_node, n_person))
@@ -75,10 +76,16 @@ sim_gvar_loop <- function(graph,
                                                  kappa = kappa[, , i])
     }
   }
+  ret <- list()
+  if(isTRUE(listify)) {
+  # Convert 3D arrays beta, kappa, pcor to list
+  ret$beta_l <- lapply(1:n_person, function(i) beta[, , i])
+  ret$kappa_l <- lapply(1:n_person, function(i) kappa[, , i])
+  ret$pcor_l <- lapply(1:n_person, function(i) pcor[, , i])
+  }
   
   # Return the list of simulated data
   # Also return the parameters used in the simulation
-  ret <- list()
   ret$data <- data
   ret$beta <- beta
   ret$kappa <- kappa
@@ -616,7 +623,10 @@ most_cent_ident <- function(x, y){
   }, x, y)
 }
 
-
+# Calculate MCSE for generic performance measures
+mcse_generic <- function(x, n){
+  sd(x, na.rm = TRUE)/sqrt(n)
+}
 
 
 
