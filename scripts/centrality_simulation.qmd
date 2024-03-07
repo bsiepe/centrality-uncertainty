@@ -129,6 +129,12 @@ sim_generate <- function(condition, fixed_objects = NULL){
   dgp_graph <- ifelse(condition$dgp == "sparse", 
                       "graph_sparse", 
                       "graph_nonsparse")
+  # beta_sd <- ifelse(condition$heterogeneity == "low", 
+  #                   0.1, 
+  #                   0.3)
+  # kappa_sd <- ifelse(condition$heterogeneity == "low", 
+  #                    0.3, 
+  #                    0.9)
   
   ml_sim <- sim_gvar_loop(
                      graph = fixed_objects[[dgp_graph]],
@@ -137,7 +143,8 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      n_person = n_id,
                      n_time = n_tp,
                      n_node = n_var,
-                     max_try = 10000)
+                     max_try = 10000,
+                     listify = TRUE)
   
   # Obtain true centralities
   true_cent <- centrality_mlvar_sim(ml_sim,
@@ -189,9 +196,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
   # Return data and true centralities
   ret_data <- list(
     data = ml_sim$data,
-    beta = ml_sim$beta,
-    kappa = ml_sim$kappa,
-    pcor = ml_sim$pcor,
+    beta = ml_sim$beta_l,
+    kappa = ml_sim$kappa_l,
+    pcor = ml_sim$pcor_l,
     covariate_temp_dens = covariate_temp_dens,
     covariate_out_strength = covariate_out_strength,
     covariate_cont_dens = covariate_cont_dens,
@@ -414,106 +421,59 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   #--- Parameter recovery  
   # IMPORTANT: Keep in mind structure of mlVARsim object (rows vs. cols)
   #-- RMSE
-  #- LASSO GVAR
-  # TODO IMPORTANT! THINK ABOUT SCALING
-  # Temporal
-  rmse_beta_gvar <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$gvar$fit_gvar)){
+  # TODO move this function to auxiliary file
+  summary_calc <- function(results, method, fit, measure, func) {
+  sapply(seq_along(results), function(i){
+    if(is.null(results[[i]][[method]][[fit]])){
       return(NA)
     } 
     else{
-      # TODO THINK ABOUT SCALING HERE
-      rmse_mean_list(results[[i]]$gvar$fit_gvar$XXX, results[[i]]$XXX)
-    }
-
-  })
-  # Contemporaneous
-  rmse_pcor_gvar <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$gvar$fit_gvar)){
-      return(NA)
-    } 
-    else{
-      # TODO THINK ABOUT SCALING HERE
-      rmse_mean_list(results[[i]]$gvar$fit_gvar$XXX, results[[i]]$XXX)
+      unlist(func(results[[i]][[method]][[fit]][[measure]], results[[i]][[measure]]))
     }
   })
-    
-  #- GIMME
-  # Temporal
-  rmse_beta_gimme <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$gimme$fit_gimme)){
-      return(NA)
-    } 
-    else{
-      # TODO THINK ABOUT SCALING HERE
-      rmse_mean_list(results[[i]]$gimme$fit_gimme$XXX, results[[i]]$XXX)
-    }
-  })
-  # Contemporaneous  
-  rmse_pcor_gimme <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$gimme$fit_gimme)){
-      return(NA)
-    } 
-    else{
-      # TODO THINK ABOUT SCALING HERE
-      rmse_mean_list(results[[i]]$gimme$fit_gimme$XXX, results[[i]]$XXX)
-    }
-  })
+}
   
-    
-  #- mlVAR
-  # Temporal
-  rmse_beta_mlvar <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$mlvar$fit_mlvar)){
-      return(NA)
-    } 
-    else{
-      # TODO THINK ABOUT SCALING HERE
-      rmse_mean_list(results[[i]]$mlvar$fit_mlvar$XXX, results[[i]]$XXX)
-    }
-  })
-  # Contemporaneous
-  rmse_pcor_mlvar <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$mlvar$fit_mlvar)){
-      return(NA)
-    } 
-    else{
-      # TODO THINK ABOUT SCALING HERE
-      rmse_mean_list(results[[i]]$mlvar$fit_mlvar$XXX, results[[i]]$XXX)
-    }
-  })
-    
-  #- BmlVAR
-  # Temporal
-  rmse_beta_bmlvar <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$bmlvar$fit_bmlvar)){
-      return(NA)
-    } 
-    else{
-      # TODO THINK ABOUT SCALING HERE
-      rmse_mean_list(results[[i]]$bmlvar$fit_bmlvar$XXX, results[[i]]$XXX)
-    }
-  })
-  # Contemporaneous
-  rmse_pcor_bmlvar <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$bmlvar$fit_bmlvar)){
-      return(NA)
-    } 
-    else{
-      # TODO THINK ABOUT SCALING HERE
-      rmse_mean_list(results[[i]]$bmlvar$fit_bmlvar$XXX, results[[i]]$XXX)
-    }
-  })
-    
-  #-- MCSE
+  
+  rmse_beta_gvar <- summary_calc(results, "gvar", "fit_gvar", "beta", rmse_mean_list)
+  rmse_pcor_gvar <- summary_calc(results, "gvar", "fit_gvar", "pcor", rmse_mean_list)
+  
+  rmse_beta_gimme <- summary_calc(results, "gimme", "fit_gimme", "beta", rmse_mean_list)
+  rmse_pcor_gimme <- summary_calc(results, "gimme", "fit_gimme", "pcor", rmse_mean_list)
+  
+  rmse_beta_mlvar <- summary_calc(results, "mlvar", "fit_mlvar", "beta", rmse_mean_list)
+  rmse_pcor_mlvar <- summary_calc(results, "mlvar", "fit_mlvar", "pcor", rmse_mean_list)
+  
+  rmse_beta_bmlvar <- summary_calc(results, "bmlvar", "fit_bmlvar", "beta", rmse_mean_list)
+  rmse_pcor_bmlvar <- summary_calc(results, "bmlvar", "fit_bmlvar", "pcor", rmse_mean_list)
+  
+  
+  #-- Summary and MCSE
+  # TODO ADD MCSE 
   #- LASSO GVAR
-    
+  rmse_beta_gvar_mean_tmp <- colMeans(apply(as.matrix(rmse_beta_gvar), c(1,2), as.numeric))  
+  rmse_beta_gvar_mean <- mean(rmse_beta_gvar_mean_tmp)
+  rmse_pcor_gvar_mean_tmp <- colMeans(apply(as.matrix(rmse_pcor_gvar, c(1,2), as.numeric)))
+  rmse_pcor_gvar_mean <- mean(rmse_pcor_gvar_mean_tmp)
+  
+  
   #- GIMME
-    
+  rmse_beta_gimme_mean_tmp <- colMeans(apply(as.matrix(rmse_beta_gimme), c(1,2), as.numeric))
+  rmse_beta_gimme_mean <- mean(rmse_beta_gimme_mean_tmp)
+  rmse_pcor_gimme_mean_tmp <- colMeans(apply(as.matrix(rmse_pcor_gimme), c(1,2), as.numeric))
+  rmse_pcor_gimme_mean <- mean(rmse_pcor_gimme_mean_tmp)
+  
   #- mlVAR
-    
+  rmse_beta_mlvar_mean_tmp <- colMeans(apply(as.matrix(rmse_beta_mlvar), c(1,2), as.numeric))
+  rmse_beta_mlvar_mean <- mean(rmse_beta_mlvar_mean_tmp)
+  rmse_pcor_mlvar_mean_tmp <- colMeans(apply(as.matrix(rmse_pcor_mlvar), c(1,2), as.numeric))
+  rmse_pcor_mlvar_mean <- mean(rmse_pcor_mlvar_mean_tmp)
+  
+  
   #- BmlVar 
-    
+  rmse_beta_bmlvar_mean_tmp <- colMeans(apply(as.matrix(rmse_beta_bmlvar), c(1,2), as.numeric))
+  rmse_beta_bmlvar_mean <- mean(rmse_beta_bmlvar_mean_tmp)
+  rmse_pcor_bmlvar_mean_tmp <- colMeans(apply(as.matrix(rmse_pcor_bmlvar), c(1,2), as.numeric))
+  rmse_pcor_bmlvar_mean <- mean(rmse_pcor_bmlvar_mean_tmp)
     
     
     
@@ -737,16 +697,16 @@ sim_results <- SimDesign::runSimulation(
                                     replications = 2, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
-                                    summarise = NA,
+                                    summarise = sim_summarise,
                                     fixed_objects = sim_pars,
                                     parallel = TRUE,
                                     packages = c("tidyverse", 
                                                  "gimme",
                                                  "mlVAR",
                                                  "graphicalVAR"),
-                                    save_results = TRUE,
-                                    ncores = 2
-                                    # debug = "analyse"
+                                    save_results = FALSE,
+                                    ncores = 2,
+                                    debug = "summarise"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
