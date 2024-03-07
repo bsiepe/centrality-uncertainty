@@ -651,9 +651,9 @@ draws_matrix2list <- function(draws_matrix) {
 estimates_array2list <- function(draws_array) {
   est_list <-
     lapply(
-      X = 1:length(draws_array),
+      X = 1:dim(draws_array)[3],
       FUN = function(X) {
-        draws_array[[X]][,,1]
+        draws_array[,,X]
       }
     )
   return(est_list)
