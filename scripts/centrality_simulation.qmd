@@ -189,6 +189,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
   # Return data and true centralities
   ret_data <- list(
     data = ml_sim$data,
+    beta = ml_sim$beta,
+    kappa = ml_sim$kappa,
+    pcor = ml_sim$pcor,
     covariate_temp_dens = covariate_temp_dens,
     covariate_out_strength = covariate_out_strength,
     covariate_cont_dens = covariate_cont_dens,
@@ -204,28 +207,16 @@ sim_generate <- function(condition, fixed_objects = NULL){
 
 
 # Analysis
-TODO somehow GIMME does repeat without end here
 
 ```{r data-analysis}
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
   SimDesign::Attach(fixed_objects)
-  # # Split data for idiographic models
-  # data_list <- split(dat$data, dat$data$ID)
-  # 
-  # # remove ID column in data_list explicitly by name, not by position
-  # data_list <- lapply(data_list, function(x){
-  #   x <- dplyr::select(x, -ID)
-  # })
-  # 
-  # # for graphicalVAR only: standardize
-  # data_list_scale <- lapply(data_list, function(x){
-  #   x <- scale(x)
-  # })
   
   # Concatenate list of data into dataframe with id column
-  df_data <- dplyr::bind_rows(purrr::map(dat$data, dplyr::as_tibble, .id = "ID")) 
+  df_data <- dplyr::bind_rows(purrr::map(dat$data, dplyr::as_tibble)
+                              , .id = "ID") 
   
   
   
@@ -240,17 +231,23 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   })
  
   
-  # Obtain centralities
-  cent_gvar <- lapply(fit_gvar, function(x){
+  # Obtain centralities, IDs nested in list
+  cent_gvar <- purrr::transpose(lapply(fit_gvar, function(x){
     centrality_gvar(x)
+  }))
+
+  
+  dens_temp_gvar <- unlist(cent_gvar$dens_temp)
+  dens_cont_gvar <- unlist(cent_gvar$dens_cont)
+  outstrength_gvar <- sapply(cent_gvar$outstrength, function(x) unname(x[1]))
+  
+  # Create list of subject-specific estimates
+  beta_gvar <- lapply(fit_gvar, function(x){
+    t(x$beta[,-1])
   })
-  dens_temp_gvar <- sapply(cent_gvar, function(x){
-    x$dens_temp
+  pcor_gvar <- lapply(fit_gvar, function(x){
+    x$PCC
   })
-  dens_cont_gvar <- sapply(cent_gvar, function(x){
-    x$dens_cont
-  })
-  outstrength_gvar <- sapply(cent_gvar, function(x) unname(x$outstrength[1]))
   
   # Fit regression
   reg_gvar_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_gvar))
@@ -260,28 +257,33 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- GIMME
   
   # Fit model
-  # fit_gimme <- gimme::gimme(dat$data,
-  #                           ar = TRUE,
-  #                           subgroup = TRUE,
-  #                           plot = FALSE,
-  #                           hybrid = FALSE,
-  #                           groupcutoff = .50,
-  #                           subcutoff = .50)
-  # 
-  # # Obtain centralities
-  # cent_gimme <- centrality_gimme(fit_gimme)
-  # dens_temp_gimme <- sapply(cent_gimme, function(x){
-  #   x$dens_temp
-  # })
-  # dens_cont_gimme <- sapply(cent_gimme, function(x){
-  #   x$dens_cont
-  # })
-  # outstrength_gimme <- sapply(cent_gimme, function(x) unname(x$outstrength[1]))
-  # 
-  # # Fit regression
-  # reg_gimme_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_gimme))
-  # reg_gimme_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_gimme))
-  # reg_gvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gimme))
+  fit_gimme <- gimme::gimme(dat$data,
+                            ar = TRUE,
+                            subgroup = TRUE,
+                            plot = FALSE,
+                            hybrid = FALSE,
+                            groupcutoff = .50,
+                            subcutoff = .50)
+  
+  cent_gimme <- centrality_gimme(fit_gimme)
+
+  # Obtain centralities
+  dens_temp_gimme <- unlist(cent_gimme$dens_temp)
+  dens_cont_gimme <- unlist(cent_gimme$dens_cont)
+  outstrength_gimme <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
+  
+  # Create list of subject-specific estimates
+  beta_gimme <- lapply(fit_gimme$path_est_mats, function(x){
+    t(x[,1:n_var])
+  })
+  pcor_gimme <- lapply(fit_gimme$path_est_mats, function(x){
+    x[, (n_var+1):(n_var*2)]
+  })
+
+  # Fit regression
+  reg_gimme_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_gimme))
+  reg_gimme_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_gimme))
+  reg_gimme_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gimme))
 
   # #--- frequentist mlVAR
 
@@ -297,19 +299,25 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 
   # Obtain centralities
   cent_mlvar <- centrality_mlvar(fit_mlvar)
-  temp_dens_mlvar <- sapply(cent_mlvar, function(x){
-    x$temporal_dens
+  dens_temp_mlvar <- unlist(cent_mlvar$dens_temp)
+  dens_cont_mlvar <- unlist(cent_mlvar$dens_cont)
+  outstrength_mlvar <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
+  
+  # Create list of subject-specific estimates
+  beta_mlvar <- lapply(1:n_id, function(i){
+    mlVAR::getNet(fit_mlvar,
+                  subject = i,
+                  type = "temporal")
   })
-  cont_dens_mlvar <- sapply(cent_mlvar, function(x){
-    x$contemporaneous_dens
-  })
-  outstrength_mlvar <- sapply(cent_mlvar, function(x){
-    x$outstrength[1]
+  pcor_mlvar <- lapply(1:n_id, function(i){
+    mlVAR::getNet(fit_mlvar,
+                  subject = i,
+                  type = "contemporaneous")
   })
 
   # Fit regression
-  reg_mlvar_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ temp_dens_mlvar))
-  reg_mlvar_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ cont_dens_mlvar))
+  reg_mlvar_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_mlvar))
+  reg_mlvar_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_mlvar))
   reg_mlvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_mlvar))
   # 
   #--- Bayesian mlVAR
@@ -330,13 +338,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Obtain centralities
   # cent_bmlvar <- centrality_bmlvar(fit_bmlvar)
-  # dens_temp_bmlvar <- vapply(cent_bmlvar, function(x){
-  #   x$dens_temp
-  # }, numeric(1))
-  # outstrength_bmlvar <- vapply(cent_bmlvar, function(x){
-  #   x$outstrength[1]
-  # }, numeric(1))
-  
+  # dens_temp_blmvar <- unlist(cent_blmvar$dens_temp)
+  # dens_cont_blmvar <- unlist(cent_blmvar$dens_cont)
+  # outstrength_blmvar <- sapply(cent_blmvar$outstrength, function(x) unname(x[1]))
+  # 
   # Obtain regression coefficients
 
   
@@ -344,25 +349,37 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # Also return true centralities for comparison later
   ret_results <- list(
     gvar = list(
-      fit_gvar = fit_gvar,
+      fit_gvar = list(
+        beta = beta_gvar,
+        pcor = pcor_gvar),
       dens_temp = dens_temp_gvar,
+      dens_cont = dens_cont_gvar,
       outstrength = outstrength_gvar,
-      reg_tempdens = reg_gvar_tempdens,
-      reg_outstrength = reg_gvar_outstrength
+      reg_tempdens = reg_gvar_temp_dens,
+      reg_contdens = reg_gvar_cont_dens,
+      reg_outstrength = reg_gvar_out_strength
     ),
-    # gimme = list(
-    #   fit_gimme = fit_gimme,
-    #   dens_temp = dens_temp_gimme,
-    #   outstrength = outstrength_gimme,
-    #   reg_tempdens = reg_gimme_tempdens,
-    #   reg_outstrength = reg_gimme_outstrength
-    # ),
+    gimme = list(
+      fit_gimme = list(
+        beta = beta_gimme,
+        pcor = pcor_gimme
+      ),
+      dens_temp = dens_temp_gimme,
+      outstrength = outstrength_gimme,
+      reg_tempdens = reg_gimme_temp_dens,
+      reg_contdens = reg_gimme_cont_dens,
+      reg_outstrength = reg_gimme_out_strength
+    ),
     mlvar = list(
-      fit_mlvar = fit_mlvar,
+      fit_mlvar = list(
+        beta = beta_mlvar,
+        pcor = pcor_mlvar),
       dens_temp = dens_temp_mlvar,
+      dens_cont = dens_cont_mlvar,
       outstrength = outstrength_mlvar,
-      reg_tempdens = reg_mlvar_tempdens,
-      reg_outstrength = reg_mlvar_outstrength
+      reg_tempdens = reg_mlvar_temp_dens,
+      reg_contdens = reg_mlvar_cont_dens,
+      reg_outstrength = reg_mlvar_out_strength
     ),
     # bmlvar = list(
     #   fit_blmvar = fit_blmvar,
@@ -372,7 +389,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     #   reg_outstrength = reg_bmlvar_outstrength
     # ),
     true_cent = dat$true_cent,
-    data = data_list
+    data = dat$data,
+    beta = dat$beta,
+    kappa = dat$kappa,
+    pcor = dat$pcor
   )
   return(ret_results)
   
@@ -520,35 +540,96 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
     
   #--- Centrality
-  #-- Bias
-  #- LASSO GVAR
-    
-  #- GIMME
-    
-  #- mlVAR
-    
-  #- BmlVar
-  
-  #-- MCSE
-  #- LASSO GVAR
-    
-  #- GIMME
-    
-  #- mlVAR
-    
-  #- BmlVar
-  
-   
-     
   #-- Rank-Order between individuals
   #- LASSO GVAR
-    
+  rankcor_beta_gvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$gvar$fit_gvar)){
+      return(NA)
+    } 
+    else{
+      stats::cor(results[[i]]$gvar$dens_temp, 
+                 results[[i]]$true_cent$dens_temp, 
+                 method = "spearman")
+    }
+  })  
+  rankcor_pcor_gvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$gvar$fit_gvar)){
+      return(NA)
+    } 
+    else{
+      stats::cor(results[[i]]$gvar$dens_cont, 
+                 results[[i]]$true_cent$dens_cont, 
+                 method = "spearman")
+    }
+  })
   #- GIMME
-    
+  rankcor_beta_gimme <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$gimme$fit_gimme)){
+      return(NA)
+    } 
+    else{
+      stats::cor(results[[i]]$gimme$dens_temp, 
+                 results[[i]]$true_cent$dens_temp, 
+                 method = "spearman")
+    }
+  })  
+  rankcor_pcor_gimme <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$gimme$fit_gimme)){
+      return(NA)
+    } 
+    else{
+      stats::cor(results[[i]]$gimme$dens_cont, 
+                 results[[i]]$true_cent$dens_cont, 
+                 method = "spearman")
+    }
+  })
+  
   #- mlVAR
-    
+  rankcor_beta_mlvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$mlvar$fit_mlvar)){
+      return(NA)
+    } 
+    else{
+      stats::cor(results[[i]]$mlvar$dens_temp, 
+                 results[[i]]$true_cent$dens_temp, 
+                 method = "spearman")
+    }
+  })
+  rankcor_pcor_mlvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$mlvar$fit_mlvar)){
+      return(NA)
+    } 
+    else{
+      stats::cor(results[[i]]$mlvar$dens_cont, 
+                 results[[i]]$true_cent$dens_cont, 
+                 method = "spearman")
+    }
+  })
+  
   #- BmlVar
-    
+  rankcor_beta_bmlvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$bmlvar$fit_bmlvar)){
+      return(NA)
+    } 
+    else{
+      stats::cor(results[[i]]$bmlvar$dens_temp, 
+                 results[[i]]$true_cent$dens_temp, 
+                 method = "spearman")
+    }
+  })
+  rankcor_pcor_bmlvar <- lapply(seq_along(results), function(i){
+    if(is.null(results[[i]]$bmlvar$fit_bmlvar)){
+      return(NA)
+    } 
+    else{
+      stats::cor(results[[i]]$bmlvar$dens_cont, 
+                 results[[i]]$true_cent$dens_cont, 
+                 method = "spearman")
+    }
+  })
+  
+  # Rank-order MCSE
+  
   
     
   #-- Most central within individuals
@@ -595,6 +676,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     
   #- BmlVar 
   
+  #-- Most central MCSE
+  #- LASSO GVAR
+  
+  #- GIMME
+  
+  #- mlVAR
+  
+  #- BmlVar
+  
   
   
   #--- Regression
@@ -608,9 +698,9 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   #- mlVAR
     
   #- BmlVar
-  rmse_reg_tempdens <- ""
+  rmse_reg_tempdens_bmlvar <- ""
     
-  rmse_reg_outstrength <- ""
+  rmse_reg_outstrength_mlvar <- ""
     
     
   #-- MCSE
@@ -621,8 +711,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   #- mlVAR
     
   #- BmlVar
-  rmsemcse_reg_tempdens <- ""
-  rmsemcse_reg_outstrength <- ""  
+  rmsemcse_reg_tempdens_bmlvar <- ""
+  rmsemcse_reg_outstrength_bmlvar <- ""  
   
     
   #--- Return
@@ -647,7 +737,7 @@ sim_results <- SimDesign::runSimulation(
                                     replications = 2, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
-                                    summarise = sim_summarise,
+                                    summarise = NA,
                                     fixed_objects = sim_pars,
                                     parallel = TRUE,
                                     packages = c("tidyverse", 
@@ -655,8 +745,8 @@ sim_results <- SimDesign::runSimulation(
                                                  "mlVAR",
                                                  "graphicalVAR"),
                                     save_results = TRUE,
-                                    ncores = 2,
-                                    debug = "analyse"
+                                    ncores = 2
+                                    # debug = "analyse"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
