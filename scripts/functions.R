@@ -607,6 +607,12 @@ rmse_mean_list <- function(x, y){
   }, x, y)
 }
 
+mse_mean_list <- function(x, y){
+  Map(function(x, y){
+    mean((x-y)^2, na.rm = TRUE)
+  }, x, y)
+}
+
 
 # Compute mean pairwise absolute bias for list of matrices
 abs_mean_bias_list <- function(x, y){
@@ -614,6 +620,14 @@ abs_mean_bias_list <- function(x, y){
     abs_mean(x - y)
   }, x, y)
 }
+
+# Compute mean pairwise bias for list of matrices
+bias_mean_list <- function(x, y){
+  Map(function(x, y){
+    mean(x - y, na.rm = TRUE)
+  }, x, y)
+}
+
 
 # Find most central node and compare to true centrality
 # for list of centralities
