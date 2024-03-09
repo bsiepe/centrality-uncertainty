@@ -255,7 +255,7 @@ rstan::get_elapsed_time(mlvar_fit) %>%
   rowMeans() %>% 
   max()/60
 
-saveRDS(mlvar_fit, here("fits", "mlvar_fit.rds"))
+saveRDS(mlvar_fit, here("fits", paste0(model_name, "_fit.rds")))
 ```
 
 ```{r}
@@ -296,7 +296,9 @@ rstan::check_hmc_diagnostics(mlvar_fit)
 ```
 
 ```{r}
-param_ests <- summary(mlvar_fit)$summary %>% as.data.frame()
+param_ests <- summary(mlvar_fit)$summary %>% 
+  as.data.frame() %>% 
+  rownames_to_column("parameter")
 ```
 
 ## Parameter Recovery
@@ -317,7 +319,7 @@ abline(a = 0, b = 1, col = "red")
 
 
 ## Regression
-```{r}
+```{r renv.ignore=TRUE}
 bayesplot::mcmc_recover_intervals(
   true = rep(c(0, .2, .4),3),
   x = rstan::extract(object = mlvar_fit, "reg_slope_density_z") %>% do.call(cbind, .) %>%
@@ -331,7 +333,7 @@ bayesplot::mcmc_intervals(
 
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 bayesplot::mcmc_recover_intervals(
   true = rep(0,9),
   x = rstan::extract(object = mlvar_fit, c("reg_intercept")) %>% do.call(cbind, .) %>%
@@ -345,7 +347,7 @@ bayesplot::mcmc_intervals(
 ```
 
 ## Partial Correlations
-```{r}
+```{r renv.ignore=TRUE}
 Rho_vec <- 
   rstan::summary(mlvar_fit, pars =  "Rho", probs = .5)[["summary"]][,4] %>%
     unlist()
@@ -374,7 +376,7 @@ abline(a = 0, b = 1, col = "red")
 ```
 
 ### Density
-```{r}
+```{r renv.ignore=TRUE}
 Beta_density <-
   rstan::summary(mlvar_fit, pars =  "Beta_density", probs = .5)[["summary"]][, 4] %>%
   unlist()
@@ -388,7 +390,7 @@ plot(Beta_density, Beta_density_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 Rho_density <-  rstan::summary(mlvar_fit, pars =  "Rho_density", probs = .5)[["summary"]][, 4] %>%
   unlist()
 
@@ -401,7 +403,7 @@ plot(Rho_density, Rho_density_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 in_strength <-  rstan::summary(mlvar_fit, pars =  "Beta_in_strength", probs = .5)[["summary"]][, 4] %>%
   unlist()
 
@@ -415,7 +417,7 @@ plot(in_strength, in_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 out_strength <- rstan::summary(mlvar_fit, pars =  "Beta_out_strength", probs = .5)[["summary"]][, 4] %>%
   unlist()
 
@@ -427,7 +429,7 @@ plot(out_strength, out_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 Rho_strength <- rstan::summary(mlvar_fit, pars =  "Rho_centrality", probs = .5)[["summary"]][, 4] %>%
   unlist()
 
@@ -440,17 +442,17 @@ abline(a = 0, b = 1, col = "red")
 ```
 
 ## Extract functions dev
-```{r}
+```{r renv.ignore=TRUE}
 # Extract estimates for one parameter
 extract_estimates <- function(fit, par) {
   # extract draws
   draws <-
-    rstan::extract(fit, par, permute = FALSE) %>%
+    rstan::extract(object = fit, pars = par, permute = FALSE) %>%
     as_draws_matrix()
   # calculate estimates
   median <-
     try(bayestestR::point_estimate(draws, method = "median")[, "Median"])
-  di_95_L <- try(bayestestR::hdi(draws, ci = .95)[, "CI_low"])
+  hdi_95_L <- try(bayestestR::hdi(draws, ci = .95)[, "CI_low"])
   hdi_95_U <- try(bayestestR::hdi(draws, ci = .95)[, "CI_high"])
   q_05 <- try(bayestestR::ci(draws, ci = .90)[, "CI_low"])
   
@@ -466,7 +468,7 @@ extract_estimates <- function(fit, par) {
 }
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 est_vector2matrix <- function(est_vector, n_id, n_var) {
   # initialize list
   list <- lapply(1:n_id, function(x) matrix(NA, n_var, n_var))
@@ -494,7 +496,7 @@ est_vector2vector <- function(est_vector, n_id, n_var) {
 }
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 # Extract estimates for all parameters
 extract_all_estimates <- function(fit, n_id, n_var) {
   # compute estimates
@@ -532,23 +534,23 @@ extract_all_estimates <- function(fit, n_id, n_var) {
 }
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 fit <- mlvar_fit
 list <- extract_all_estimates(mlvar_fit, I, K)
 ```
 
-```{r}
+```{r renv.ignore=TRUE}
 beta_est <- extract_estimates(fit, "Beta") %>% 
   map(function(x) est_vector2matrix(x, I, K))
-pcor_est <-  extract_estimates(fit, "Rho") %>% 
-  map(function(x) est_vector2matrix(x, I, K))
+pcor_est <-  extract_estimates(fit, "Rho_vec") %>% 
+  map(function(x) est_vector2vector(x, I, K))
 draws <-
     rstan::extract(fit, "Rho_vec", permute = FALSE) %>%
     as_draws_matrix()
   # calculate estimates
   median <-
     try(bayestestR::point_estimate(draws)[, "Median"])
-  di_95_L <- try(bayestestR::hdi(draws, ci = .95)[, "CI_low"])
+  hdi_95_L <- try(bayestestR::hdi(draws, ci = .95)[, "CI_low"])
   hdi_95_U <- try(bayestestR::hdi(draws, ci = .95)[, "CI_high"])
   q_05 <- try(bayestestR::ci(draws, ci = .90)[, "CI_low"])
   

@@ -774,3 +774,100 @@ theme_compare <- function(){
 
 okabe_fill_enh <- ggokabeito::palette_okabe_ito(order = c(5,1,3,4,2,6,7,8,9))
 okabe_color_enh <- ggokabeito::palette_okabe_ito(order = c(5,1,3,4,2,6,7,8,9))
+
+
+# ------------------------------------------------------------------------------
+# Extract MCMC Draws from rstan fit  -------------------------------------------
+# ------------------------------------------------------------------------------
+
+# Extract estimates for one parameter
+extract_estimates <- function(fit, par) {
+  # extract draws
+  draws <-
+    rstan::extract(object = fit, pars = par, permute = FALSE) %>%
+    as_draws_matrix()
+  # calculate estimates
+  median <-
+    try(bayestestR::point_estimate(draws, method = "median")[, "Median"])
+  hdi_95_L <- try(bayestestR::hdi(draws, ci = .95)[, "CI_low"])
+  hdi_95_U <- try(bayestestR::hdi(draws, ci = .95)[, "CI_high"])
+  q_05 <- try(bayestestR::ci(draws, ci = .90)[, "CI_low"])
+  
+  # split into matrices and return list of lists
+  list <- list(
+    median = median,
+    hdi_95_L = hdi_95_L,
+    hdi_95_U = hdi_95_U,
+    q_05 = q_05
+  )
+  # return list
+  return(list)
+}
+
+
+# Extract estimates for all parameters
+extract_all_estimates <- function(fit, n_id, n_var) {
+  # compute estimates
+  beta_est <- extract_estimates(fit, "Beta") %>%
+    map(function(x){
+      est_vector2matrix(x, n_id, n_var)})
+  pcor_est <-  extract_estimates(fit, "Rho_vec") %>%
+    map(function(x){
+      est_vector2vector(x, n_id, (n_var*(n_var-1))/2)})
+  pcor_centrality_est <-
+    extract_estimates(fit, "Rho_centrality") %>%
+    map(function(x){
+      est_vector2vector(x, n_id, n_var)})
+  contdens_est <-  extract_estimates(fit, "Rho_density")
+  tempdens_est <-  extract_estimates(fit, "Beta_density")
+  outstrength_est <-  extract_estimates(fit, "Beta_out_strength")
+  regression_slope_est <-
+    extract_estimates(fit, "reg_slope_density")
+  regression_intercept_est <-
+    extract_estimates(fit, "reg_intercept")
+  # return list of lists
+  list <-
+    list(
+      beta_est = beta_est,
+      pcor_est = pcor_est,
+      pcor_centrality_est = pcor_centrality_est,
+      contdens_est = contdens_est,
+      tempdens_est = tempdens_est,
+      outstrength_est = outstrength_est,
+      regression_slope_est = regression_slope_est,
+      regression_intercept_est = regression_intercept_est
+    )
+  
+  return(list)
+}
+
+
+### Helper functions to transform draws to a suitable format -------------------
+
+# split vector into list of matrices (for beta)
+est_vector2matrix <- function(est_vector, n_id, n_var) {
+  # initialize list
+  list <- lapply(1:n_id, function(x) matrix(NA, n_var, n_var))
+  # fill list
+  for (i in 1:n_id) {
+    idx <- seq(i, length(est_vector), by = n_id)
+    list[[i]] <-
+      est_vector[idx] %>% matrix(n_var, n_var, byrow = FALSE)
+  }
+  # return list
+  return(list)
+}
+
+# split vector into list of vectors (for pcor and pcor centrality)
+est_vector2vector <- function(est_vector, n_id, n_var) {
+  # initialize list
+  list <- lapply(1:n_id, function(x) rep(NA, n_var))
+  # fill list
+  for (i in 1:n_id) {
+    idx <- seq(i, length(est_vector), by = n_id)
+    list[[i]] <-
+      est_vector[idx]
+  }
+  # return list
+  return(list)
+}
