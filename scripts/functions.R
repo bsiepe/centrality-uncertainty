@@ -822,9 +822,9 @@ extract_all_estimates <- function(fit, n_id, n_var) {
   tempdens_est <-  extract_estimates(fit, "Beta_density")
   outstrength_est <-  extract_estimates(fit, "Beta_out_strength")
   regression_slope_est <-
-    extract_estimates(fit, "reg_slope_density")
+    extract_estimates(fit, "reg_slope_density_z")
   regression_intercept_est <-
-    extract_estimates(fit, "reg_intercept")
+    extract_estimates(fit, "reg_intercept_z")
   # return list of lists
   list <-
     list(
