@@ -246,8 +246,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   dens_temp_gvar <- unlist(cent_gvar$dens_temp)
   dens_cont_gvar <- unlist(cent_gvar$dens_cont)
-  outstrength_gvar <- sapply(cent_gvar$outstrength, function(x) unname(x))
-  instrength_gvar <- sapply(cent_gvar$instrength, function(x) unname(x))
+  outstrength_gvar <- lapply(cent_gvar$outstrength, function(x) unname(x))
+  strength_gvar <- lapply(cent_gvar$strength, function(x) unname(x))
   outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1]))
   
   # Create list of subject-specific estimates
@@ -279,8 +279,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # Obtain centralities
   dens_temp_gimme <- unlist(cent_gimme$dens_temp)
   dens_cont_gimme <- unlist(cent_gimme$dens_cont)
-  outstrength_gimme <- sapply(cent_gimme$outstrength, function(x) unname(x))
-  instrength_gimme <- sapply(cent_gimme$instrength, function(x) unname(x))
+  outstrength_gimme <- lapply(cent_gimme$outstrength, function(x) unname(x))
+  strength_gimme <- lapply(cent_gimme$strength, function(x) unname(x))
   outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
   
   # Create list of subject-specific estimates
@@ -312,8 +312,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   cent_mlvar <- centrality_mlvar(fit_mlvar)
   dens_temp_mlvar <- unlist(cent_mlvar$dens_temp)
   dens_cont_mlvar <- unlist(cent_mlvar$dens_cont)
-  outstrength_mlvar <- sapply(cent_mlvar$outstrength, function(x) unname(x))
-  instrength_mlvar <- sapply(cent_mlvar$instrength, function(x) unname(x))
+  outstrength_mlvar <- lapply(cent_mlvar$outstrength, function(x) unname(x))
+  strength_mlvar <- lapply(cent_mlvar$strength, function(x) unname(x))
   outstrength_mlvar_first <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
   
   # Create list of subject-specific estimates
@@ -350,15 +350,18 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #                )
   
   # Obtain centralities
-  cent_bmlvar <- centrality_bmlvar(fit_bmlvar)
-  dens_temp_blmvar <- unlist(cent_blmvar$dens_temp)
-  dens_cont_blmvar <- unlist(cent_blmvar$dens_cont)
-  outstrength_blmvar <- sapply(cent_blmvar$outstrength, function(x) unname(x))
-  instrength_blmvar <- sapply(cent_blmvar$instrength, function(x) unname(x))
-  outstrength_blmvar_first <- sapply(cent_blmvar$outstrength, function(x) unname(x[1]))
+  # cent_bmlvar <- centrality_bmlvar(fit_bmlvar)
+  # dens_temp_blmvar <- unlist(cent_blmvar$dens_temp)
+  # dens_cont_blmvar <- unlist(cent_blmvar$dens_cont)
+  # outstrength_blmvar <- lapply(cent_blmvar$outstrength, function(x) unname(x))
+  # strength_blmvar <- lapply(cent_blmvar$strength, function(x) unname(x))
+  # outstrength_blmvar_first <- sapply(cent_blmvar$outstrength, function(x) unname(x[1]))
 
   # Obtain regression coefficients
   # TODO
+  
+  # TODO save summary 
+  # summary_blmvar <- summary(fit_blmvar)
   
   #--- Return Results
   # Also return true centralities for comparison later
@@ -370,7 +373,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       dens_temp = dens_temp_gvar,
       dens_cont = dens_cont_gvar,
       outstrength = outstrength_gvar,
-      instrength = instrength_gvar,
+      strength = strength_gvar,
       reg_tempdens = reg_gvar_temp_dens,
       reg_contdens = reg_gvar_cont_dens,
       reg_outstrength = reg_gvar_out_strength
@@ -383,7 +386,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       dens_temp = dens_temp_gimme,
       dens_cont = dens_cont_gimme,
       outstrength = outstrength_gimme,
-      instrength = instrength_gimme,
+      strength = strength_gimme,
       reg_tempdens = reg_gimme_temp_dens,
       reg_contdens = reg_gimme_cont_dens,
       reg_outstrength = reg_gimme_out_strength
@@ -395,7 +398,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       dens_temp = dens_temp_mlvar,
       dens_cont = dens_cont_mlvar,
       outstrength = outstrength_mlvar,
-      instrength = instrength_mlvar,
+      strength = strength_mlvar,
       reg_tempdens = reg_mlvar_temp_dens,
       reg_contdens = reg_mlvar_cont_dens,
       reg_outstrength = reg_mlvar_out_strength
@@ -404,7 +407,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     #   fit_blmvar = fit_blmvar,
     #   dens_temp = dens_temp_bmlvar,
     #   outstrength = outstrength_bmlvar,
-    #   instrength = instrength_bmlvar,
+    #   strength = strength_bmlvar,
     #   reg_tempdens = reg_bmlvar_tempdens,
     #   reg_outstrength = reg_bmlvar_outstrength
     # ),
@@ -494,8 +497,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   mse_pcor_gimme_mean_tmp <- colMeans(apply(as.matrix(mse_pcor_gimme), c(1,2), as.numeric))
   mse_pcor_gimme_mean <- mean(mse_pcor_gimme_mean_tmp)
   
-  rmsemcse_beta_gimme <- sqrt(stats::var(rmse_beta_gimme_mean_tmp) / (4*n_rep*mse_beta_gimme_mean))
-  rmsemcse_pcor_gimme <- sqrt(stats::var(rmse_pcor_gimme_mean_tmp) / (4*n_rep*mse_pcor_gimme_mean))
+  rmse_beta_gimme_mcse <- sqrt(stats::var(rmse_beta_gimme_mean_tmp) / (4*n_rep*mse_beta_gimme_mean))
+  rmse_pcor_gimme_mcse <- sqrt(stats::var(rmse_pcor_gimme_mean_tmp) / (4*n_rep*mse_pcor_gimme_mean))
   mse_beta_gimme_mcse <- sqrt(stats::var(mse_beta_gimme_mean_tmp) / n_rep)
   mse_pcor_gimme_mcse <- sqrt(stats::var(mse_pcor_gimme_mean_tmp) / n_rep)
   
@@ -509,8 +512,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   mse_pcor_mlvar_mean_tmp <- colMeans(apply(as.matrix(mse_pcor_mlvar), c(1,2), as.numeric))
   mse_pcor_mlvar_mean <- mean(mse_pcor_mlvar_mean_tmp)
   
-  rmsemcse_beta_mlvar <- sqrt(stats::var(rmse_beta_mlvar_mean_tmp) / (4*n_rep*mse_beta_mlvar_mean))
-  rmsemcse_pcor_mlvar <- sqrt(stats::var(rmse_pcor_mlvar_mean_tmp) / (4*n_rep*mse_pcor_mlvar_mean))
+  rmse_beta_mlvar_mcse <- sqrt(stats::var(rmse_beta_mlvar_mean_tmp) / (4*n_rep*mse_beta_mlvar_mean))
+  rmse_pcor_mlvar_mcse <- sqrt(stats::var(rmse_pcor_mlvar_mean_tmp) / (4*n_rep*mse_pcor_mlvar_mean))
   mse_beta_mlvar_mcse <- sqrt(stats::var(mse_beta_mlvar_mean_tmp) / n_rep)
   mse_pcor_mlvar_mcse <- sqrt(stats::var(mse_pcor_mlvar_mean_tmp) / n_rep)
   
@@ -525,31 +528,31 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   mse_pcor_bmlvar_mean_tmp <- colMeans(apply(as.matrix(mse_pcor_bmlvar), c(1,2), as.numeric))
   mse_pcor_bmlvar_mean <- mean(mse_pcor_bmlvar_mean_tmp)
   
-  rmsemcse_beta_bmlvar <- sqrt(stats::var(rmse_beta_bmlvar_mean_tmp) / (4*n_rep*mse_beta_bmlvar_mean))
-  rmsemcse_pcor_bmlvar <- sqrt(stats::var(rmse_pcor_bmlvar_mean_tmp) / (4*n_rep*mse_pcor_bmlvar_mean))
+  rmse_beta_bmlvar_mcse <- sqrt(stats::var(rmse_beta_bmlvar_mean_tmp) / (4*n_rep*mse_beta_bmlvar_mean))
+  rmse_pcor_bmlvar_mcse <- sqrt(stats::var(rmse_pcor_bmlvar_mean_tmp) / (4*n_rep*mse_pcor_bmlvar_mean))
   mse_beta_bmlvar_mcse <- sqrt(stats::var(mse_beta_bmlvar_mean_tmp) / n_rep)
   mse_pcor_bmlvar_mcse <- sqrt(stats::var(mse_pcor_bmlvar_mean_tmp) / n_rep)
   
   
   
-  # Simplifying the calculation  
-  calc_mean <- function(result) {
-  tmp <- colMeans(apply(as.matrix(result), c(1,2), as.numeric))
-  mean(tmp)
-  }
-  methods <- c("gvar", "gimme", "mlvar", "bmlvar")
-  measures <- c("beta", "pcor")
-  pms <- c("rmse", "mse")
-  combinations <- expand.grid(method = methods, measure = measures, pm = pms)
-  
-  # Use calc_mean for each combination
-  results_list <- apply(combinations, 1, function(x) {
-    result <- get(paste0(x['pm'], "_", x['measure'], "_", x['method']))
-    calc_mean(result)
-  })  
-  names(results_list) <- apply(combinations, 1, function(x) {
-  paste0(x['pm'], "_", x['measure'], "_", x['method'], "_mean")
-  })
+  # # Simplifying the calculation  
+  # calc_mean <- function(result) {
+  # tmp <- colMeans(apply(as.matrix(result), c(1,2), as.numeric))
+  # mean(tmp)
+  # }
+  # methods <- c("gvar", "gimme", "mlvar", "bmlvar")
+  # measures <- c("beta", "pcor")
+  # pms <- c("rmse", "mse")
+  # combinations <- expand.grid(method = methods, measure = measures, pm = pms)
+  # 
+  # # Use calc_mean for each combination
+  # results_list <- apply(combinations, 1, function(x) {
+  #   result <- get(paste0(x['pm'], "_", x['measure'], "_", x['method']))
+  #   calc_mean(result)
+  # })  
+  # names(results_list) <- apply(combinations, 1, function(x) {
+  # paste0(x['pm'], "_", x['measure'], "_", x['method'], "_mean")
+  # })
     
   #-- Bias
   #- LASSO GVAR
@@ -613,65 +616,89 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   
   # Rank-order MCSE
-
-  
-  
+  # create bootstrapped correlation standard error
+  # This was unnecessary, I bootstrap simulation replications
+  # not data sets... should get another coffee
+  # cor_boot <- function(data, i){
+  #     cor(data[i,1], data[i,2], method = "spearman", use = "pairwise")
+  #   }
+  # calc_bootcor <- function(results, method, measure) {
+  #   sapply(seq_along(results), function(i){
+  #     if(is.null(results[[i]][[method]][[paste0("fit_", method)]])){
+  #       return(NA)
+  #     } 
+  #     else{
+  #       cor_dat <- cbind(results[[i]][[method]][[paste0("dens_", measure)]], 
+  #               unlist(results[[i]]$true_cent[[paste0("dens_", measure)]]))
+  #       boot_res <- boot::boot(
+  #         data = cor_dat, 
+  #         statistic = cor_boot,
+  #         R = 1000)
+  #     }
+  #     # return standard error
+  #     sd(boot_res$t)
+  #   })
+  # }
+  bootstrap_rankcor <- function(data, n_boot){
+    bootstrap_res <- vector("numeric", n_boot)
+    for(i in 1:n_boot){
+      ind <- sample(1:n_boot, replace = TRUE)
+      bootstrap_res[i] <- mean(data[ind], na.rm = TRUE)
+    }
+      sd(bootstrap_res, na.rm = TRUE)
+  }
+  rankcor_beta_gvar_mcse <- bootstrap_rankcor(rankcor_beta_gvar, n_rep)
+  rankcor_pcor_gvar_mcse <- bootstrap_rankcor(rankcor_pcor_gvar, n_rep)
+  rankcor_beta_gimme_mcse <- bootstrap_rankcor(rankcor_beta_gimme, n_rep)
+  rankcor_pcor_gimme_mcse <- bootstrap_rankcor(rankcor_pcor_gimme, n_rep)
+  rankcor_beta_mlvar_mcse <- bootstrap_rankcor(rankcor_beta_mlvar, n_rep)
+  rankcor_pcor_mlvar_mcse <- bootstrap_rankcor(rankcor_pcor_mlvar, n_rep)
+  rankcor_beta_bmlvar_mcse <- bootstrap_rankcor(rankcor_beta_bmlvar, n_rep)
+  rankcor_pcor_bmlvar_mcse <- bootstrap_rankcor(rankcor_pcor_bmlvar, n_rep)
   
     
   #-- Most central within individuals
-  #- LASSO GVAR
-  mostcent_beta_gvar <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$gvar$fit_gvar)){
-      return(NA)
-    } 
-  else{
-      most_cent_ident(results[[i]]$gvar$fit_gvar$outstrength, 
-                      results[[i]]$true_cent$outstrength)
-    }
+  calc_most_cent_ident <- function(results, method, measure) {
+    sapply(seq_along(results), function(i){
+      if(is.null(results[[i]][[method]][paste0("fit_", method)])){
+        return(NA)
+      } 
+      else{
+        mci <- most_cent_ident(results[[i]][[method]][[measure]], 
+                              results[[i]]$true_cent[[measure]])
+        colSums(matrix(unlist(mci), 
+                      nrow = n_id, 
+                      byrow = FALSE))/n_id
+      }
+    })
+  }
+  mostcent_beta_gvar <- calc_most_cent_ident(results, "gvar", "outstrength")
+  mostcent_pcor_gvar <- calc_most_cent_ident(results, "gvar", "strength")
+  mostcent_beta_gimme <- calc_most_cent_ident(results, "gimme", "outstrength")
+  mostcent_pcor_gimme <- calc_most_cent_ident(results, "gimme", "strength")
+  mostcent_beta_mlvar <- calc_most_cent_ident(results, "mlvar", "outstrength")
+  mostcent_pcor_mlvar <- calc_most_cent_ident(results, "mlvar", "strength")
+  mostcent_beta_bmlvar <- calc_most_cent_ident(results, "bmlvar", "outstrength")
+  mostcent_pcor_bmlvar <- calc_most_cent_ident(results, "bmlvar", "strength")
 
-  })  
-  mostcent_pcor_gvar <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$gvar$fit_gvar)){
-      return(NA)
-    } 
-  else{
-      most_cent_ident(results[[i]]$gvar$fit_gvar$XXX, results[[i]]$XXX)
-    }
-
-  })
-  #- GIMME
-  mostcent_beta_gimme <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$gimme$fit_gimme)){
-      return(NA)
-    } 
-  else{
-      most_cent_ident(results[[i]]$gimme$fit_gimme$XXX, results[[i]]$XXX)
-    }
-
-  })
-  mostcent_pcor_gimme <- lapply(seq_along(results), function(i){
-    if(is.null(results[[i]]$gimme$fit_gimme)){
-      return(NA)
-    } 
-  else{
-      most_cent_ident(results[[i]]$gimme$fit_gimme$XXX, results[[i]]$XXX)
-    }
-
-  })
-    
-  #- mlVAR
-    
-  #- BmlVar 
-  
   #-- Most central MCSE
-  #- LASSO GVAR
-  
-  #- GIMME
-  
-  #- mlVAR
-  
-  #- BmlVar
-  
+  mostcent_beta_gvar_mean <- mean(mostcent_beta_gvar)
+  mostcent_pcor_gvar_mean <- mean(mostcent_pcor_gvar)
+  mostcent_beta_gvar_mcse <- sqrt(mostcent_beta_gvar_mean * (1 - mostcent_beta_gvar_mean) / n_rep)
+  mostcent_pcor_gvar_mcse <- sqrt(mostcent_pcor_gvar_mean * (1 - mostcent_pcor_gvar_mean) / n_rep)
+  mostcent_beta_gimme_mean <- mean(mostcent_beta_gimme)
+  mostcent_pcor_gimme_mean <- mean(mostcent_pcor_gimme)
+  mostcent_beta_gimme_mcse <- sqrt(mostcent_beta_gimme_mean * (1 - mostcent_beta_gimme_mean) / n_rep)
+  mostcent_pcor_gimme_mcse <- sqrt(mostcent_pcor_gimme_mean * (1 - mostcent_pcor_gimme_mean) / n_rep)
+  mostcent_beta_mlvar_mean <- mean(mostcent_beta_mlvar)
+  mostcent_pcor_mlvar_mean <- mean(mostcent_pcor_mlvar)
+  mostcent_beta_mlvar_mcse <- sqrt(mostcent_beta_mlvar_mean * (1 - mostcent_beta_mlvar_mean) / n_rep)
+  mostcent_pcor_mlvar_mcse <- sqrt(mostcent_pcor_mlvar_mean * (1 - mostcent_pcor_mlvar_mean) / n_rep)
+  mostcent_beta_bmlvar_mean <- mean(mostcent_beta_bmlvar)
+  mostcent_pcor_bmlvar_mean <- mean(mostcent_pcor_bmlvar)
+  mostcent_beta_bmlvar_mcse <- sqrt(mostcent_beta_bmlvar_mean * (1 - mostcent_beta_bmlvar_mean) / n_rep)
+  mostcent_pcor_bmlvar_mcse <- sqrt(mostcent_pcor_bmlvar_mean * (1 - mostcent_pcor_bmlvar_mean) / n_rep)
+
   
   
   #--- Regression
@@ -719,7 +746,37 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   
   #-- MCSE
+  # rowMeans due to the three underlying conditions
+  power_reg_tempdens_gvar_mean <- rowMeans(power_reg_tempdens_gvar)
+  power_reg_contdens_gvar_mean <- rowMeans(power_reg_contdens_gvar)
+  power_reg_outstrength_gvar_mean <- rowMeans(power_reg_outstrength_gvar)
+  power_reg_tempdens_gvar_mcse <- sqrt(power_reg_tempdens_gvar_mean * (1 - power_reg_tempdens_gvar_mean) / n_rep)
+  power_reg_contdens_gvar_mcse <- sqrt(power_reg_contdens_gvar_mean * (1 - power_reg_contdens_gvar_mean) / n_rep)
+  power_reg_outstrength_gvar_mcse <- sqrt(power_reg_outstrength_gvar_mean * (1 - power_reg_outstrength_gvar_mean) / n_rep)
   
+  power_reg_tempdens_gimme_mean <- rowMeans(power_reg_tempdens_gimme)
+  power_reg_contdens_gimme_mean <- rowMeans(power_reg_contdens_gimme)
+  power_reg_outstrength_gimme_mean <- rowMeans(power_reg_outstrength_gimme)
+  power_reg_tempdens_gimme_mcse <- sqrt(power_reg_tempdens_gimme_mean * (1 - power_reg_tempdens_gimme_mean) / n_rep)
+  power_reg_contdens_gimme_mcse <- sqrt(power_reg_contdens_gimme_mean * (1 - power_reg_contdens_gimme_mean) / n_rep)
+  power_reg_outstrength_gimme_mcse <- sqrt(power_reg_outstrength_gimme_mean * (1 - power_reg_outstrength_gimme_mean) / n_rep)
+
+  power_reg_tempdens_mlvar_mean <- rowMeans(power_reg_tempdens_mlvar)
+  power_reg_contdens_mlvar_mean <- rowMeans(power_reg_contdens_mlvar)
+  power_reg_outstrength_mlvar_mean <- rowMeans(power_reg_outstrength_mlvar)
+  power_reg_tempdens_mlvar_mcse <- sqrt(power_reg_tempdens_mlvar_mean * (1 - power_reg_tempdens_mlvar_mean) / n_rep)
+  power_reg_contdens_mlvar_mcse <- sqrt(power_reg_contdens_mlvar_mean * (1 - power_reg_contdens_mlvar_mean) / n_rep)
+  power_reg_outstrength_mlvar_mcse <- sqrt(power_reg_outstrength_mlvar_mean * (1 - power_reg_outstrength_mlvar_mean) / n_rep)
+
+  power_reg_tempdens_bmlvar_mean <- rowMeans(power_reg_tempdens_bmlvar)
+  power_reg_contdens_bmlvar_mean <- rowMeans(power_reg_contdens_bmlvar)
+  power_reg_outstrength_bmlvar_mean <- rowMeans(power_reg_outstrength_bmlvar)
+  power_reg_tempdens_bmlvar_mcse <- sqrt(power_reg_tempdens_bmlvar_mean * (1 - power_reg_tempdens_bmlvar_mean) / n_rep)
+  power_reg_contdens_bmlvar_mcse <- sqrt(power_reg_contdens_bmlvar_mean * (1 - power_reg_contdens_bmlvar_mean) / n_rep)
+  power_reg_outstrength_bmlvar_mcse <- sqrt(power_reg_outstrength_bmlvar_mean * (1 - power_reg_outstrength_bmlvar_mean) / n_rep)
+
+
+
   
   
   
@@ -730,7 +787,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                               method, 
                               measure,
                               true_coef = c(0,.2,.4),
-                              lm_beta = TRUE) {
+                              lm_beta = TRUE,
+                              rmse = TRUE) {
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[paste0("reg_", measure)]])){
       return(NA)
@@ -744,44 +802,151 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                               x$coefficients
                             }})[2,]   # 2nd row -> beta coef
       # Calculate RMSE
-      sqrt( (reg_coefs - true_coef )^2 )
+      if(isTRUE(rmse)){
+        sqrt( (reg_coefs - true_coef )^2 )
+      } else{
+        (reg_coefs - true_coef)^2
+      }
+      
       }
   })
   }
   
   #- LASSO GVAR
-  rmse_reg_tempdens_gvar <- regression_rmse(results, "gvar", "tempdens")
-  rmse_reg_contdens_gvar <- regression_rmse(results, "gvar", "contdens")
-  rmse_reg_outstrength_gvar <- regression_rmse(results, "gvar", "outstrength")
+  rmse_reg_tempdens_gvar <- regression_rmse(results, "gvar", "tempdens", rmse = TRUE)
+  rmse_reg_contdens_gvar <- regression_rmse(results, "gvar", "contdens", rmse = TRUE)
+  rmse_reg_outstrength_gvar <- regression_rmse(results, "gvar", "outstrength", rmse = TRUE)
+  mse_reg_tempdens_gvar <- regression_rmse(results, "gvar", "tempdens", rmse = FALSE)
+  mse_reg_contdens_gvar <- regression_rmse(results, "gvar", "contdens", rmse = FALSE)
+  mse_reg_outstrength_gvar <- regression_rmse(results, "gvar", "outstrength", rmse = FALSE)
   
     
   #- GIMME
-  rmse_reg_tempdens_gimme <- regression_rmse(results, "gimme", "tempdens")
-  rmse_reg_contdens_gimme <- regression_rmse(results, "gimme", "contdens")
-  rmse_reg_outstrength_gimme <- regression_rmse(results, "gimme", "outstrength")
+  rmse_reg_tempdens_gimme <- regression_rmse(results, "gimme", "tempdens", rmse = TRUE)
+  rmse_reg_contdens_gimme <- regression_rmse(results, "gimme", "contdens", rmse = TRUE)
+  rmse_reg_outstrength_gimme <- regression_rmse(results, "gimme", "outstrength", rmse = TRUE)
+  mse_reg_tempdens_gimme <- regression_rmse(results, "gimme", "tempdens", rmse = FALSE)
+  mse_reg_contdens_gimme <- regression_rmse(results, "gimme", "contdens", rmse = FALSE)
+  mse_reg_outstrength_gimme <- regression_rmse(results, "gimme", "outstrength", rmse = FALSE)
+  
   
   #- mlVAR
-  rmse_reg_tempdens_mlvar <- regression_rmse(results, "mlvar", "tempdens")
-  rmse_reg_contdens_mlvar <- regression_rmse(results, "mlvar", "contdens")
-  rmse_reg_outstrength_mlvar <- regression_rmse(results, "mlvar", "outstrength")
+  rmse_reg_tempdens_mlvar <- regression_rmse(results, "mlvar", "tempdens", rmse = TRUE)
+  rmse_reg_contdens_mlvar <- regression_rmse(results, "mlvar", "contdens", rmse = TRUE)
+  rmse_reg_outstrength_mlvar <- regression_rmse(results, "mlvar", "outstrength", rmse = TRUE)
+  mse_reg_tempdens_mlvar <- regression_rmse(results, "mlvar", "tempdens", rmse = FALSE)
+  mse_reg_contdens_mlvar <- regression_rmse(results, "mlvar", "contdens", rmse = FALSE)
+  mse_reg_outstrength_mlvar <- regression_rmse(results, "mlvar", "outstrength", rmse = FALSE)
     
   #- BmlVar
-  rmse_reg_tempdens_bmlvar <- regression_rmse(results, "bmlvar", "tempdens")
-  rmse_reg_contdens_bmlvar <- regression_rmse(results, "bmlvar", "contdens")
-  rmse_reg_outstrength_bmlvar <- regression_rmse(results, "bmlvar", "outstrength")
+  rmse_reg_tempdens_bmlvar <- regression_rmse(results, "bmlvar", "tempdens", rmse = TRUE)
+  rmse_reg_contdens_bmlvar <- regression_rmse(results, "bmlvar", "contdens", rmse = TRUE)
+  rmse_reg_outstrength_bmlvar <- regression_rmse(results, "bmlvar", "outstrength", rmse = TRUE)
+  mse_reg_tempdens_bmlvar <- regression_rmse(results, "bmlvar", "tempdens", rmse = FALSE)
+  mse_reg_contdens_bmlvar <- regression_rmse(results, "bmlvar", "contdens", rmse = FALSE)
+  mse_reg_outstrength_bmlvar <- regression_rmse(results, "bmlvar", "outstrength", rmse = FALSE)
   
     
   #-- MCSE
   #- LASSO GVAR
+  rmse_reg_tempdens_gvar_mean <- rowMeans(rmse_reg_tempdens_gvar, na.rm = TRUE)
+  rmse_reg_contdens_gvar_mean <- rowMeans(rmse_reg_contdens_gvar, na.rm = TRUE)
+  rmse_reg_outstrength_gvar_mean <- rowMeans(rmse_reg_outstrength_gvar, na.rm = TRUE)
+  mse_reg_tempdens_gvar_mean <- rowMeans(mse_reg_tempdens_gvar, na.rm = TRUE)
+  mse_reg_contdens_gvar_mean <- rowMeans(mse_reg_contdens_gvar, na.rm = TRUE)
+  mse_reg_outstrength_gvar_mean <- rowMeans(mse_reg_outstrength_gvar, na.rm = TRUE)
+  
+  rmse_reg_tempdens_gvar_mcse <- sqrt ( apply(rmse_reg_tempdens_gvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_tempdens_gvar))
+  rmse_reg_contdens_gvar_mcse <- sqrt ( apply(rmse_reg_contdens_gvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_contdens_gvar))
+  rmse_reg_outstrength_gvar_mcse <- sqrt ( apply(rmse_reg_outstrength_gvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_outstrength_gvar))
     
   #- GIMME
-    
+  rmse_reg_tempdens_gimme_mean <- rowMeans(rmse_reg_tempdens_gimme, na.rm = TRUE)
+  rmse_reg_contdens_gimme_mean <- rowMeans(rmse_reg_contdens_gimme, na.rm = TRUE)
+  rmse_reg_outstrength_gimme_mean <- rowMeans(rmse_reg_outstrength_gimme, na.rm = TRUE)
+  mse_reg_tempdens_gimme_mean <- rowMeans(mse_reg_tempdens_gimme, na.rm = TRUE)
+  mse_reg_contdens_gimme_mean <- rowMeans(mse_reg_contdens_gimme, na.rm = TRUE)
+  mse_reg_outstrength_gimme_mean <- rowMeans(mse_reg_outstrength_gimme, na.rm = TRUE)
+  
+  rmse_reg_tempdens_gimme_mcse <- sqrt ( apply(rmse_reg_tempdens_gimme, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_tempdens_gimme))
+  rmse_reg_contdens_gimme_mcse <- sqrt ( apply(rmse_reg_contdens_gimme, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_contdens_gimme))
+  rmse_reg_outstrength_gimme_mcse <- sqrt ( apply(rmse_reg_outstrength_gimme, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_outstrength_gimme))
+  
+  
   #- mlVAR
+  rmse_reg_tempdens_mlvar_mean <- rowMeans(rmse_reg_tempdens_mlvar, na.rm = TRUE)
+  rmse_reg_contdens_mlvar_mean <- rowMeans(rmse_reg_contdens_mlvar, na.rm = TRUE)
+  rmse_reg_outstrength_mlvar_mean <- rowMeans(rmse_reg_outstrength_mlvar, na.rm = TRUE)
+  mse_reg_tempdens_mlvar_mean <- rowMeans(mse_reg_tempdens_mlvar, na.rm = TRUE)
+  mse_reg_contdens_mlvar_mean <- rowMeans(mse_reg_contdens_mlvar, na.rm = TRUE)
+  mse_reg_outstrength_mlvar_mean <- rowMeans(mse_reg_outstrength_mlvar, na.rm = TRUE)
+    
+  rmse_reg_tempdens_mlvar_mcse <- sqrt ( apply(rmse_reg_tempdens_mlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_tempdens_mlvar))
+  rmse_reg_contdens_mlvar_mcse <- sqrt ( apply(rmse_reg_contdens_mlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_contdens_mlvar))
+  rmse_reg_outstrength_mlvar_mcse <- sqrt ( apply(rmse_reg_outstrength_mlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_outstrength_mlvar))
+  
     
   #- BmlVar
-
+  rmse_reg_tempdens_bmlvar_mean <- rowMeans(rmse_reg_tempdens_bmlvar, na.rm = TRUE)
+  rmse_reg_contdens_bmlvar_mean <- rowMeans(rmse_reg_contdens_bmlvar, na.rm = TRUE)
+  rmse_reg_outstrength_bmlvar_mean <- rowMeans(rmse_reg_outstrength_bmlvar, na.rm = TRUE)
+  mse_reg_tempdens_bmlvar_mean <- rowMeans(mse_reg_tempdens_bmlvar, na.rm = TRUE)
+  mse_reg_contdens_bmlvar_mean <- rowMeans(mse_reg_contdens_bmlvar, na.rm = TRUE)
+  mse_reg_outstrength_bmlvar_mean <- rowMeans(mse_reg_outstrength_bmlvar, na.rm = TRUE)
+  
+  rmse_reg_tempdens_bmlvar_mcse <- sqrt ( apply(rmse_reg_tempdens_bmlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_tempdens_bmlvar))
+  rmse_reg_contdens_bmlvar_mcse <- sqrt ( apply(rmse_reg_contdens_bmlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_contdens_bmlvar))
+  rmse_reg_outstrength_bmlvar_mcse <- sqrt ( apply(rmse_reg_outstrength_bmlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_outstrength_bmlvar))
+  
+  
+  
   #--- Return
-
+  # TODO not fully finished yet
+  ret <- c(
+    rmse_beta_gvar_mean = rmse_beta_gvar_mean,
+    rmse_beta_gvar_mcse = rmse_beta_gvar_mcse,
+    rmse_beta_gimme_mean = rmse_beta_gimme_mean,
+    rmse_beta_gimme_mcse = rmse_beta_gimme_mcse,
+    rmse_beta_mlvar_mean = rmse_beta_mlvar_mean,
+    rmse_beta_mlvar_mcse = rmse_beta_mlvar_mcse,
+    rmse_beta_bmlvar_mean = rmse_beta_bmlvar_mean,
+    rmse_beta_bmlvar_mcse = rmse_beta_bmlvar_mcse,
+    rmse_pcor_gvar_mean = rmse_pcor_gvar_mean,
+    rmse_pcor_gvar_mcse = rmse_pcor_gvar_mcse,
+    rmse_pcor_gimme_mean = rmse_pcor_gimme_mean,
+    rmse_pcor_gimme_mcse = rmse_pcor_gimme_mcse,
+    rmse_pcor_mlvar_mean = rmse_pcor_mlvar_mean,
+    rmse_pcor_mlvar_mcse = rmse_pcor_mlvar_mcse,
+    rmse_pcor_bmlvar_mean = rmse_pcor_bmlvar_mean,
+    rmse_pcor_bmlvar_mcse = rmse_pcor_bmlvar_mcse,
+    power_reg_tempdens_gvar = power_reg_tempdens_gvar,
+    power_reg_contdens_gvar = power_reg_contdens_gvar,
+    power_reg_outstrength_gvar = power_reg_outstrength_gvar,
+    power_reg_tempdens_gimme = power_reg_tempdens_gimme,
+    power_reg_contdens_gimme = power_reg_contdens_gimme,
+    power_reg_outstrength_gimme = power_reg_outstrength_gimme,
+    power_reg_tempdens_mlvar = power_reg_tempdens_mlvar,
+    power_reg_contdens_mlvar = power_reg_contdens_mlvar,
+    power_reg_outstrength_mlvar = power_reg_outstrength_mlvar,
+    power_reg_tempdens_bmlvar = power_reg_tempdens_bmlvar,
+    power_reg_contdens_bmlvar = power_reg_contdens_bmlvar,
+    power_reg_outstrength_bmlvar = power_reg_outstrength_bmlvar,
+    rmse_reg_tempdens_gvar = rmse_reg_tempdens_gvar,
+    rmse_reg_contdens_gvar = rmse_reg_contdens_gvar,
+    rmse_reg_outstrength_gvar = rmse_reg_outstrength_gvar,
+    rmse_reg_tempdens_gimme = rmse_reg_tempdens_gimme,
+    rmse_reg_contdens_gimme = rmse_reg_contdens_gimme,
+    rmse_reg_outstrength_gimme = rmse_reg_outstrength_gimme,
+    rmse_reg_tempdens_mlvar = rmse_reg_tempdens_mlvar,
+    rmse_reg_contdens_mlvar = rmse_reg_contdens_mlvar,
+    rmse_reg_outstrength_mlvar = rmse_reg_outstrength_mlvar,
+    rmse_reg_tempdens_bmlvar = rmse_reg_tempdens_bmlvar,
+    rmse_reg_contdens_bmlvar = rmse_reg_contdens_bmlvar,
+    rmse_reg_outstrength_bmlvar = rmse_reg_outstrength_bmlvar
+  )
+  
+  
+  
   
 }
 
@@ -808,7 +973,8 @@ sim_results <- SimDesign::runSimulation(
                                     packages = c("tidyverse", 
                                                  "gimme",
                                                  "mlVAR",
-                                                 "graphicalVAR"),
+                                                 "graphicalVAR",
+                                                 "lm.beta"),
                                     save_results = FALSE,
                                     ncores = 2,
                                     debug = "summarise"
