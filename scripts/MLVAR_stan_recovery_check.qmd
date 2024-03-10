@@ -64,7 +64,7 @@ ml_sim <- sim_gvar_loop(
                      max_try = 10000)
 
 # Obtain individual models and data
-Y <- ml_sim$data %>% 
+Y <- ml_sim$data %>% map(function(x) apply(x,2,scale)) %>% 
   do.call(rbind, .) %>% 
   as.matrix()
 
@@ -169,7 +169,7 @@ stan_data <-
     n_t = n_t,
     n_pc = n_pc,
     idx_rho = array(idx_rho, dim = length(idx_rho)),
-    Y = Y,
+    Y = Y %>% apply(2, scale),
     reg_covariate = reg_data
   )
 ```
@@ -240,7 +240,7 @@ n_chains <- 4
 # Run sampler
 mlvar_fit <- rstan::sampling(
   object = mlvar_model,
-  pars = contains("raw"),
+  pars = vars(contains("raw")),
   include = FALSE,
   data = stan_data,
   seed = 2023,
@@ -310,7 +310,7 @@ Beta_vec <-
   rstan::summary(mlvar_fit, pars =  "Beta", probs = .5)[["summary"]][,4] %>%
     unlist()
 
-Beta_true_vec <- ml_beta %>% estimates_array2list() %>% map(function(x) t(x)) %>% unlist()
+Beta_true_vec <- ml_beta %>% map(., function(x)t(x)) %>% unlist()
 
 cor.test(Beta_vec, Beta_true_vec, method = "pearson")
 cor.test(Beta_vec, Beta_true_vec, method = "spearman")
@@ -354,7 +354,7 @@ Rho_vec <-
   rstan::summary(mlvar_fit, pars =  "Rho", probs = .5)[["summary"]][,4] %>%
     unlist()
 
-Rho_true_vec <- ml_pcor %>%  unlist()
+Rho_true_vec <- ml_pcor %>% map(., function(x)t(x)) %>% unlist()
 cor.test(Rho_vec, Rho_true_vec, method = "pearson")
 cor.test(Rho_vec, Rho_true_vec, method = "spearman")
 # plot
@@ -409,7 +409,7 @@ abline(a = 0, b = 1, col = "red")
 in_strength <-  rstan::summary(mlvar_fit, pars =  "Beta_in_strength", probs = .5)[["summary"]][, 4] %>%
   unlist()
 
-in_strength_true <- ml_instrength%>% unlist()
+in_strength_true <- ml_instrength %>% unlist()
 
 
 cor.test(in_strength, in_strength_true, method = "pearson")
@@ -443,7 +443,7 @@ plot(Rho_strength, Rho_strength_true, xlim = c(0, 1), ylim = c(0, 1))
 abline(a = 0, b = 1, col = "red")
 ```
 
-
+# Extract estimates
 ```{r renv.ignore=TRUE}
-list <- extract_all_estimates(mlvar_fit, I, K)
+estimates_list <- extract_all_estimates(mlvar_fit, I, K)
 ```

@@ -44,6 +44,8 @@ transformed parameters{
   array[I]matrix[K,K] Sigma; 
   // Partial correlation matrix
   array[I] matrix[K,K] Rho;
+  vector[I*n_pc] Rho_vec; // vectorize Rho
+    
   matrix[I,K] theta_sd;      // 
   //  Centrality for each individual
   vector[I]  Beta_density;
@@ -55,7 +57,8 @@ transformed parameters{
   // Regression
   matrix[I,P] mu_regression;
 
-  
+   { 
+  int position_rho = 1;
   // loop over respondents
   for(i in 1:I) {
   
@@ -85,6 +88,9 @@ transformed parameters{
         } // end else
       } // end k
     } // end j
+    Rho_vec[position_rho:(position_rho - 1 + n_pc)] = to_vector(Rho[i])[idx_rho];
+    position_rho += n_pc; // increment position counter
+    
     // Aggregate Statistics /////////////////////////////////////////////
     //  In-Strength, Out-Strength, and Centrality
     for(k in 1:K){
@@ -96,6 +102,7 @@ transformed parameters{
     Beta_density[i] = mean(abs(Beta[i]));
     Rho_density[i]  = mean(abs(Rho[i]));
   } // end i
+   }
   // Regression ////////////////////////////////////////////////////////
     mu_regression[,1] = reg_intercept[1] + reg_slope_density[1] * Beta_density;
     mu_regression[,2] = reg_intercept[2] + reg_slope_density[2] * Beta_density;
