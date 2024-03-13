@@ -398,7 +398,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   )
   
   ests_bmlvar <- extract_all_estimates(fit_bmlvar,
-                                       n_id = n_id,
+                                       n_id = n_id, 
                                        n_var = n_var)
   
   # Obtain centralities
@@ -593,7 +593,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   measures <- c("temp", "cont")
   for (method in methods) {
     for (measure in measures) {
-      result_name <- paste("rankcor", method, measure, sep = "_")
+      result_name <- paste("rankcor", measure, method, sep = "_")
       calc_list <- calc_correlation(
         results = results,
         method = method,
@@ -790,7 +790,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                               results, 
                               method = "bmlvar", 
                               measure,
-                              oneside = TRUE) {
+                              oneside = TRUE){
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][["reg_bmlvar"]])){
       return(NA)
@@ -856,10 +856,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 df_design_test <- df_design[1,]
 sim_pars$n_id <- 25
 sim_pars$n_var <- 3
-sim_pars$n_tp <- 300
 n_var <- 3
 n_id <- 25
-n_tp <- 300
 sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:3,1:3]
 sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:3,1:3]
 sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:3,1:3]
@@ -868,13 +866,13 @@ sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:3,1:3]
 sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:3,1:3]
 
 
-n_rep <- 2
+n_rep <- 10
 sim_results <- SimDesign::runSimulation(
                                     design = df_design_test, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
-                                    summarise = NA,
+                                    summarise = sim_summarise,
                                     fixed_objects = sim_pars,
                                     parallel = TRUE,
                                     packages = c("tidyverse", 
@@ -882,25 +880,98 @@ sim_results <- SimDesign::runSimulation(
                                                  "mlVAR",
                                                  "graphicalVAR",
                                                  "lm.beta"),
-                                    save_results = TRUE,
-                                    ncores = 2,
-                                    debug = "analyse"
+                                    # save_results = TRUE,
+                                    ncores = 10
+                                    # debug = "summarise"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
 
 SimClean()
+saveRDS(sim_results, file = "output/single_row_results.RDS")
 
 ```
 
 
+We now temporarily create a mock results data frame which we use to create visualization templates.
+
+```{r mock-results}
+sim_res <- readRDS("output/single_row_results.RDS")
+
+# duplicate the first row of the dataframe multiple times
+sim_res[2:4,] <- sim_res[1,]
+
+# create mock conditions
+sim_res$dgp[2:4] <- c("nonsparse", "sparse", "nonsparse")
+sim_res$heterogeneity[2:4] <- c("high", "high", "low")
+
+# Add some random noise for visualization tests
+# define non-performance columns
+exclude_cols <- c("dgp", "heterogeneity", "REPLICATIONS", "SIM_TIME", "RAM_USED", "SEED", "COMPLETED", "WARNINGS")
+# Define the column strings to exclude from the non-negativity constraint
+exclude_nonneg <- c("mse", "rankcor", "bias")
+noise_cols <- setdiff(colnames(sim_res), exclude_cols)
+
+# Add noise to rows 2-4 for the selected columns
+sim_res[2:4, noise_cols] <- sapply(sim_res[2:4, noise_cols], function(x) x * (1 + runif(length(x), -0.1, 0.3)))
+
+
+nonneg_cols <- noise_cols[!grepl("mse|rankcor|bias", noise_cols)]
+# Apply non-negativity constraint to rows 2-4 for the selected columns
+sim_res[2:4, nonneg_cols] <- sapply(sim_res[2:4, nonneg_cols], function(x) pmax(x, 0))
+
+
+
+```
+
 # Visualization
+
+Prepare dataframe
+```{r}
+sr_edit <- sim_res %>% 
+  mutate(dgp = factor(dgp, levels = c("nonsparse", "sparse")),
+         heterogeneity = factor(heterogeneity, levels = c("low", "high"))) %>% 
+  # remove "reg_" from all column names
+  rename_with(~str_remove(., "reg_")) %>% 
+  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "RAM_USED", "SEED", "COMPLETED", "WARNINGS")) %>% 
+  # pivot longer except conditions cols
+  pivot_longer(cols = -c("dgp", "heterogeneity"), 
+               names_to = "measure", 
+               values_to = "value") %>% 
+  
+  # THIS IS TEMPORARY UNTIL A RENAMING OF THE REGRESSION COLUMNS!
+  # AND UNTIL RENAMING OF THE RANKCOR
+  # TODO
+  # TODO
+  # filter out all rows that contain "mean1", "mean2", "mean3", "mcse1", "mcse2", "mcse3" in "measure"
+  filter(!str_detect(measure, "mean1|mean2|mean3|mcse1|mcse2|mcse3")) %>%
+    separate_wider_delim(measure, 
+                       delim = "_", 
+                       names = c("pm", "outcome", "method", "summary")) %>%
+  filter(pm != "rankcor") %>% 
+  # END TEMPORARY
+  
+  mutate(method = case_when(
+    method == "gvar" ~ "GVAR",
+    method == "gimme" ~ "GIMME",
+    method == "mlvar" ~ "mlVAR",
+    method == "bmlvar" ~ "BmlVAR"
+  )) %>%
+  # treat method as factor and order 
+  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) %>%
+  group_by(dgp, heterogeneity, pm, outcome, method) %>%
+  pivot_wider(names_from = summary, values_from = value) %>% 
+  ungroup()
+
+
+
+```
+
 
 
 Prepare different colors and settings for visualization: 
 ```{r viz-prep}
-meth_colors <- set_names(ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)],
-                         c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
+meth_colors <- ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)]
 
 ```
 
@@ -911,8 +982,6 @@ theme_centrality <- function(){
   sysfonts::font_add_google("News Cycle", "news")
   # use showtext
   showtext::showtext_auto()
-  # add horizontal line between factors (i.e., methods)
-  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
   
   # theme
   ggplot2::theme_minimal(base_family = "news") +
@@ -925,20 +994,19 @@ theme_centrality <- function(){
                                          hjust = 0.5),
       plot.subtitle = ggplot2::element_text(size = ggplot2::rel(1.1),
                                             hjust = 0.5),
-      axis.title = ggplot2::element_text(size = ggplot2::rel(1.15)),
-      axis.text.x = ggplot2::element_text(face = "plain", 
-                                          size = ggplot2::rel(1.2)),
-      axis.title.x = ggplot2::element_text(face = "plain", 
-                                           size = ggplot2::rel(1.4)),
+      axis.text.x = ggplot2::element_text(face = "plain", size = ggplot2::rel(0.95)),
+      axis.title.x = ggplot2::element_text(face = "plain", size = ggplot2::rel(1.3)),
+      axis.title.y = ggplot2::element_text(face = "plain", size = ggplot2::rel(1.3)),
+      axis.line = element_line(colour = "#6d6d6e"),
       
       # Faceting
       strip.text = ggplot2::element_text(face = "plain",
-                                         size = ggplot2::rel(1.2),
+                                         size = ggplot2::rel(1.1),
                                          hjust = 0.5),
       strip.text.x.top = ggplot2::element_text(face = "plain", 
-                                               size = ggplot2::rel(1.3),
+                                               size = ggplot2::rel(1.2),
                                                  hjust = 0.5),
-      strip.text.y = element_blank(),
+      # strip.text.y = element_blank(),
       strip.background = ggplot2::element_rect(fill = NA, color = NA),
       # Grid
       panel.grid = ggplot2::element_line(colour = "#F3F4F5"),
@@ -961,18 +1029,76 @@ theme_centrality <- function(){
 
 ## Point Estimates
 
-Plot point estimate recovery (RMSE)
+Plot point estimate recovery (RMSE), not directly relevant for the manuscript
 
 ## Centrality
 
 Plot most central identical 
 
+```{r viz-most-central}
+plot_mostcentral <- sr_edit %>% 
+  # if mcse is missing, set to 0
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  mutate(outcome = case_when(
+    outcome == "beta" ~ "Temporal",
+    outcome == "pcor" ~ "Contemporaneous"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  filter(pm == "mostcent") %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             # fill = method,
+             # group = method
+             )) +
+  # add horizontal line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none")+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Proportion of Correct Central Nodes")
+
+ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 6, width = 9,
+       path = here::here("figures/"), device = "svg")
+
+
+
+```
+
+
+
 
 ## Regression
 
 Plot power of regression
+```{r viz-regression-power}
+
+```
 
 
+
+Plot RMSE of regression
+```{r viz-regression-rmse}
+
+```
 
 
 
