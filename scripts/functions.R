@@ -831,7 +831,7 @@ extract_all_estimates <- function(fit, n_id, n_var) {
   regression_intercept_est <-
     extract_estimates(fit, "reg_intercept_z")
   # return list of lists
-  list <-
+  ret_list <-
     list(
       beta_est = beta_est,
       pcor_est = pcor_est,
@@ -843,7 +843,7 @@ extract_all_estimates <- function(fit, n_id, n_var) {
       regression_intercept_est = regression_intercept_est
     )
   
-  return(list)
+  return(ret_list)
 }
 
 
@@ -851,28 +851,27 @@ extract_all_estimates <- function(fit, n_id, n_var) {
 
 # split vector into list of matrices (for beta)
 est_vector2matrix <- function(est_vector, n_id, n_var) {
-  # initialize list
-  list <- lapply(1:n_id, function(x) matrix(NA, n_var, n_var))
-  # fill list
+  # initialize list of matrices for each individual
+  est_list <- lapply(1:n_id, function(x) matrix(NA, n_var, n_var))
+  
   for (i in 1:n_id) {
+    # create indicator for individual draws
     idx <- seq(i, length(est_vector), by = n_id)
-    list[[i]] <-
+    est_list[[i]] <-
       est_vector[idx] %>% matrix(n_var, n_var, byrow = FALSE)
   }
-  # return list
   return(list)
 }
 
 # split vector into list of vectors (for pcor and pcor centrality)
 est_vector2vector <- function(est_vector, n_id, n_var) {
-  # initialize list
-  list <- lapply(1:n_id, function(x) rep(NA, n_var))
-  # fill list
+  # initialize list of matrices for each individual
+  est_list <- lapply(1:n_id, function(x) rep(NA, n_var))
+  
   for (i in 1:n_id) {
     idx <- seq(i, length(est_vector), by = n_id)
-    list[[i]] <-
+    est_list[[i]] <-
       est_vector[idx]
   }
-  # return list
   return(list)
 }
