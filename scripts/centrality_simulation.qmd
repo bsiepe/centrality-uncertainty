@@ -119,7 +119,7 @@ sim_pars <- list(
 
 Pre-compiling the model
 ```{r precompile}
-model_name <- "MLVAR_lkj_only_no_intercept"
+model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
   rstan::stan_model(
@@ -318,7 +318,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 
   # Fit model
   fit_mlvar <- mlVAR::mlVAR(df_data,
-                            vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
+                            vars = paste0("V", seq(1:n_var)),
                             idvar = "ID",
                             estimator = "lmer",
                             contemporaneous = "correlated",
@@ -382,7 +382,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   )
   
   
-  fit_blmvar <- rstan::sampling(
+  fit_bmlvar <- rstan::sampling(
   object = fixed_objects$mlvar_model,
   pars = vars(contains("raw")),
   include = FALSE,
@@ -397,21 +397,27 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   verbose = FALSE
   )
   
-  ests_bmlvar <- extract_all_estimates(fit_bmlvar)
+  ests_bmlvar <- extract_all_estimates(fit_bmlvar,
+                                       n_id = n_id,
+                                       n_var = n_var)
   
   # Obtain centralities
-  dens_temp_blmvar <- ests_bmlvar$tempdens_est$median
-  dens_cont_blmvar <- ests_bmlvar$contdens_est$median
-  # TODO THIS NEEDS TO CHANGE
-  # outstrength_blmvar <- lapply(cent_blmvar$outstrength, function(x) unname(x))
-  # strength_blmvar <- lapply(cent_blmvar$strength, function(x) unname(x))
-  # outstrength_blmvar_first <- sapply(cent_blmvar$outstrength, function(x) unname(x[1]))
+  dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
+  dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
+  # Obtain centralities
+  dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
+  dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
+  outstrength_bmlvar <- ests_bmlvar$outstrength_est$median
+  strength_bmlvar <- ests_bmlvar$pcor_centrality_est$median
+  outstrength_bmlvar_first <- sapply(ests_bmlvar$outstrength_est$median, function(x) unname(x[1]))
 
   # Obtain regression coefficients
-  
+  reg_bmlvar <- list(
+    regression_intercept = ests_bmlvar$regression_intercept_est, 
+    regression_slope = ests_bmlvar$regression_slope_est)
   
   # save summary 
-  summary_blmvar <- summary(fit_blmvar)
+  summary_bmlvar <- rstan::summary(fit_bmlvar)
   
   #--- Return Results
   # Also return true centralities for comparison later
@@ -454,7 +460,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       reg_outstrength = reg_mlvar_out_strength
     ),
     bmlvar = list(
-      fit_blmvar = list(
+      fit_bmlvar = list(
         beta = ests_bmlvar$beta_est$median,
         pcor = ests_bmlvar$pcor_est$median
       ),
@@ -462,10 +468,12 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       dens_cont = dens_cont_bmlvar,
       outstrength = outstrength_bmlvar,
       strength = strength_bmlvar,
-      reg_tempdens = reg_bmlvar_tempdens,
-      reg_outstrength = reg_bmlvar_outstrength,
+      reg_bmlvar = reg_bmlvar,
+      # reg_tempdens = reg_bmlvar_temp_dens,
+      # reg_cont_dens = reg_bmlvar_cont_dens,
+      # reg_outstrength = reg_bmlvar_outstrength,
       ests_bmlvar = ests_bmlvar,
-      summary_blmvar = summary_blmvar
+      summary_bmlvar = summary_bmlvar
     ),
     true_cent = dat$true_cent,
     data = dat$data,
@@ -700,6 +708,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   }
   
   
+  # exclude bmlvar because of its different data structure
+  methods <- c("gvar", "mlvar", "gimme")
   measures <- c("tempdens", "contdens", "outstrength")
   summaries <- c("rmse", "mse")
   
@@ -747,8 +757,82 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
       }
   }
   
- 
+  # Summary for bmlvar
+  method <- "bmlvar"
+  regression_rmse_bmlvar <- function(
+                              results, 
+                              method = "bmlvar", 
+                              true_coef = c(0,.2,.4),
+                              # lm_beta = TRUE,
+                              rmse = TRUE) {
+  sapply(seq_along(results), function(i){
+    if(is.null(results[[i]][[method]][["reg_bmlvar"]])){
+      return(NA)
+    } 
+    else{
+      reg_coefs <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["median"]]
+      # Have them all in one vector
+      # thus need to repeat the true_coefs 
+      true_coef_all <- rep(true_coef, 3)
+
+      # Calculate RMSE
+      if(isTRUE(rmse)){
+        sqrt( (reg_coefs - true_coef )^2 )
+      } else{
+        (reg_coefs - true_coef)^2
+      }
+      
+      }
+  })
+  }
   
+  regression_power_bmlvar <- function(
+                              results, 
+                              method = "bmlvar", 
+                              measure,
+                              oneside = TRUE) {
+  sapply(seq_along(results), function(i){
+    if(is.null(results[[i]][[method]][["reg_bmlvar"]])){
+      return(NA)
+    } 
+    else{
+      ci_twoside <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["ci_95_l"]]
+      ci_oneside <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["ci_oneside"]]
+      if(isTRUE(oneside)){
+        ifelse(ci_oneside > 0, 1, 0)
+      } else{
+        ifelse(ci_twoside > 0, 1, 0)
+      
+    }
+  }
+  })
+  }
+  
+  # Apply the functions
+  calc_rmse <- regression_rmse_bmlvar(
+    results = results, 
+    method = "bmlvar", 
+    rmse = TRUE)
+  calc_mse <- regression_rmse_bmlvar(
+    results = results, 
+    method = "bmlvar", 
+    rmse = FALSE)
+  calc_pwr_oneside <- regression_power_bmlvar(
+    results = results, 
+    method = "bmlvar",
+    oneside = FALSE)
+  calc_pwr_twoside <- regression_power_bmlvar(
+    results = results, 
+    method = "bmlvar",
+    oneside = FALSE)
+  
+  # Calculate mean and mcse
+  mean_rmse <- rowMeans(calc_rmse, na.rm = TRUE)
+  mean_mse <- rowMeans(calc_mse, na.rm = TRUE)
+  mean_pwr_oneside <- rowMeans(calc_pwr_oneside, na.rm = TRUE)
+  mean_pwr_twoside <- rowMeans(calc_pwr_twoside, na.rm = TRUE)
+  
+  # TODO
   
   
   #--- Return
@@ -772,8 +856,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 df_design_test <- df_design[1,]
 sim_pars$n_id <- 25
 sim_pars$n_var <- 3
-n_var <- 
+sim_pars$n_tp <- 300
+n_var <- 3
 n_id <- 25
+n_tp <- 300
 sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:3,1:3]
 sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:3,1:3]
 sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:3,1:3]
@@ -809,6 +895,85 @@ SimClean()
 
 
 # Visualization
+
+
+Prepare different colors and settings for visualization: 
+```{r viz-prep}
+meth_colors <- set_names(ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)],
+                         c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
+
+```
+
+Create common theme for all plots
+```{r}
+theme_centrality <- function(){
+  # add google font
+  sysfonts::font_add_google("News Cycle", "news")
+  # use showtext
+  showtext::showtext_auto()
+  # add horizontal line between factors (i.e., methods)
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  
+  # theme
+  ggplot2::theme_minimal(base_family = "news") +
+    ggplot2::theme(
+      # remove minor grid
+      panel.grid.minor = ggplot2::element_blank(),
+      # Title and Axis Texts
+      plot.title = ggplot2::element_text(face = "plain",
+                                         size = ggplot2::rel(1.2),
+                                         hjust = 0.5),
+      plot.subtitle = ggplot2::element_text(size = ggplot2::rel(1.1),
+                                            hjust = 0.5),
+      axis.title = ggplot2::element_text(size = ggplot2::rel(1.15)),
+      axis.text.x = ggplot2::element_text(face = "plain", 
+                                          size = ggplot2::rel(1.2)),
+      axis.title.x = ggplot2::element_text(face = "plain", 
+                                           size = ggplot2::rel(1.4)),
+      
+      # Faceting
+      strip.text = ggplot2::element_text(face = "plain",
+                                         size = ggplot2::rel(1.2),
+                                         hjust = 0.5),
+      strip.text.x.top = ggplot2::element_text(face = "plain", 
+                                               size = ggplot2::rel(1.3),
+                                                 hjust = 0.5),
+      strip.text.y = element_blank(),
+      strip.background = ggplot2::element_rect(fill = NA, color = NA),
+      # Grid
+      panel.grid = ggplot2::element_line(colour = "#F3F4F5"),
+      # Legend
+      legend.title = ggplot2::element_text(face = "plain"),
+      legend.position = "top",
+      legend.justification = 1,
+      # Panel/Facets
+      panel.spacing.x = ggplot2::unit(1.6, "lines"),
+      panel.spacing.y = ggplot2::unit(1.6, "lines"),
+      # Remove vertical grid lines
+      panel.grid.major.x = ggplot2::element_blank()
+      
+    )
+}
+```
+
+
+
+
+## Point Estimates
+
+Plot point estimate recovery (RMSE)
+
+## Centrality
+
+Plot most central identical 
+
+
+## Regression
+
+Plot power of regression
+
+
+
 
 
 
