@@ -461,12 +461,14 @@ centrality_mlvar <- function(fit){
   l_beta <- lapply(1:n_id, function(i){
     mlVAR::getNet(fit,
                   subject = i,
-                  type = "temporal")
+                  type = "temporal",
+                  nonsig = "hide")
   })
   l_pcor <- lapply(1:n_id, function(i){
     mlVAR::getNet(fit,
                   subject = i,
-                  type = "contemporaneous")
+                  type = "contemporaneous",
+                  nonsig = "hide")
   })
   
   #--- Density
@@ -785,20 +787,21 @@ extract_estimates <- function(fit, par) {
   # extract draws
   draws <-
     rstan::extract(object = fit, pars = par, permute = FALSE) %>%
-    as_draws_matrix()
+    posterior::as_draws_matrix()
   # calculate estimates
   median <-
-    try(bayestestR::point_estimate(draws, method = "median")[, "Median"])
-  hdi_95_L <- try(bayestestR::hdi(draws, ci = .95)[, "CI_low"])
-  hdi_95_U <- try(bayestestR::hdi(draws, ci = .95)[, "CI_high"])
-  q_05 <- try(bayestestR::ci(draws, ci = .90)[, "CI_low"])
+    try(bayestestR::point_estimate(draws, centrality = "median")[, "Median"])
+  # use quantile-based due to potential problems with HDI
+  ci_95_l <- try(bayestestR::ci(draws, ci = .95)[, "CI_low"])
+  ci_95_u <- try(bayestestR::ci(draws, ci = .95)[, "CI_high"])
+  ci_oneside <- try(bayestestR::ci(draws, ci = .90)[, "CI_low"])
   
   # split into matrices and return list of lists
   list <- list(
     median = median,
-    hdi_95_L = hdi_95_L,
-    hdi_95_U = hdi_95_U,
-    q_05 = q_05
+    ci_95_l = ci_95_l,
+    ci_95_u = ci_95_u,
+    ci_oneside = ci_oneside
   )
   # return list
   return(list)
