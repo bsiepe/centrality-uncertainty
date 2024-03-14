@@ -653,7 +653,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
         
       } else if(measure == "strength"){
         ret[[paste0("mostcent_pcor_", method, "_mean")]] <- mean_tmp
-        ret[[paste0("mostcent_pcor_", method, "_mean")]] <- mean_tmp
+        ret[[paste0("mostcent_pcor_", method, "_mcse")]] <- mcse_tmp
       }
     }
   }
@@ -760,14 +760,14 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
             measure,
             rmse = FALSE)
             mse_mean_tmp <- rowMeans(mse_tmp, na.rm = TRUE)
-            names(mean_tmp) <- paste0(summary, 
-                                   "_reg",
-                                   c(0, 2, 4),
-                                   "_",
-                                   measure,
-                                   "_",
-                                   method,
-                                   "_mean")
+            # names(mean_tmp) <- paste0(summary, 
+            #                        "_reg",
+            #                        c(0, 2, 4),
+            #                        "_",
+            #                        measure,
+            #                        "_",
+            #                        method,
+            #                        "_mean")
             mcse_tmp <- sqrt (apply(calc_list, 1, var, na.rm = TRUE) / (4*n_rep*mse_mean_tmp))
             names(mcse_tmp) <- paste0(summary, 
                                    "_reg",
@@ -790,7 +790,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_",
                                    method,
                                    "_mcse")
-            ret[[paste0(result_name_rmse, "_mcse")]] 
+            ret[[paste0(result_name_rmse, "_mcse")]] <- mcse_tmp
           }
           # Calculate Power
           result_name_power <- paste("power", "reg", measure, method, sep = "_")
@@ -810,6 +810,14 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
           ret[[paste0(result_name_power, "_mean")]] <- pwr_mean
           pwr_mcse_tmp <- sqrt(
             pwr_mean * (1 - pwr_mean) / n_rep)
+          names(pwr_mcse_tmp) <- paste0("power", 
+                                   "_reg",
+                                   c(0, 2, 4),
+                                   "_",
+                                   measure,
+                                   "_",
+                                   method,
+                                   "_mcse")
           ret[[paste0(result_name_power, "_mcse")]] <- pwr_mcse_tmp
         }
       }
@@ -1027,7 +1035,7 @@ sim_results <- SimDesign::runSimulation(
                                     )
 
 SimClean()
-saveRDS(sim_results, file = "output/single_row_results.RDS")
+saveRDS(sim_results, file = here("output/single_row_results.RDS"))
 
 ```
 
@@ -1035,7 +1043,7 @@ saveRDS(sim_results, file = "output/single_row_results.RDS")
 We now temporarily create a mock results data frame which we use to create visualization templates.
 
 ```{r mock-results}
-sim_res <- readRDS("output/single_row_results.RDS")
+sim_res <- readRDS(here("output/single_row_results.RDS"))
 
 # duplicate the first row of the dataframe multiple times
 sim_res[2:4,] <- sim_res[1,]
@@ -1072,23 +1080,34 @@ sr_edit <- sim_res %>%
          heterogeneity = factor(heterogeneity, levels = c("low", "high"))) %>% 
   # remove "reg_" from all column names
   rename_with(~str_remove(., "reg_")) %>% 
+  # remove everything before a "." in the column names
+  rename_with(~str_remove(., ".*\\.")) %>% 
   dplyr::select(-c("REPLICATIONS", "SIM_TIME", "RAM_USED", "SEED", "COMPLETED", "WARNINGS")) %>% 
   # pivot longer except conditions cols
   pivot_longer(cols = -c("dgp", "heterogeneity"), 
                names_to = "measure", 
                values_to = "value") %>% 
+  mutate(measure = str_replace(measure, "power_reg", "powerreg"),
+         measure = str_replace(measure, "powertwoside_reg", "powertwosidereg"),
+         measure = str_replace(measure, "poweroneside_reg", "poweronesidereg"),
+         measure = str_replace(measure, "rmse_reg", "rmsereg"),
+         measure = str_replace(measure, "mse_reg", "msereg")) %>%
+  separate_wider_delim(measure, 
+                       delim = "_",
+                       names = c("pm", "outcome", "method", "summary")) %>% 
   
-  # THIS IS TEMPORARY UNTIL A RENAMING OF THE REGRESSION COLUMNS!
-  # AND UNTIL RENAMING OF THE RANKCOR
-  # TODO
-  # TODO
-  # filter out all rows that contain "mean1", "mean2", "mean3", "mcse1", "mcse2", "mcse3" in "measure"
-  filter(!str_detect(measure, "mean1|mean2|mean3|mcse1|mcse2|mcse3")) %>%
-    separate_wider_delim(measure, 
-                       delim = "_", 
-                       names = c("pm", "outcome", "method", "summary")) %>%
-  filter(pm != "rankcor") %>% 
-  # END TEMPORARY
+# 
+#   # THIS IS TEMPORARY UNTIL A RENAMING OF THE REGRESSION COLUMNS!
+#   # AND UNTIL RENAMING OF THE RANKCOR
+#   # TODO
+#   # TODO
+#   # filter out all rows that contain "mean1", "mean2", "mean3", "mcse1", "mcse2", "mcse3" in "measure"
+#   filter(!str_detect(measure, "mean1|mean2|mean3|mcse1|mcse2|mcse3")) %>%
+#     separate_wider_delim(measure, 
+#                        delim = "_", 
+#                        names = c("pm", "outcome", "method", "summary")) %>%
+#   filter(pm != "rankcor") %>% 
+#   # END TEMPORARY
   
   mutate(method = case_when(
     method == "gvar" ~ "GVAR",
@@ -1235,24 +1254,141 @@ Plot rank correlation of centrality measures
 Need to find a way to nest the different strengths of regression coefficient
 
 ### Plot power of regression
+Prep data
+```{r viz-regression-power-prep}
+# Split data set into three based on true effect
+power_list <- sr_edit %>% 
+  filter(!str_detect(pm, "poweroneside")) %>% 
+  mutate(pm = str_replace(pm, "powertwoside", "power")) %>% 
+  filter(str_detect(pm, "power")) %>% 
+  mutate(outcome = case_when(
+    outcome == "tempdens" ~ "Temporal\nDensity",
+    outcome == "contdens" ~ "Contemporaneous\nDensity",
+    outcome == "outstrength" ~ "Temporal\nOutstrength"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "nonsparse" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  # split pm into two columns, take last number into new column
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
+  # split data set into list based on true effect
+  split(.$true_effect)
+```
+
+
 Create plot under the Null
 ```{r viz-regression-power0}
+plot0 <- power_list[[1]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,.3)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
+        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"))+
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       y = "False-Positive Rate")
+
 
 ```
 
 Create plot for .2 
 ```{r viz-regression-power2}
+plot2 <- power_list[[2]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_blank())+
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       y = "Power")
+
 
 ```
 
 
 Create plot for .4
 ```{r viz-regression-power4}
-
+plot4 <- power_list[[3]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_blank())+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Power")
 ```
+
 
 Combine them with patchwork
 ```{r viz-regression-power-combined}
+plot_power_combined <- cowplot::plot_grid(plot0, plot2, plot4, ncol = 1,
+                                          labels = c("True Effect: 0", 
+                                                     "True Effect: 0.2",
+                                                     "True Effect: 0.4"))
+
+ggsave("plot_power_combined_mock.svg", plot_power_combined, height = 12, width = 16,
+       path = here::here("figures/"), device = "svg")
+
+
 
 ```
 
@@ -1260,6 +1396,136 @@ Combine them with patchwork
 ### Plot RMSE of regression
 
 ```{r viz-regression-rmse}
+rmse_list <- sr_edit %>% 
+  filter(str_detect(pm, "rmsereg")) %>% 
+  mutate(outcome = case_when(
+    outcome == "tempdens" ~ "Temporal\nDensity",
+    outcome == "contdens" ~ "Contemporaneous\nDensity",
+    outcome == "outstrength" ~ "Temporal\nOutstrength"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "nonsparse" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  # split pm into two columns, take last number into new column
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
+  # split data set into list based on true effect
+  split(.$true_effect)
+```
+
+
+Create plot under the Null
+```{r viz-regression-power0}
+plot0_rmsereg <- rmse_list[[1]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
+        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"))+
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       y = "RMSE")
+
+
+```
+
+Create plot for .2 
+```{r viz-regression-power2}
+plot2_rmsereg <- rmse_list[[2]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_blank())+
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       y = "RMSE")
+
+
+```
+
+
+Create plot for .4
+```{r viz-regression-power4}
+plot4_rmsereg <- rmse_list[[3]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_blank())+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "RMSE")
+```
+
+Combine Plots:
+
+```{r plot-rmsereg-combined}
+plot_rmse_combined <- cowplot::plot_grid(plot0_rmsereg, 
+                                         plot2_rmsereg, 
+                                         plot4_rmsereg, 
+                                         ncol = 1,
+                                        labels = c("True Effect: 0", 
+                                                   "True Effect: 0.2",
+                                                   "True Effect: 0.4"))
+ggsave("plot_reg_rmse_combined_mock.svg", plot_rmse_combined, height = 12, width = 16,
+       path = here::here("figures/"), device = "svg")
 
 ```
 
