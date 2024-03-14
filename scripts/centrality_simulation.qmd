@@ -726,6 +726,16 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
             measure = measure,
             rmse = ifelse(summary == "rmse", TRUE, FALSE))
           mean_tmp <- rowMeans(calc_list, na.rm = TRUE)
+          # bit of a hack to add the names for the different correlation
+          # levels
+          names(mean_tmp) <- paste0(summary, 
+                                   "_reg",
+                                   c(0, 2, 4),
+                                   "_",
+                                   measure,
+                                   "_",
+                                   method,
+                                   "_mean")
           ret[[paste0(result_name_rmse, "_mean")]] <- mean_tmp
           if(func_name == "rmse"){
             # calculate MSE
@@ -735,12 +745,37 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
             measure,
             rmse = FALSE)
             mse_mean_tmp <- rowMeans(mse_tmp, na.rm = TRUE)
-            ret[[paste0(result_name_rmse, "_mcse")]] <- sqrt ( 
-              apply(calc_list, 1, var, na.rm = TRUE) / (4*n_rep*mse_mean_tmp))
+            names(mean_tmp) <- paste0(summary, 
+                                   "_reg",
+                                   c(0, 2, 4),
+                                   "_",
+                                   measure,
+                                   "_",
+                                   method,
+                                   "_mean")
+            mcse_tmp <- sqrt (apply(calc_list, 1, var, na.rm = TRUE) / (4*n_rep*mse_mean_tmp))
+            names(mcse_tmp) <- paste0(summary, 
+                                   "_reg",
+                                   c(0, 2, 4),
+                                   "_",
+                                   measure,
+                                   "_",
+                                   method,
+                                   "_mcse")
+            ret[[paste0(result_name_rmse, "_mcse")]] <- mcse_tmp
           }
           else if(func_name == "mse"){
-            ret[[paste0(result_name_rmse, "_mcse")]] <- sqrt(
+            mcse_tmp <- sqrt(
               apply(calc_list, 1, var, na.rm = TRUE) / n_rep)
+            names(mcse_tmp) <- paste0(summary, 
+                                   "_reg",
+                                   c(0, 2, 4),
+                                   "_",
+                                   measure,
+                                   "_",
+                                   method,
+                                   "_mcse")
+            ret[[paste0(result_name_rmse, "_mcse")]] 
           }
           # Calculate Power
           result_name_power <- paste("power", "reg", measure, method, sep = "_")
@@ -749,10 +784,18 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
             method = method, 
             measure = measure)
           pwr_mean <- rowMeans(calc_list_pwr, na.rm = TRUE)
+          names(pwr_mean) <- paste0("power", 
+                                   "_reg",
+                                   c(0, 2, 4),
+                                   "_",
+                                   measure,
+                                   "_",
+                                   method,
+                                   "_mean")
           ret[[paste0(result_name_power, "_mean")]] <- pwr_mean
-          ret[[paste0(result_name_power, "_mcse")]] <- sqrt(
+          pwr_mcse_tmp <- sqrt(
             pwr_mean * (1 - pwr_mean) / n_rep)
-
+          ret[[paste0(result_name_power, "_mcse")]] <- pwr_mcse_tmp
         }
       }
   }
@@ -826,17 +869,96 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     method = "bmlvar",
     oneside = FALSE)
   
-  # Calculate mean and mcse
+  # Calculate mean
   mean_rmse <- rowMeans(calc_rmse, na.rm = TRUE)
+  names(mean_rmse) <- paste0("rmse", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             measures,
+                             "_",
+                             "bmlvar",
+                             "_mean")
   mean_mse <- rowMeans(calc_mse, na.rm = TRUE)
-  mean_pwr_oneside <- rowMeans(calc_pwr_oneside, na.rm = TRUE)
-  mean_pwr_twoside <- rowMeans(calc_pwr_twoside, na.rm = TRUE)
+  names(mean_mse) <- paste0("mse", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             measures,
+                             "_",
+                             "bmlvar",
+                             "_mean")
+  mean_pwroneside <- rowMeans(calc_pwr_oneside, na.rm = TRUE)
+  names(mean_pwroneside) <- paste0("poweroneside", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             measures,
+                             "_",
+                             "bmlvar",
+                             "_mean")
+  mean_pwrtwoside <- rowMeans(calc_pwr_twoside, na.rm = TRUE)
+  names(mean_pwrtwoside) <- paste0("powertwoside", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             measures,
+                             "_",
+                             "bmlvar",
+                             "_mean")
+  ret[["mean_rmse"]] <- mean_rmse
+  ret[["mean_mse"]] <- mean_mse
+  ret[["mean_pwroneside"]] <- mean_pwroneside
+  ret[["mean_pwrtwoside"]] <- mean_pwrtwoside
   
-  # TODO
+  # calculate mcse
+  mcse_rmse <- sqrt(
+    mean_rmse * (1 - mean_rmse) / n_rep)
+  names(mcse_rmse) <- paste0("rmse", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             measures,
+                             "_",
+                             "bmlvar",
+                             "_mcse")
+  mcse_mse <- sqrt(
+    mean_mse * (1 - mean_mse) / n_rep)
+  names(mcse_mse) <- paste0("mse", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             measures,
+                             "_",
+                             "bmlvar",
+                             "_mcse")
+  mcse_pwroneside <- sqrt(
+    mean_pwroneside * (1 - mean_pwroneside) / n_rep)
+  names(mcse_pwroneside) <- paste0("poweroneside", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             measures,
+                             "_",
+                             "bmlvar",
+                             "_mcse")
+  mcse_pwrtwoside <- sqrt(
+    mean_pwrtwoside * (1 - mean_pwrtwoside) / n_rep)
+  names(mcse_pwrtwoside) <- paste0("powertwoside", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             measures,
+                             "_",
+                             "bmlvar",
+                             "_mcse")
+  ret[["mcse_rmse"]] <- mcse_rmse
+  ret[["mcse_mse"]] <- mcse_mse
+  ret[["mcse_pwroneside"]] <- mcse_pwroneside
+  ret[["mcse_pwrtwoside"]] <- mcse_pwrtwoside
   
   
-  #--- Return
-  # TODO the regression stuff with 3 measures might take some renaming
+  #--- Returna
   ret_vec <- unlist(ret, use.names = TRUE)
   return(ret_vec)
   
@@ -866,7 +988,7 @@ sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:3,1:3]
 sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:3,1:3]
 
 
-n_rep <- 10
+n_rep <- 2
 sim_results <- SimDesign::runSimulation(
                                     design = df_design_test, 
                                     replications = n_rep, 
@@ -879,10 +1001,12 @@ sim_results <- SimDesign::runSimulation(
                                                  "gimme",
                                                  "mlVAR",
                                                  "graphicalVAR",
-                                                 "lm.beta"),
+                                                 "lm.beta",
+                                                 "bayestestR",
+                                                 "posterior"),
                                     # save_results = TRUE,
-                                    ncores = 10
-                                    # debug = "summarise"
+                                    ncores = 2,
+                                    debug = "analyse"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
@@ -994,7 +1118,7 @@ theme_centrality <- function(){
                                          hjust = 0.5),
       plot.subtitle = ggplot2::element_text(size = ggplot2::rel(1.1),
                                             hjust = 0.5),
-      axis.text.x = ggplot2::element_text(face = "plain", size = ggplot2::rel(0.95)),
+      axis.text.x = ggplot2::element_text(face = "plain", size = ggplot2::rel(0.975)),
       axis.title.x = ggplot2::element_text(face = "plain", size = ggplot2::rel(1.3)),
       axis.title.y = ggplot2::element_text(face = "plain", size = ggplot2::rel(1.3)),
       axis.line = element_line(colour = "#6d6d6e"),
@@ -1047,6 +1171,10 @@ plot_mostcentral <- sr_edit %>%
     heterogeneity == "low" ~ "Low\nHeterogeneity",
     heterogeneity == "high" ~ "High\nHeterogeneity"
   )) %>%
+  mutate(dgp = case_when(
+    dgp == "nonsparse" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
   filter(pm == "mostcent") %>% 
   ggplot(aes(x = method, 
              y = mean, 
@@ -1076,7 +1204,7 @@ plot_mostcentral <- sr_edit %>%
        colour = "Method",
        y = "Proportion of Correct Central Nodes")
 
-ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 6, width = 9,
+ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 5, width = 9,
        path = here::here("figures/"), device = "svg")
 
 
@@ -1084,22 +1212,52 @@ ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 6, width = 9,
 ```
 
 
+Plot rank correlation of centrality measures
 
 
 ## Regression
 
-Plot power of regression
-```{r viz-regression-power}
+Need to find a way to nest the different strengths of regression coefficient
+
+### Plot power of regression
+Create plot under the Null
+```{r viz-regression-power0}
+
+```
+
+Create plot for .2 
+```{r viz-regression-power2}
 
 ```
 
 
+Create plot for .4
+```{r viz-regression-power4}
 
-Plot RMSE of regression
+```
+
+Combine them with patchwork
+```{r viz-regression-power-combined}
+
+```
+
+
+### Plot RMSE of regression
+
 ```{r viz-regression-rmse}
 
 ```
 
+
+
+
+# Create Overview Table for Supplement
+Create one long overview table over all performance measures for the supplement.
+Probably will be long and unwieldy. 
+
+```{r overview-table}
+
+``` 
 
 
 
