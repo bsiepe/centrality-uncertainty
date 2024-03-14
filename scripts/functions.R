@@ -797,14 +797,14 @@ extract_estimates <- function(fit, par) {
   ci_oneside <- try(bayestestR::ci(draws, ci = .90)[, "CI_low"])
   
   # split into matrices and return list of lists
-  list <- list(
+  ret_list <- list(
     median = median,
     ci_95_l = ci_95_l,
     ci_95_u = ci_95_u,
     ci_oneside = ci_oneside
   )
   # return list
-  return(list)
+  return(ret_list)
 }
 
 
@@ -860,7 +860,7 @@ est_vector2matrix <- function(est_vector, n_id, n_var) {
     est_list[[i]] <-
       est_vector[idx] %>% matrix(n_var, n_var, byrow = FALSE)
   }
-  return(list)
+  return(est_list)
 }
 
 # split vector into list of vectors (for pcor and pcor centrality)
@@ -873,5 +873,5 @@ est_vector2vector <- function(est_vector, n_id, n_var) {
     est_list[[i]] <-
       est_vector[idx]
   }
-  return(list)
+  return(est_list)
 }
