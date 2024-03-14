@@ -289,8 +289,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                             subgroup = TRUE,
                             plot = FALSE,
                             hybrid = FALSE,
-                            groupcutoff = .50,
-                            subcutoff = .50)
+                            groupcutoff = .75,
+                            subcutoff = .75)
   
   cent_gimme <- centrality_gimme(fit_gimme)
 
@@ -339,13 +339,31 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     mlVAR::getNet(fit_mlvar,
                   subject = i,
                   type = "temporal",
-                  nonsig = "hide")
+                  nonsig = "show")
   })
   pcor_mlvar <- lapply(1:n_id, function(i){
     mlVAR::getNet(fit_mlvar,
                   subject = i,
                   type = "contemporaneous",
-                  nonsig = "hide")
+                  nonsig = "show")
+  })
+  
+  # # Calculate fixed effects adjacency matrix
+  adj_mat_beta <- ifelse(
+    mlVAR::getNet(fit_mlvar,
+       type = "temporal",
+       nonsig = "hide") != 0, 1, 0)
+  adj_mat_pcor <- ifelse(
+    mlVAR::getNet(fit_mlvar,
+       type = "contemporaneous",
+       nonsig = "hide") != 0, 1, 0)
+
+  # set effects to zero
+  beta_mlvar <- lapply(beta_mlvar, function(i){
+    i * adj_mat_beta
+  })
+  pcor_mlvar <- lapply(pcor_mlvar, function(i){
+    i * adj_mat_pcor
   })
 
   # Fit regression
@@ -469,9 +487,6 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       outstrength = outstrength_bmlvar,
       strength = strength_bmlvar,
       reg_bmlvar = reg_bmlvar,
-      # reg_tempdens = reg_bmlvar_temp_dens,
-      # reg_cont_dens = reg_bmlvar_cont_dens,
-      # reg_outstrength = reg_bmlvar_outstrength,
       ests_bmlvar = ests_bmlvar,
       summary_bmlvar = summary_bmlvar
     ),
@@ -1006,7 +1021,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "posterior"),
                                     # save_results = TRUE,
                                     ncores = 2,
-                                    debug = "analyse"
+                                    debug = "summarise"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
