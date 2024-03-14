@@ -890,7 +890,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_reg",
                              c(0, 2, 4),
                              "_",
-                             measures,
+                             rep(measures, each = 3),
                              "_",
                              "bmlvar",
                              "_mean")
@@ -899,7 +899,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_reg",
                              c(0, 2, 4),
                              "_",
-                             measures,
+                             rep(measures, each = 3),
                              "_",
                              "bmlvar",
                              "_mean")
@@ -908,7 +908,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_reg",
                              c(0, 2, 4),
                              "_",
-                             measures,
+                             rep(measures, each = 3),
                              "_",
                              "bmlvar",
                              "_mean")
@@ -917,7 +917,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_reg",
                              c(0, 2, 4),
                              "_",
-                             measures,
+                             rep(measures, each = 3),
                              "_",
                              "bmlvar",
                              "_mean")
@@ -933,7 +933,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_reg",
                              c(0, 2, 4),
                              "_",
-                             measures,
+                             rep(measures, each = 3),
                              "_",
                              "bmlvar",
                              "_mcse")
@@ -943,7 +943,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_reg",
                              c(0, 2, 4),
                              "_",
-                             measures,
+                             rep(measures, each = 3),
                              "_",
                              "bmlvar",
                              "_mcse")
@@ -953,7 +953,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_reg",
                              c(0, 2, 4),
                              "_",
-                             measures,
+                             rep(measures, each = 3),
                              "_",
                              "bmlvar",
                              "_mcse")
@@ -963,7 +963,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_reg",
                              c(0, 2, 4),
                              "_",
-                             measures,
+                             rep(measures, each = 3),
                              "_",
                              "bmlvar",
                              "_mcse")
