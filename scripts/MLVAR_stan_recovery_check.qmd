@@ -24,7 +24,7 @@ library(psych)
 library(bayestestR)
 
 source(here("scripts", "functions.R"))
-set.seed(35037)
+set.seed(35032)
 ```
 
 # Simulate data
@@ -36,7 +36,7 @@ TODO: The following does not work yet when we scale the variables, because the t
 
 Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
 ```{r sim-data}
-I <- 200
+I <- 500
 K <- 6
 # number of regression outcomes
 P <- 9
@@ -44,7 +44,7 @@ n_pc <-  K * (K - 1) / 2
 idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>% 
   c() %>% 
   which(.)
-n_t <- rep(150, I)
+n_t <- rep(1000, I)
 beta_sd <- 0.1
 kappa_sd <- 0.1
 
@@ -64,7 +64,7 @@ ml_sim <- sim_gvar_loop(
                      max_try = 10000)
 
 # Obtain individual models and data
-Y <- ml_sim$data %>% map(function(x) apply(x,2,scale)) %>% 
+Y <- ml_sim$data %>% 
   do.call(rbind, .) %>% 
   as.matrix()
 
@@ -174,7 +174,7 @@ stan_data <-
   )
 ```
 
-#### Strating Values
+#### Starting Values
 ```{r  renv.ignore = TRUE}
 # # initial values
 # beta_start <-
@@ -222,7 +222,7 @@ stan_data <-
 
 ```{r compile, renv.ignore = TRUE}
 # Choose model to fit
-model_name <- "MLVAR_lkj_only_no_intercept"
+model_name <- "MLVAR_lkj_only"
 # Compile model
 mlvar_model <-
   rstan::stan_model(
@@ -240,7 +240,10 @@ n_chains <- 4
 # Run sampler
 mlvar_fit <- rstan::sampling(
   object = mlvar_model,
-  pars = vars(contains("raw")),
+  pars = c("Beta_raw",
+           "Intercepts_raw",
+           "theta_sd_raw",
+           "lp__"),
   include = FALSE,
   data = stan_data,
   seed = 2023,
@@ -248,14 +251,14 @@ mlvar_fit <- rstan::sampling(
   cores = n_chains,
   warmup = 500,
   iter = 1000,
-  init = 0,
+  init = 0.01,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
 )
-rstan::get_elapsed_time(mlvar_fit) %>% 
-  as.data.frame() %>% 
-  rowMeans() %>% 
-  max()/60
+rstan::get_elapsed_time(mlvar_fit) %>%
+  as.data.frame() %>%
+  rowMeans() %>%
+  max() / 60
 
 saveRDS(mlvar_fit, here("fits", paste0(model_name, "_fit.rds")))
 ```
@@ -265,7 +268,7 @@ mlvar_fit <- readRDS(here("fits", "mlvar_fit.rds"))
 ```
 
 ## Effective sample size (ESS) & Rhat Plots
-```{r ,  renv.ignore=TRUE, eval = FALSE}
+```{r ,  renv.ignore=TRUE}
 # color scheme
 color_scheme_set(scheme = "purple")
 # Effective sample sizes
@@ -338,12 +341,12 @@ bayesplot::mcmc_intervals(
 ```{r renv.ignore=TRUE}
 bayesplot::mcmc_recover_intervals(
   true = rep(0,9),
-  x = rstan::extract(object = mlvar_fit, c("reg_intercept")) %>% do.call(cbind, .) %>%
+  x = rstan::extract(object = mlvar_fit, c("reg_intercept_z")) %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 
 bayesplot::mcmc_intervals(
-  x = rstan::extract(object = mlvar_fit, c("reg_intercept")) %>% do.call(cbind, .) %>%
+  x = rstan::extract(object = mlvar_fit, c("reg_intercept_z")) %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 ```

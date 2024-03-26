@@ -173,10 +173,11 @@ model {
     Y_temp[2:n_t[i]] ~ multi_normal_cholesky(mu_network, Sigma_chol);
   } // end i
   
+  
   // Regression
-  for(p in 1:P){
-    reg_covariate[,p] ~ normal(mu_regression[,p], exp(reg_residual[p]));
-  } // end p
+    to_vector(reg_covariate) ~ normal(
+      to_vector(mu_regression), exp(to_vector(rep_matrix(reg_residual', I)))
+      );
     
 } // end model
 ////////////////////////////////////////////////////////////////////////////////

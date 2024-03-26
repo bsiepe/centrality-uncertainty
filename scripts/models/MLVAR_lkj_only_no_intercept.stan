@@ -12,6 +12,13 @@ data {
   array[N_total] vector[K] Y; // longitudinal responses for all persons
   matrix[I,P] reg_covariate; // regression outcome
 }
+transformed data{
+  matrix[I,P] reg_covariate_z; // standardized covariates
+  for(p in 1:P){
+    reg_covariate_z[,p] = (reg_covariate[,p] - mean(reg_covariate[,p]))  / 
+                          sd(reg_covariate[,p];
+  } // end p
+}
 ////////////////////////////////////////////////////////////////////////////////
 parameters {
   // Temporal
@@ -163,9 +170,9 @@ model {
   } // end i
   
   // Regression
-  for(p in 1:P){
-    reg_covariate[,p] ~ normal(mu_regression[,p], exp(reg_residual[p]));
-  } // end p
+    to_vector(reg_covariate_z) ~ normal(
+      to_vector(mu_regression), exp(to_vector(rep_matrix(reg_residual', I)))
+      );
     
 } // end model
 ////////////////////////////////////////////////////////////////////////////////
