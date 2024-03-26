@@ -406,10 +406,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 4,
+  chains = 2,
   cores = 1,
-  warmup = 500,
-  iter = 1000,
+  warmup = 300,
+  iter = 500,
   init = 0,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
@@ -436,6 +436,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # save summary 
   summary_bmlvar <- rstan::summary(fit_bmlvar)
+  
+  # convergence diagnostics
+  rhat_bmlvar <- apply(posterior::as_draws_array(fit_bmlvar), 3, rstan::Rhat)
+  divtrans_bmlvar <- rstan::get_num_divergent(fit_bmlvar)
   
   #--- Return Results
   # Also return true centralities for comparison later
@@ -488,7 +492,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       strength = strength_bmlvar,
       reg_bmlvar = reg_bmlvar,
       ests_bmlvar = ests_bmlvar,
-      summary_bmlvar = summary_bmlvar
+      summary_bmlvar = summary_bmlvar,
+      rhat_bmlvar = rhat_bmlvar,
+      divtrans_bmlvar = divtrans_bmlvar
     ),
     true_cent = dat$true_cent,
     data = dat$data,
@@ -981,7 +987,12 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   ret[["mcse_pwrtwoside"]] <- mcse_pwrtwoside
   
   
-  #--- Returna
+  #--- Return
+  ret$bmlvar_diagnostics <- list()
+  ret$bmlvar_diagnostics$rhat_bmlvar <- lapply(results, function(x){
+    x$bmlvar$rhat_bmlvar})
+  ret$bmlvar_diagnostics$divtrans_bmlvar <- lapply(results, function(x){
+    x$bmlvar$divtrans_bmlvar})
   ret_vec <- unlist(ret, use.names = TRUE)
   return(ret_vec)
   
@@ -998,22 +1009,22 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 ```{r run-sim}
 # For testing
-df_design_test <- df_design[1,]
-sim_pars$n_id <- 25
-sim_pars$n_var <- 3
-n_var <- 3
-n_id <- 25
-sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:3,1:3]
-sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:3,1:3]
-sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:3,1:3]
-sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:3,1:3]
-sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:3,1:3]
-sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:3,1:3]
+df_design_test <- df_design[2,]
+# sim_pars$n_id <- 25
+# sim_pars$n_var <- 3
+# n_var <- 3
+# n_id <- 25
+# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:3,1:3]
+# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:3,1:3]
+# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:3,1:3]
+# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:3,1:3]
+# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:3,1:3]
+# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:3,1:3]
 
 
 n_rep <- 2
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design_test, 
+                                    design = df_design, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
@@ -1027,7 +1038,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "lm.beta",
                                                  "bayestestR",
                                                  "posterior"),
-                                    # save_results = TRUE,
+                                    save_results = TRUE,
                                     ncores = 2,
                                     debug = "summarise"
                                     # filename = "centrality-simulation.rds",
