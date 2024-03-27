@@ -6,8 +6,10 @@ sim_gvar_loop <- function(graph,
                           n_time,
                           n_node,
                           max_try = 1000,
-                          failsafe = TRUE,
+                          failsafe = FALSE,
                           listify = FALSE) {
+  # browser()
+  
   # Create a list to store the data for each person
   data <- vector("list", n_person)
   beta <- array(NA, c(n_node, n_node, n_person))
@@ -17,9 +19,11 @@ sim_gvar_loop <- function(graph,
   # Simulate data for each person
   for (i in seq_len(n_person)) {
     counter <- 0
+    beta_counter <- 0
+    kappa_counter <- 0
     repeat {
-      counter <- counter + 1
-      if (counter > max_try)
+      beta_counter <- beta_counter + 1
+      if (beta_counter > max_try)
         stop("Exceeded maximum number of attempts to generate stable beta matrix.")
       
       # Generate beta matrix using graph$beta as mean
@@ -35,10 +39,10 @@ sim_gvar_loop <- function(graph,
         break
     }
     
-    counter <- 0
+    
     repeat {
-      counter <- counter + 1
-      if (counter > max_try)
+      kappa_counter <- counter + 1
+      if (kappa_counter > max_try)
         stop(
           "Exceeded maximum number of attempts to generate semi-positive definite kappa matrix."
         )
@@ -56,10 +60,15 @@ sim_gvar_loop <- function(graph,
       # Check if kappa matrix is semi-positive definite
       ev_k <- eigen(kappa[, , i])$values
       
-      if (all(ev_k >= 0))
+      # add small tolerance 
+      if (all(ev_k >= 0 - 1e-6)){
         pcor[, , i] <- -stats::cov2cor(kappa[, , i])
         diag(pcor[, , i]) <- 0
-        break
+        if(!any(is.na(pcor[,,i]))){
+          break
+        }
+        
+        }
     }
     
     if (failsafe) {
@@ -71,9 +80,15 @@ sim_gvar_loop <- function(graph,
         }, error = function(e)
           NA)
     } else {
+      repeat{
+      counter <- counter + 1
       data[[i]] <- graphicalVAR::graphicalVARsim(nTime = n_time,
                                                  beta = beta[, , i],
                                                  kappa = kappa[, , i])
+      if(!is.null(data[[i]])) break
+      
+      
+    }
     }
   }
   ret <- list()

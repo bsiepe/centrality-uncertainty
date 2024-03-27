@@ -778,5 +778,64 @@ loop_test_fit <- mlVAR(data_loop,
 ```
 
 
+Check if it actually increases the random effects sd as intended
+
+```{r}
+# non-sparse Graph to simulate from
+graph_nonsparse <- readRDS(here::here("data/graph_nonsparse.RDS"))
+
+# sparse DGP
+graph_sparse <- readRDS(here::here("data/graph_sparse.RDS"))
+
+dgp <- "sparse"
+heterogeneity <- "low"
+heterogeneity <- "high"
+
+dgp_graph <- ifelse(dgp == "sparse", 
+                      "graph_sparse", 
+                      "graph_nonsparse")
+beta_sd <- ifelse(heterogeneity == "low",
+                    0.05,
+                    0.2)
+  
+# scale kappa random effects w.r.t diagonal elements
+mean_diag_kappa <- mean(diag(graph_sparse$kappa)) 
+kappa_sd_low <- 0.05 * mean_diag_kappa
+kappa_sd_high <- 0.2 * mean_diag_kappa
+  
+kappa_sd <- ifelse(heterogeneity == "low",
+                     kappa_sd_low,
+                     kappa_sd_high)
+  
+ml_sim <- sim_gvar_loop(
+                     graph = graph_sparse,
+                     beta_sd = beta_sd,
+                     kappa_sd = kappa_sd,
+                     n_person = n_id,
+                     n_time = n_tp,
+                     n_node = n_var,
+                     max_try = 10000,
+                     listify = TRUE)
+
+# Check if the beta and kappa sd are as intended
+ml_sim$beta %>% 
+  apply(c(1,2), sd) %>% 
+  mean()
+
+ml_sim$pcor %>% 
+  apply(c(1,2), sd) %>% 
+  # remove diagonal 
+  .[upper.tri(.)] %>% 
+  mean()
+
+
+
+
+```
+
+
+
+
+
 
 
