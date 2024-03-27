@@ -82,8 +82,8 @@ n_var <- 6
 n_tp <- 150
 
 # random effects sds
-beta_sd <- 0.1
-kappa_sd <- 0.1
+# beta_sd <- 0.1
+# kappa_sd <- 0.1
 
 # Type of DGP
 dgp <- c("sparse", "dense")
@@ -110,8 +110,8 @@ sim_pars <- list(
   n_var = n_var,
   n_tp = n_tp,
   reg_error_sd = reg_error_sd,
-  beta_sd = beta_sd,
-  kappa_sd = kappa_sd,
+  # beta_sd = beta_sd,
+  # kappa_sd = kappa_sd,
   graph_nonsparse = graph_nonsparse,
   graph_sparse = graph_sparse
 )
@@ -144,13 +144,13 @@ sim_generate <- function(condition, fixed_objects = NULL){
                       "graph_sparse", 
                       "graph_nonsparse")
   beta_sd <- ifelse(condition$heterogeneity == "low",
-                    0.1,
-                    0.3)
+                    0.05,
+                    0.2)
   
   # scale kappa random effects w.r.t diagonal elements
   mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
-  kappa_sd_low <- 0.1 * mean_diag_kappa
-  kappa_sd_high <- 0.3 * mean_diag_kappa
+  kappa_sd_low <- 0.05 * mean_diag_kappa
+  kappa_sd_high <- 0.2 * mean_diag_kappa
   
   kappa_sd <- ifelse(condition$heterogeneity == "low",
                      kappa_sd_low,
@@ -165,12 +165,20 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      n_node = n_var,
                      max_try = 10000,
                      listify = TRUE)
+  if(any(is.na(ml_sim$beta))){
+    stop("Generation of Betas failed")
+  }
+  
+  if(any(is.na(ml_sim$pcor))){
+    stop("Generation of PCORs failed")
+  } 
   
   # Obtain true centralities
   true_cent <- centrality_mlvar_sim(ml_sim,
                                     sim_fn = "sim_gvar_loop")
+
   
-  # TODO think about if scaling is okay here
+  # Exctract and scale network features  
   tempdens <- unlist(true_cent$dens_temp) |> scale()
   outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale()
   contdens <- unlist(true_cent$dens_cont) |> scale()
@@ -248,12 +256,14 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- graphicalVAR
   # Fit models
   fit_gvar <- lapply(dat$data, function(x){
-    graphicalVAR::graphicalVAR(x, 
+    tryCatch({graphicalVAR::graphicalVAR(x, 
                                nLambda = 50,
                                verbose = FALSE,
                                gamma = 0, 
-                               scale = FALSE)
+                               scale = FALSE)}, error = function(e) NA)
   })
+  
+  # TODO add check for graphicalVAR
  
   
   # Obtain centralities, IDs nested in list
@@ -292,6 +302,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                             groupcutoff = .75,
                             subcutoff = .75)
   
+  # TODO add check for GIMME as well
+  
+  
   cent_gimme <- centrality_gimme(fit_gimme)
 
   # Obtain centralities
@@ -325,6 +338,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                             temporal = "correlated",
                             nCores = 1,
                             scale = FALSE)
+  
+  
 
   # Obtain centralities
   cent_mlvar <- centrality_mlvar(fit_mlvar)
@@ -370,6 +385,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   reg_mlvar_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_mlvar))
   reg_mlvar_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_mlvar))
   reg_mlvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_mlvar_first))
+  
+  
   # 
   #--- Bayesian mlVAR
   # indicators for partial correlations
@@ -414,6 +431,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   control = list(adapt_delta = 0.8),
   verbose = FALSE
   )
+  
+  if(!inherits(fit_bmlvar, "stanfit")){
+    stop("BmlVAR model failed.")
+  }
   
   ests_bmlvar <- extract_all_estimates(fit_bmlvar,
                                        n_id = n_id, 
@@ -1031,16 +1052,18 @@ sim_results <- SimDesign::runSimulation(
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
                                     parallel = TRUE,
+                                    max_errors = 100,
                                     packages = c("tidyverse", 
                                                  "gimme",
                                                  "mlVAR",
                                                  "graphicalVAR",
                                                  "lm.beta",
                                                  "bayestestR",
-                                                 "posterior"),
+                                                 "posterior",
+                                                 "rstan"),
                                     save_results = TRUE,
-                                    ncores = 2,
-                                    debug = "summarise"
+                                    ncores = 2
+                                    # debug = "summarise"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
