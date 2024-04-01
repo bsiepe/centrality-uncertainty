@@ -145,12 +145,12 @@ sim_generate <- function(condition, fixed_objects = NULL){
                       "graph_nonsparse")
   beta_sd <- ifelse(condition$heterogeneity == "low",
                     0.05,
-                    0.2)
+                    0.1)
   
   # scale kappa random effects w.r.t diagonal elements
   mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
   kappa_sd_low <- 0.05 * mean_diag_kappa
-  kappa_sd_high <- 0.2 * mean_diag_kappa
+  kappa_sd_high <- 0.1 * mean_diag_kappa
   
   kappa_sd <- ifelse(condition$heterogeneity == "low",
                      kappa_sd_low,
@@ -256,15 +256,17 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- graphicalVAR
   # Fit models
   fit_gvar <- lapply(dat$data, function(x){
-    tryCatch({graphicalVAR::graphicalVAR(x, 
+    tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
                                nLambda = 50,
                                verbose = FALSE,
                                gamma = 0, 
-                               scale = FALSE)}, error = function(e) NA)
+                               scale = FALSE))}, error = function(e) NA)
   })
   
   # TODO add check for graphicalVAR
- 
+  if(any(is.na(fit_gvar))){
+    stop("Not all GVAR models converged.")
+  }
   
   # Obtain centralities, IDs nested in list
   cent_gvar <- purrr::transpose(lapply(fit_gvar, function(x){
@@ -294,16 +296,18 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- GIMME
   
   # Fit model
-  fit_gimme <- gimme::gimme(dat$data,
+  fit_gimme <- tryCatch({gimme::gimme(dat$data,
                             ar = TRUE,
                             subgroup = TRUE,
                             plot = FALSE,
                             hybrid = FALSE,
                             groupcutoff = .75,
-                            subcutoff = .75)
+                            subcutoff = .75)}, error = function(e) NA)
   
   # TODO add check for GIMME as well
-  
+  if(any(is.na(fit_gimme))){
+    stop("GIMME did not converge.")
+  }
   
   cent_gimme <- centrality_gimme(fit_gimme)
 
@@ -330,14 +334,17 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # #--- frequentist mlVAR
 
   # Fit model
-  fit_mlvar <- mlVAR::mlVAR(df_data,
+  fit_mlvar <- tryCatch({suppressMessages(mlVAR::mlVAR(df_data,
                             vars = paste0("V", seq(1:n_var)),
                             idvar = "ID",
                             estimator = "lmer",
                             contemporaneous = "correlated",
                             temporal = "correlated",
                             nCores = 1,
-                            scale = FALSE)
+                            scale = FALSE))}, error = function(e) NA)
+  if(any(is.na(fit_mlvar))){
+    stop("mlVAR did not converge.")
+  }
   
   
 
@@ -1031,28 +1038,28 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 ```{r run-sim}
 # For testing
 df_design_test <- df_design[2,]
-# sim_pars$n_id <- 25
-# sim_pars$n_var <- 3
-# n_var <- 3
-# n_id <- 25
-# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:3,1:3]
-# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:3,1:3]
-# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:3,1:3]
-# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:3,1:3]
-# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:3,1:3]
-# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:3,1:3]
+sim_pars$n_id <- 25
+sim_pars$n_var <- 3
+n_var <- 3
+n_id <- 25
+sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:3,1:3]
+sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:3,1:3]
+sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:3,1:3]
+sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:3,1:3]
+sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:3,1:3]
+sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:3,1:3]
 
 
 n_rep <- 2
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design, 
+                                    design = df_design[c(1,2),], 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
                                     parallel = TRUE,
-                                    max_errors = 100,
+                                    max_errors = 10,
                                     packages = c("tidyverse", 
                                                  "gimme",
                                                  "mlVAR",
@@ -1060,8 +1067,9 @@ sim_results <- SimDesign::runSimulation(
                                                  "lm.beta",
                                                  "bayestestR",
                                                  "posterior",
-                                                 "rstan"),
-                                    save_results = TRUE,
+                                                 "rstan",
+                                                 "Rcpp"),
+                                    # save_results = TRUE,
                                     ncores = 2
                                     # debug = "summarise"
                                     # filename = "centrality-simulation.rds",
