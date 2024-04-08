@@ -136,7 +136,8 @@ sim_pars$mlvar_model <-
 ## Simulating Data
 ```{r data-generation}
 sim_generate <- function(condition, fixed_objects = NULL){
-  
+  source(here::here("scripts", "functions.R"))
+
   # obtain fixed params
   SimDesign::Attach(fixed_objects)
 
@@ -1017,8 +1018,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Return
   ret$bmlvar_diagnostics <- list()
-  ret$bmlvar_diagnostics$rhat_bmlvar <- lapply(results, function(x){
-    x$bmlvar$rhat_bmlvar})
+  # ret$bmlvar_diagnostics$rhat_bmlvar <- lapply(results, function(x){
+  #   x$bmlvar$rhat_bmlvar})
   ret$bmlvar_diagnostics$divtrans_bmlvar <- lapply(results, function(x){
     x$bmlvar$divtrans_bmlvar})
   ret_vec <- unlist(ret, use.names = TRUE)
@@ -1037,29 +1038,37 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 ```{r run-sim}
 # For testing
-df_design_test <- df_design[2,]
-sim_pars$n_id <- 25
-sim_pars$n_var <- 3
-n_var <- 3
-n_id <- 25
-sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:3,1:3]
-sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:3,1:3]
-sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:3,1:3]
-sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:3,1:3]
-sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:3,1:3]
-sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:3,1:3]
+# df_design_test <- df_design[2,]
+# sim_pars$n_id <- 25
+# sim_pars$n_var <- 3
+# n_var <- 3
+# n_id <- 25
+# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:3,1:3]
+# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:3,1:3]
+# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:3,1:3]
+# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:3,1:3]
+# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:3,1:3]
+# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:3,1:3]
 
 
-n_rep <- 2
+n_rep <- 10
+library(future)
+library(progressr)
+future::plan(multisession, workers = n_rep)
+# handlers("rstudio")
+# handlers('cli')
+
+# started 2024-04-03 ~18:00
+
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design[c(1,2),], 
+                                    design = df_design, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    parallel = TRUE,
-                                    max_errors = 10,
+                                    parallel = "future",
+                                    max_errors = 2,
                                     packages = c("tidyverse", 
                                                  "gimme",
                                                  "mlVAR",
@@ -1068,16 +1077,18 @@ sim_results <- SimDesign::runSimulation(
                                                  "bayestestR",
                                                  "posterior",
                                                  "rstan",
-                                                 "Rcpp"),
+                                                 "Rcpp")
                                     # save_results = TRUE,
-                                    ncores = 2
+                                    # ncores = 1
                                     # debug = "summarise"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
 
+plan(sequential)
+
 SimClean()
-saveRDS(sim_results, file = here("output/single_row_results.RDS"))
+saveRDS(sim_results, file = here("output/pilot_sim_results.RDS"))
 
 ```
 
@@ -1085,7 +1096,7 @@ saveRDS(sim_results, file = here("output/single_row_results.RDS"))
 We now temporarily create a mock results data frame which we use to create visualization templates.
 
 ```{r mock-results}
-sim_res <- readRDS(here("output/single_row_results.RDS"))
+sim_res <- readRDS(here("output/pilot_sim_results.RDS"))
 
 # duplicate the first row of the dataframe multiple times
 sim_res[2:4,] <- sim_res[1,]
@@ -1115,10 +1126,22 @@ sim_res[2:4, nonneg_cols] <- sapply(sim_res[2:4, nonneg_cols], function(x) pmax(
 
 # Visualization
 
-Prepare dataframe
+TEMPORARY: Remove all Rhat columns, way too many in the pilot sim_results
 ```{r}
-sr_edit <- sim_res %>% 
-  mutate(dgp = factor(dgp, levels = c("nonsparse", "sparse")),
+sim_results <- readRDS(here("output/pilot_sim_results.RDS"))
+sim_res_cut <- sim_results %>% 
+  select(-contains("rhat")) %>% 
+  select(-contains("divtrans"))
+
+```
+
+
+
+
+Prepare dataframe 
+```{r}
+sr_edit <- sim_res_cut %>% 
+  mutate(dgp = factor(dgp, levels = c("dense", "sparse")),
          heterogeneity = factor(heterogeneity, levels = c("low", "high"))) %>% 
   # remove "reg_" from all column names
   rename_with(~str_remove(., "reg_")) %>% 
@@ -1137,8 +1160,6 @@ sr_edit <- sim_res %>%
   separate_wider_delim(measure, 
                        delim = "_",
                        names = c("pm", "outcome", "method", "summary")) %>% 
-  
-# 
 #   # THIS IS TEMPORARY UNTIL A RENAMING OF THE REGRESSION COLUMNS!
 #   # AND UNTIL RENAMING OF THE RANKCOR
 #   # TODO
@@ -1150,7 +1171,6 @@ sr_edit <- sim_res %>%
 #                        names = c("pm", "outcome", "method", "summary")) %>%
 #   filter(pm != "rankcor") %>% 
 #   # END TEMPORARY
-  
   mutate(method = case_when(
     method == "gvar" ~ "GVAR",
     method == "gimme" ~ "GIMME",
@@ -1248,7 +1268,7 @@ plot_mostcentral <- sr_edit %>%
     heterogeneity == "high" ~ "High\nHeterogeneity"
   )) %>%
   mutate(dgp = case_when(
-    dgp == "nonsparse" ~ "Non-Sparse",
+    dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
   )) %>%
   filter(pm == "mostcent") %>% 
@@ -1283,7 +1303,7 @@ plot_mostcentral <- sr_edit %>%
 ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 5, width = 9,
        path = here::here("figures/"), device = "svg")
 
-
+plot_mostcentral
 
 ```
 
@@ -1313,7 +1333,7 @@ power_list <- sr_edit %>%
     heterogeneity == "high" ~ "High\nHeterogeneity"
   )) %>%
   mutate(dgp = case_when(
-    dgp == "nonsparse" ~ "Non-Sparse",
+    dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
   )) %>%
   # split pm into two columns, take last number into new column
@@ -1352,7 +1372,7 @@ plot0 <- power_list[[1]] %>%
        x = "",
        colour = "Method",
        y = "False-Positive Rate")
-
+plot0
 
 ```
 
@@ -1430,7 +1450,7 @@ plot_power_combined <- cowplot::plot_grid(plot0, plot2, plot4, ncol = 1,
 ggsave("plot_power_combined_mock.svg", plot_power_combined, height = 12, width = 16,
        path = here::here("figures/"), device = "svg")
 
-
+plot_power_combined
 
 ```
 
@@ -1450,7 +1470,7 @@ rmse_list <- sr_edit %>%
     heterogeneity == "high" ~ "High\nHeterogeneity"
   )) %>%
   mutate(dgp = case_when(
-    dgp == "nonsparse" ~ "Non-Sparse",
+    dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
   )) %>%
   # split pm into two columns, take last number into new column
@@ -1568,6 +1588,8 @@ plot_rmse_combined <- cowplot::plot_grid(plot0_rmsereg,
                                                    "True Effect: 0.4"))
 ggsave("plot_reg_rmse_combined_mock.svg", plot_rmse_combined, height = 12, width = 16,
        path = here::here("figures/"), device = "svg")
+
+plot_rmse_combined
 
 ```
 
