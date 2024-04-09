@@ -15,8 +15,6 @@ library(graphicalVAR)
 library(gimme)
 library(here)
 source(here::here("scripts", "functions.R"))
-# source(here("scripts", "MLVAR_fit_stan_wrapper.qmd"))
-
 ```
 
 
@@ -26,39 +24,7 @@ source(here::here("scripts", "functions.R"))
 
 ## Data-Generating Processes
 
-Old DGPS with mlVAR_sim:
-```{r dgps}
-# Settings for data simulation
-# for mlvar sim
-thetaVar = 1
-DF_theta = 2
-mu_SD = c(1, 1)
-init_beta_SD = c(0.3, 1.5) 
-fixedMuSD = 1
-shrink_fixed = 0.9
-shrink_deviation = 0.9
-pcor_sparsity = 0.5
-beta_sparsity = 0.5
-
-# for regression
-reg_error_sd = 1
-
-# Parameters
-# sim_pars_old <- list(
-#   reg_error_sd = reg_error_sd,
-#   thetaVar = thetaVar,
-#   DF_theta = DF_theta,
-#   mu_SD = mu_SD,
-#   init_beta_SD = init_beta_SD,
-#   fixedMuSD = fixedMuSD,
-#   shrink_fixed = shrink_fixed,
-#   shrink_deviation = shrink_deviation
-#   # mlvar_model = mlvar_model
-# )
-```
-
-
-New DGP with specific graph: 
+Load DGP based on estimated network structures:  
 ```{r}
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse.RDS"))
@@ -70,7 +36,23 @@ graph_sparse <- readRDS(here::here("data/graph_sparse.RDS"))
 
 
 ## Setting parameters
+
+We define the conditions and the fixed parameters for the simulation.
+
 ```{r params}
+# Type of DGP
+dgp <- c("sparse", "dense")
+
+# Heterogeneity
+heterogeneity <- c("low", "high")
+
+# Design Conditions
+df_design <- SimDesign::createDesign(
+  dgp = dgp,
+  heterogeneity = heterogeneity
+  )
+
+
 # Simulation parameters
 # Number of individuals 
 n_id <- 200
@@ -81,29 +63,15 @@ n_var <- 6
 # Number of timepoints
 n_tp <- 150
 
+# for regression
+reg_error_sd = 1
+
 # random effects sds
 # beta_sd <- 0.1
 # kappa_sd <- 0.1
-
-# Type of DGP
-dgp <- c("sparse", "dense")
-
-# Heterogeneity
-heterogeneity <- c("low", "high")
-
 # # Strength of the correlation
 # hard-coded down below
 # beta_reg <- c(0, 0.2, 0.4)
-
-
-
-# Design
-df_design <- SimDesign::createDesign(
-  dgp = dgp,
-  heterogeneity = heterogeneity
-  )
-
-
 
 sim_pars <- list(
   n_id = n_id,
@@ -117,7 +85,7 @@ sim_pars <- list(
 )
 ```
 
-Pre-compiling the model
+Pre-compiling the Stan model
 ```{r precompile}
 model_name <- "MLVAR_lkj_only"
 # Compile model
@@ -126,7 +94,6 @@ sim_pars$mlvar_model <-
     file = here::here("scripts", "models", paste0(model_name, ".stan")),
     model_name = model_name
   )
-
 
 ```
 
@@ -192,8 +159,6 @@ sim_generate <- function(condition, fixed_objects = NULL){
   resid_dens <- rnorm(n_id, mean = 0, sd = eps_sd)
   resid_cent <- rnorm(n_id, mean = 0, sd = eps_sd)
 
-  # covariate_tempdens = rep(condition$beta_reg, condition$n_id) * tempdens + resid_dens
-  # covariate_oustrength = rep(condition$beta_reg, condition$n_id) * outstrength + resid_cent
   # correlation matrix of true effects
   rho <- c(
           1, 0, .2, .4,
@@ -264,7 +229,6 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                                scale = FALSE))}, error = function(e) NA)
   })
   
-  # TODO add check for graphicalVAR
   if(any(is.na(fit_gvar))){
     stop("Not all GVAR models converged.")
   }
@@ -305,7 +269,6 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                             groupcutoff = .75,
                             subcutoff = .75)}, error = function(e) NA)
   
-  # TODO add check for GIMME as well
   if(any(is.na(fit_gimme))){
     stop("GIMME did not converge.")
   }
@@ -467,7 +430,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   summary_bmlvar <- rstan::summary(fit_bmlvar)
   
   # convergence diagnostics
-  rhat_bmlvar <- apply(posterior::as_draws_array(fit_bmlvar), 3, rstan::Rhat)
+  rhat_bmlvar_tmp <- summary_bmlvar$summary %>% as.data.frame() %>% pull(Rhat)
+  rhat_bmlvar_tmp <- rhat_bmlvar_tmp[!is.nan(rhat_bmlvar_tmp)]
+  rhat_bmlvar_mean <- mean(rhat_bmlvar_tmp, na.rm = TRUE)
+  rhat_bmlvar_11 <- sum(rhat_bmlvar_tmp > 1.1)/length(rhat_bmlvar_tmp)
   divtrans_bmlvar <- rstan::get_num_divergent(fit_bmlvar)
   
   #--- Return Results
@@ -522,7 +488,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       reg_bmlvar = reg_bmlvar,
       ests_bmlvar = ests_bmlvar,
       summary_bmlvar = summary_bmlvar,
-      rhat_bmlvar = rhat_bmlvar,
+      rhat_bmlvar_mean = rhat_bmlvar_mean,
+      rhat_bmlvar_11 = rhat_bmlvar_11,
       divtrans_bmlvar = divtrans_bmlvar
     ),
     true_cent = dat$true_cent,
@@ -1018,8 +985,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Return
   ret$bmlvar_diagnostics <- list()
-  # ret$bmlvar_diagnostics$rhat_bmlvar <- lapply(results, function(x){
-  #   x$bmlvar$rhat_bmlvar})
+  ret$bmlvar_diagnostics$rhat_bmlvar_mean <- mean(sapply(results, function(x){
+     x$bmlvar$rhat_bmlvar_mean}))
+  ret$bmlvar_diagnostics$rhat_bmlvar_mean <- mean(sapply(results, function(x){
+     x$bmlvar$rhat_bmlvar_11}))
   ret$bmlvar_diagnostics$divtrans_bmlvar <- lapply(results, function(x){
     x$bmlvar$divtrans_bmlvar})
   ret_vec <- unlist(ret, use.names = TRUE)
@@ -1092,38 +1061,6 @@ saveRDS(sim_results, file = here("output/pilot_sim_results.RDS"))
 
 ```
 
-
-We now temporarily create a mock results data frame which we use to create visualization templates.
-
-```{r mock-results}
-sim_res <- readRDS(here("output/pilot_sim_results.RDS"))
-
-# duplicate the first row of the dataframe multiple times
-sim_res[2:4,] <- sim_res[1,]
-
-# create mock conditions
-sim_res$dgp[2:4] <- c("nonsparse", "sparse", "nonsparse")
-sim_res$heterogeneity[2:4] <- c("high", "high", "low")
-
-# Add some random noise for visualization tests
-# define non-performance columns
-exclude_cols <- c("dgp", "heterogeneity", "REPLICATIONS", "SIM_TIME", "RAM_USED", "SEED", "COMPLETED", "WARNINGS")
-# Define the column strings to exclude from the non-negativity constraint
-exclude_nonneg <- c("mse", "rankcor", "bias")
-noise_cols <- setdiff(colnames(sim_res), exclude_cols)
-
-# Add noise to rows 2-4 for the selected columns
-sim_res[2:4, noise_cols] <- sapply(sim_res[2:4, noise_cols], function(x) x * (1 + runif(length(x), -0.1, 0.3)))
-
-
-nonneg_cols <- noise_cols[!grepl("mse|rankcor|bias", noise_cols)]
-# Apply non-negativity constraint to rows 2-4 for the selected columns
-sim_res[2:4, nonneg_cols] <- sapply(sim_res[2:4, nonneg_cols], function(x) pmax(x, 0))
-
-
-
-```
-
 # Visualization
 
 TEMPORARY: Remove all Rhat columns, way too many in the pilot sim_results
@@ -1160,17 +1097,6 @@ sr_edit <- sim_res_cut %>%
   separate_wider_delim(measure, 
                        delim = "_",
                        names = c("pm", "outcome", "method", "summary")) %>% 
-#   # THIS IS TEMPORARY UNTIL A RENAMING OF THE REGRESSION COLUMNS!
-#   # AND UNTIL RENAMING OF THE RANKCOR
-#   # TODO
-#   # TODO
-#   # filter out all rows that contain "mean1", "mean2", "mean3", "mcse1", "mcse2", "mcse3" in "measure"
-#   filter(!str_detect(measure, "mean1|mean2|mean3|mcse1|mcse2|mcse3")) %>%
-#     separate_wider_delim(measure, 
-#                        delim = "_", 
-#                        names = c("pm", "outcome", "method", "summary")) %>%
-#   filter(pm != "rankcor") %>% 
-#   # END TEMPORARY
   mutate(method = case_when(
     method == "gvar" ~ "GVAR",
     method == "gimme" ~ "GIMME",
@@ -1249,11 +1175,107 @@ theme_centrality <- function(){
 
 ## Point Estimates
 
-Plot point estimate recovery (RMSE), not directly relevant for the manuscript
+Plot point estimate recovery (RMSE), not directly relevant for the manuscript, but maybe helpful to understand the overall performance of the different methods.
+
+```{r viz-point-estimates}
+plot_mse <- sr_edit %>% 
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  mutate(outcome = case_when(
+    outcome == "beta" ~ "Temporal",
+    outcome == "pcor" ~ "Contemporaneous"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  filter(pm == "mse") %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add horizontal line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.15,0.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none")+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "MSE of Network Estimation")
+
+plot_mse
+
+```
+
+Plot Bias:
+
+```{r viz-bias}
+plot_bias <- sr_edit %>% 
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  mutate(outcome = case_when(
+    outcome == "beta" ~ "Temporal",
+    outcome == "pcor" ~ "Contemporaneous"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  filter(pm == "bias") %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add horizontal line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none")+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Bias of Network Estimation")
+
+plot_bias
+```
+
+
+
 
 ## Centrality
 
-Plot most central identical 
+### Plot most central identical 
 
 ```{r viz-most-central}
 plot_mostcentral <- sr_edit %>% 
@@ -1275,8 +1297,6 @@ plot_mostcentral <- sr_edit %>%
   ggplot(aes(x = method, 
              y = mean, 
              colour = method
-             # fill = method,
-             # group = method
              )) +
   # add horizontal line between methods
   geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
@@ -1308,8 +1328,57 @@ plot_mostcentral
 ```
 
 
-Plot rank correlation of centrality measures
+### Plot rank correlation of centrality measures
 
+```{r viz-rank-correlation}
+plot_rankcor <- sr_edit %>% 
+  # if mcse is missing, set to 0
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  # uselessly used temp and cont instead of beta and pcor here
+  mutate(outcome = case_when(
+    outcome == "temp" ~ "Temporal",
+    outcome == "cont" ~ "Contemporaneous"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  filter(pm == "rankcor") %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add horizontal line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none")+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Centrality Rank Correlation")
+
+
+plot_rankcor
+
+
+``` 
 
 ## Regression
 
@@ -1437,6 +1506,7 @@ plot4 <- power_list[[3]] %>%
        x = "Method",
        colour = "Method",
        y = "Power")
+plot4
 ```
 
 
@@ -1574,6 +1644,8 @@ plot4_rmsereg <- rmse_list[[3]] %>%
        x = "Method",
        colour = "Method",
        y = "RMSE")
+
+plot4_rmsereg
 ```
 
 Combine Plots:
