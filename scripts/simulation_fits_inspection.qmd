@@ -1,0 +1,99 @@
+---
+title: "simulation_fits_inspection"
+format: html
+editor: visual
+---
+
+# Prep
+In this file, we investigate different simulation fits
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+# data from sim run on 2024-04-09
+sim_res_4 <- readRDS("~/centrality-uncertainty/scripts/SimDesign-results_pc04798_2/results-row-4.rds")
+```
+
+
+# Analyze bmlVAR
+
+Compare contemporaneous fits, which seemed off:
+
+```{r}
+ut <- function(x){
+  x[upper.tri(x)]
+}
+
+sim_res_4$results[[1]]$bmlvar$fit_bmlvar$pcor[[2]]
+ut(sim_res_4$results[[1]]$pcor[[2]])
+
+```
+
+
+## Regression outcomes
+
+```{r}
+sim_res_4$results[[1]]$bmlvar$reg_bmlvar$regression_slope$median
+```
+
+Plot them all (first need to account for the weird data structure where the results are a vector of length 9)
+
+```{r}
+slopes <- lapply(sim_res_4$results, function(x){
+  tmp <- x$bmlvar$reg_bmlvar$regression_slope$median
+  df_slopes <- data.frame(
+    # true coefficients
+    zero = tmp[c(1,4,7)],
+    two = tmp[c(2,5,8)],
+    four = tmp[c(3,6,9)]
+  )
+  df_slopes
+})
+
+
+slopes %>% 
+  bind_rows() %>% 
+  pivot_longer(cols = everything(), 
+               names_to = "reg_coef") %>% 
+  mutate(reg_coef = as.factor(reg_coef)) %>% 
+  ggplot(aes(x = reg_coef, y = value)) + 
+  geom_point()
+
+```
+
+
+
+
+
+
+# Analyze other models
+
+## mlVAR
+
+### Network Estimation
+
+
+
+Calculate average difference
+```{r}
+# Temporal Network
+Reduce("+", Map("abs", Map("-", sim_res_4$results[[1]]$mlvar$fit_mlvar$beta,sim_res_4$results[[1]]$beta))) / 200
+
+# Contemporaneous Network
+Reduce("+", Map("abs", Map("-", sim_res_4$results[[1]]$mlvar$fit_mlvar$pcor,sim_res_4$results[[1]]$pcor))) / 200
+```
+
+
+
+### Regression outcomes
+
+```{r}
+lm.beta(sim_res_4$results[[1]]$mlvar$reg_tempdens[[3]])
+
+```
+
+
+
+
