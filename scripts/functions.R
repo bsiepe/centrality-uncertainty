@@ -1,4 +1,6 @@
 # GVAR based ML sim function ----------------------------------------------
+# argument sparse_sim: if TRUE, no random noise/random effects will be added
+# to zero fixed effects
 sim_gvar_loop <- function(graph,
                           beta_sd,
                           kappa_sd,
@@ -6,6 +8,7 @@ sim_gvar_loop <- function(graph,
                           n_time,
                           n_node,
                           max_try = 1000,
+                          sparse_sim = FALSE,
                           failsafe = FALSE,
                           listify = FALSE) {
   # browser()
@@ -15,6 +18,16 @@ sim_gvar_loop <- function(graph,
   beta <- array(NA, c(n_node, n_node, n_person))
   kappa <- array(NA, c(n_node, n_node, n_person))
   pcor <- array(NA, c(n_node, n_node, n_person))
+  
+  if(isTRUE(sparse_sim)){
+    # helper function to identify zero elements by index
+    find_zero_indices <- function(mat) {
+      return(which(mat == 0, arr.ind = TRUE))
+    }
+    zeros_beta <- find_zero_indices(graph$beta)
+    zeros_kappa <- find_zero_indices(graph$kappa)
+  }
+  
   
   # Simulate data for each person
   for (i in seq_len(n_person)) {
@@ -32,6 +45,10 @@ sim_gvar_loop <- function(graph,
                                                sd = beta_sd),
                                          nrow = n_node,
                                          ncol = n_node)
+      # if sparse matrix should be generated, set true zero effects to zero
+      if(isTRUE(sparse_sim)){
+        beta[,,i][zeros_beta] <- 0
+      }
       
       # Check if beta matrix is stable
       ev_b <- eigen(beta[, , i])$values
@@ -56,6 +73,11 @@ sim_gvar_loop <- function(graph,
           nrow = n_node,
           ncol = n_node
         )))
+      
+      # if sparse matrix should be generated, set true zero effects to zero
+      if(isTRUE(sparse_sim)){
+        kappa[ , , i][zeros_kappa] <- 0
+      }
       
       # Check if kappa matrix is semi-positive definite
       ev_k <- eigen(kappa[, , i])$values
