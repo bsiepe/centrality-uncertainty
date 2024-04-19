@@ -414,11 +414,53 @@ centrality_gvar <- function(fit){
 # -------------------------------------------------------------------------
 # GIMME helper functions --------------------------------------------------
 # -------------------------------------------------------------------------
+# Function to extract correlations from GIMME fit object with VAR = TRUE
+gimme_cor_mat <- function(gimme_res, id, n_vars) {
+  df_id <- gimme_res %>%
+    filter(op == "~~") |>
+    filter(pval < 0.05) |>
+    mutate(file = str_remove(file, "subj")) %>%
+    filter(file == id)
+  
+  corr_matrix <- matrix(0, nrow = n_vars, ncol = n_vars)
+  rownames(corr_matrix) <- paste0("V", 1:n_vars)
+  colnames(corr_matrix) <- paste0("V", 1:n_vars)
+  
+  
+  df_id <- df_id %>%
+    select(lhs, rhs, beta.std) %>%
+    spread(lhs, beta.std) %>%
+    column_to_rownames(var = "rhs") %>%
+    # replace all NAs with zero
+    replace(is.na(.), 0) %>%
+    as.matrix()
+  
+  # if there is no correlation
+  if (nrow(df_id) == 0) {
+    return(corr_matrix)
+  }
+  else{
+    for (i in rownames(df_id)) {
+      for (j in colnames(df_id)) {
+        corr_matrix[i, j] <- df_id[i, j]
+        corr_matrix[j, i] <- df_id[i, j]
+      }
+    }
+    
+    diag(corr_matrix) <- 0
+    return(corr_matrix)
+  }
+  
+}
+
+
+
 # Function to extract centralities from GIMME fit object
-centrality_gimme <- function(fit){
+centrality_gimme <- function(fit, var_only = FALSE){
   
   #--- Prepare 
   n_var <- fit$n_vars_total
+  n_id <- length(fit$data)
   temp_ind <- 1:(n_var/2)
   cont_ind <- ((n_var/2)+1):n_var
   
@@ -433,17 +475,21 @@ centrality_gimme <- function(fit){
     }
   })
   
-  dens_cont <- lapply(fit$path_est_mats, function(x){
-    if(!is.double(x)){
-      NA
-    }
-    else{
-      x <- x[, cont_ind]
-      diag(x) <- 0
-      x[lower.tri(x)] <- 0L
-      sum(abs(x))/ (n_var * (n_var-1)/2)
-    }
-  })
+  if(isTRUE(var_only)){
+    dens_cont <- lapply(fit$contemp_mat, function(x){
+      if(!is.double(x)){
+        NA
+      }
+      else{
+        diag(x) <- 0
+        x[lower.tri(x)] <- 0L
+        sum(abs(x))/ (n_var * (n_var-1)/2)
+      }
+    })
+  }
+  # if var_only = TRUE, first need to extract partial correlations
+  # gimme somehow does not return them 
+  
 
   #--- Centrality
   outstrength <- lapply(fit$path_est_mats, function(x){
@@ -462,17 +508,26 @@ centrality_gimme <- function(fit){
       rowSums(abs(x[, temp_ind]))/n_var
     }
   })
-  strength <- lapply(fit$path_est_mats, function(x){
-    if(!is.double(x)){
-      NA
-    }
-    else{
-      # x <- x[, cont_ind]
-      # diag(x) <- 0
-      # x[lower.tri(x)] <- 0L
-      colSums(abs(x))/n_var
-    }
-  })
+  if(isFALSE(var_only)){
+    strength <- lapply(fit$path_est_mats, function(x){
+      if(!is.double(x)){
+        NA
+      }
+      else{
+        colSums(abs(x))/n_var
+      }
+    })
+  }
+  if(isTRUE(var_only)){
+    strength <- lapply(fit$contemp_mat, function(x){
+      if(!is.double(x)){
+        NA
+      }
+      else{
+        colSums(abs(x))/n_var
+      }
+    })
+  }
   
   # return list
   return(list(outstrength = outstrength,
