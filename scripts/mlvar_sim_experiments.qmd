@@ -725,12 +725,16 @@ dgp_graph <- ifelse(dgp == "sparse",
                       "graph_nonsparse")
 beta_sd <- ifelse(heterogeneity == "low",
                     0.05,
-                    0.2)
+                    0.1)
   
+n_id <- 50 
+n_tp <- 75
+n_var <- 6
+
 # scale kappa random effects w.r.t diagonal elements
 mean_diag_kappa <- mean(diag(graph_sparse$kappa)) 
 kappa_sd_low <- 0.05 * mean_diag_kappa
-kappa_sd_high <- 0.2 * mean_diag_kappa
+kappa_sd_high <- 0.1 * mean_diag_kappa
   
 kappa_sd <- ifelse(heterogeneity == "low",
                      kappa_sd_low,
@@ -744,7 +748,8 @@ ml_sim <- sim_gvar_loop(
                      n_time = n_tp,
                      n_node = n_var,
                      max_try = 10000,
-                     listify = TRUE)
+                     listify = TRUE,
+                     sparse_sim = TRUE)
 
 # Check if the beta and kappa sd are as intended
 ml_sim$beta %>% 
@@ -765,6 +770,108 @@ ml_sim$pcor %>%
 
 
 
+## Try GIMME model fit 
+Try it out to see how best to extract results
+```{r}
+gimme_fit <- gimme::gimme(ml_sim$data,
+             ar = TRUE,
+             subgroup = TRUE,
+             plot = TRUE,
+             hybrid = FALSE,
+             VAR = TRUE,
+             groupcutoff = .75,
+             subcutoff = .75)
+
+gimme_fit$path_se_est |> 
+  # filter contemporaneous relationships
+  filter(op == "~~") |>
+  filter(pval < 0.05) |>
+  mutate(file = str_remove(file, "subj")) %>% 
+  filter(file == 1) %>% 
+  select(lhs, rhs, beta.std) %>% 
+  spread(lhs, beta.std) %>% 
+  column_to_rownames(var = "rhs") %>%
+  as.matrix()
+
+
+
+
+
+
+
+
+
+centrality_gimme <- function(fit,
+                             var_only = FALSE){  # only covariances in contemp?
+  
+  #--- Prepare 
+  n_var <- fit$n_vars_total
+  temp_ind <- 1:(n_var/2)
+  cont_ind <- ((n_var/2)+1):n_var
+  
+  
+  #--- Density
+  dens_temp <- lapply(fit$path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      sum(abs(x[, temp_ind]))/(n_var^2)
+    }
+  })
+  
+  dens_cont <- lapply(fit$path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      x <- x[, cont_ind]
+      diag(x) <- 0
+      x[lower.tri(x)] <- 0L
+      sum(abs(x))/ (n_var * (n_var-1)/2)
+    }
+  })
+
+  #--- Centrality
+  outstrength <- lapply(fit$path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      colSums(abs(x[, temp_ind]))/n_var
+    }
+  })
+  instrength <- lapply(fit$path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      rowSums(abs(x[, temp_ind]))/n_var
+    }
+  })
+  strength <- lapply(fit$path_est_mats, function(x){
+    if(!is.double(x)){
+      NA
+    }
+    else{
+      # x <- x[, cont_ind]
+      # diag(x) <- 0
+      # x[lower.tri(x)] <- 0L
+      colSums(abs(x))/n_var
+    }
+  })
+  
+  # return list
+  return(list(outstrength = outstrength,
+              instrength = instrength,
+              strength = strength,
+              dens_temp = dens_temp,
+              dens_cont = dens_cont))
+  
+  
+}
+
+```
 
 
 

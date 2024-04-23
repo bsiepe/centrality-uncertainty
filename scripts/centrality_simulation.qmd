@@ -285,6 +285,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       gimme_cor_mat(fit_gimme$path_se_est, id = i, n_vars = n_var)
     }
   )
+  }
   
   cent_gimme <- centrality_gimme(fit_gimme,
                                  var_only = gimme_var_only)
@@ -300,13 +301,17 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   beta_gimme <- lapply(fit_gimme$path_est_mats, function(x){
     t(x[,1:n_var])
   })
+  
   if(isFALSE(gimme_var_only)){
       pcor_gimme <- lapply(fit_gimme$path_est_mats, function(x){
     x[, (n_var+1):(n_var*2)]
   })
   }
+  
   if(isTRUE(gimme_var_only)){
-    # TODO extract pcors from gimme_var
+    pcor_gimme <- lapply(fit_gimme$contemp_mat, function(x){
+      x
+    })
   }
 
 
@@ -1029,15 +1034,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # For testing
 # df_design_test <- df_design[2,]
 # sim_pars$n_id <- 25
-sim_pars$n_var <- 4
-n_var <- 4
+# sim_pars$n_var <- 4
+# n_var <- 4
 # n_id <- 25
-sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
-sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
-sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
-sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
-sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
-sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
+# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
+# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
+# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
+# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
+# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
+# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
 
 
 n_rep <- 10
@@ -1047,7 +1052,7 @@ future::plan(multisession, workers = n_rep)
 # handlers("rstudio")
 # handlers('cli')
 
-# started 2024-04-15 ~11:20
+# started 2024-04-19 ~11:20
 
 sim_results <- SimDesign::runSimulation(
                                     design = df_design, 
@@ -1069,7 +1074,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "Rcpp"),
                                     save_results = TRUE
                                     # ncores = 1
-                                    # debug = "summarise"
+                                    # debug = "analyse"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
@@ -1077,7 +1082,7 @@ sim_results <- SimDesign::runSimulation(
 plan(sequential)
 
 SimClean()
-saveRDS(sim_results, file = here("output/pilot_sim_results_clean_1604.RDS"))
+saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
 
 ```
 
@@ -1085,7 +1090,7 @@ saveRDS(sim_results, file = here("output/pilot_sim_results_clean_1604.RDS"))
 
 TEMPORARY: Remove all Rhat columns, way too many in the pilot sim_results
 ```{r}
-sim_results <- readRDS(here("output/pilot_sim_results_clean.RDS"))
+sim_results <- readRDS(here("output/pilot_sim_results_clean_2104.RDS"))
 sim_res_cut <- sim_results %>%
   select(-contains("rhat")) %>%
   select(-contains("divtrans"))

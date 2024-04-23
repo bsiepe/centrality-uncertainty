@@ -564,11 +564,11 @@ centrality_mlvar <- function(fit){
   })
   
   # Obtain overall adjacency matrix
-  adj_mat_beta <- ifelse(
+  adj_beta <- ifelse(
     mlVAR::getNet(fit,
                   type = "temporal",
                   nonsig = "hide") != 0, 1, 0)
-  adj_mat_pcor <- ifelse(
+  adj_pcor <- ifelse(
     mlVAR::getNet(fit,
                   type = "contemporaneous",
                   nonsig = "hide") != 0, 1, 0) 
