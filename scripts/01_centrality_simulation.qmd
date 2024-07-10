@@ -14,7 +14,7 @@ library(mlVAR)
 library(graphicalVAR)
 library(gimme)
 library(here)
-source(here::here("scripts", "functions.R"))
+source(here::here("scripts", "00_functions.R"))
 ```
 
 
@@ -106,7 +106,7 @@ sim_pars$mlvar_model <-
 ## Simulating Data
 ```{r data-generation}
 sim_generate <- function(condition, fixed_objects = NULL){
-  source(here::here("scripts", "functions.R"))
+  source(here::here("scripts", "00_functions.R"))
 
   # obtain fixed params
   SimDesign::Attach(fixed_objects)
@@ -1032,11 +1032,11 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 ```{r run-sim}
 # For testing
-# df_design_test <- df_design[2,]
-# sim_pars$n_id <- 25
-# sim_pars$n_var <- 4
-# n_var <- 4
-# n_id <- 25
+df_design_test <- df_design[2,]
+sim_pars$n_id <- 25
+sim_pars$n_var <- 6
+n_var <- 6
+n_id <- 25
 # sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
 # sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
 # sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
@@ -1045,7 +1045,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
 
 
-n_rep <- 10
+n_rep <- 2
 library(future)
 library(progressr)
 future::plan(multisession, workers = n_rep)
@@ -1072,9 +1072,9 @@ sim_results <- SimDesign::runSimulation(
                                                  "posterior",
                                                  "rstan",
                                                  "Rcpp"),
-                                    save_results = TRUE
+                                    # save_results = TRUE
                                     # ncores = 1
-                                    # debug = "analyse"
+                                    debug = "generate"
                                     # filename = "centrality-simulation.rds",
                                     # save_seeds = TRUE
                                     )
@@ -1148,54 +1148,7 @@ meth_colors <- ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)]
 
 ```
 
-Create common theme for all plots
-```{r}
-theme_centrality <- function(){
-  # add google font
-  sysfonts::font_add_google("News Cycle", "news")
-  # use showtext
-  showtext::showtext_auto()
-  
-  # theme
-  ggplot2::theme_minimal(base_family = "news") +
-    ggplot2::theme(
-      # remove minor grid
-      panel.grid.minor = ggplot2::element_blank(),
-      # Title and Axis Texts
-      plot.title = ggplot2::element_text(face = "plain",
-                                         size = ggplot2::rel(1.2),
-                                         hjust = 0.5),
-      plot.subtitle = ggplot2::element_text(size = ggplot2::rel(1.1),
-                                            hjust = 0.5),
-      axis.text.x = ggplot2::element_text(face = "plain", size = ggplot2::rel(0.975)),
-      axis.title.x = ggplot2::element_text(face = "plain", size = ggplot2::rel(1.3)),
-      axis.title.y = ggplot2::element_text(face = "plain", size = ggplot2::rel(1.3)),
-      axis.line = element_line(colour = "#6d6d6e"),
-      
-      # Faceting
-      strip.text = ggplot2::element_text(face = "plain",
-                                         size = ggplot2::rel(1.1),
-                                         hjust = 0.5),
-      strip.text.x.top = ggplot2::element_text(face = "plain", 
-                                               size = ggplot2::rel(1.2),
-                                                 hjust = 0.5),
-      # strip.text.y = element_blank(),
-      strip.background = ggplot2::element_rect(fill = NA, color = NA),
-      # Grid
-      panel.grid = ggplot2::element_line(colour = "#F3F4F5"),
-      # Legend
-      legend.title = ggplot2::element_text(face = "plain"),
-      legend.position = "top",
-      legend.justification = 1,
-      # Panel/Facets
-      panel.spacing.x = ggplot2::unit(1.6, "lines"),
-      panel.spacing.y = ggplot2::unit(1.6, "lines"),
-      # Remove vertical grid lines
-      panel.grid.major.x = ggplot2::element_blank()
-      
-    )
-}
-```
+
 
 
 

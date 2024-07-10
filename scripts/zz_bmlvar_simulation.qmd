@@ -708,8 +708,9 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # For testing
 # df_design_test <- df_design[2,]
 # sim_pars$n_var <- 4
+sim_pars$n_id <- 500
 # n_var <- 4
-# # n_id <- 25
+n_id <- 500
 # sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
 # sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
 # sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
@@ -718,7 +719,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
 
 # started 22-04-2024 08:05
-n_rep <- 10
+n_rep <- 7
 library(future)
 library(progressr)
 future::plan(multisession, workers = n_rep)
@@ -736,11 +737,11 @@ sim_results_bmlvar <- SimDesign::runSimulation(
                                                  "bayestestR",
                                                  "posterior",
                                                  "rstan",
-                                                 "Rcpp")
-                                    # save_results = TRUE,
-                                    # ncores = 1
+                                                 "Rcpp"),
+                                    save_results = TRUE,
+                                    ncores = n_rep,
                                     # debug = "summarise"
-                                    # filename = "centrality-simulation.rds",
+                                    filename = "bmlvar_prelim_500id"
                                     # save_seeds = TRUE
                                     )
 
