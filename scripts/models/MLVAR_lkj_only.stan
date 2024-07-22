@@ -94,8 +94,18 @@ transformed parameters{
     // Aggregate Statistics /////////////////////////////////////////////
     //  In-Strength, Out-Strength, and Centrality
     for(k in 1:K){
-      Beta_out_strength[i,k] = mean(abs(Beta[i, ,k]));
-      Beta_in_strength[i,k]  = mean(abs(Beta[i,k, ]));
+      
+      // Ignore autoregressive effects in centrality estimation
+      // by ignoring the diagonal elements
+      for(j in 1:K){
+        if(j != k){
+          Beta_out_strength[i,k] += abs(Beta[i,j,k]);
+          Beta_in_strength[i,k]  += abs(Beta[i,k,j]);
+        }
+      }
+      // Divide by number of predictors to obtain the mean
+      Beta_out_strength[i,k] = Beta_out_strength[i,k] / (K);
+      Beta_in_strength[i,k]  = Beta_in_strength[i,k] / (K);
       Rho_centrality[i,k]    = mean(abs(Rho[i, ,k]));
     } // end k
     // Density

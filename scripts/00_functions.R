@@ -372,22 +372,31 @@ mlVARsim_mod <- function(
 # graphicalVAR helper functions -------------------------------------------
 # -------------------------------------------------------------------------
 # Function to extract centralities from graphicalVAR fit object
-centrality_gvar <- function(fit){
+# can ignore autoregressive effects for centrality estimation
+centrality_gvar <- function(fit,
+                            ignore_ar = TRUE){  # should AR effects be ignored?
   
   #--- Prepare matrices
   n_var <- ncol(fit$kappa)
   
   
   beta <- abs(fit$beta[,-1])
+  beta_cent <- beta
+  
+  # if autoregressive effects should be ignored in centrality estimation
+  if(isTRUE(ignore_ar)){
+    diag(beta_cent) <- 0
+  }
+  
   pcor <- abs(-cov2cor(fit$kappa))
   diag(pcor) <- 0
   # pcor[lower.tri(pcor)] <- 0L
   
   #--- Outstrength 
-  outstrength <- colSums(beta)/n_var
+  outstrength <- colSums(beta_cent)/n_var
   
   #--- Instrength
-  instrength <- rowSums(beta)/n_var
+  instrength <- rowSums(beta_cent)/n_var
   
   #--- Strength
   strength <- colSums(pcor)/n_var
@@ -456,7 +465,9 @@ gimme_cor_mat <- function(gimme_res, id, n_vars) {
 
 
 # Function to extract centralities from GIMME fit object
-centrality_gimme <- function(fit, var_only = FALSE){
+centrality_gimme <- function(fit, 
+                             var_only = FALSE,
+                             ignore_ar = TRUE){ # should AR effects be ignored?
   
   #--- Prepare 
   n_var <- fit$n_vars_total
@@ -492,12 +503,18 @@ centrality_gimme <- function(fit, var_only = FALSE){
   
 
   #--- Centrality
+  # if autoregressive effects should be ignored in centrality estimation
+  # diagonal of beta matrix is set to zero
   outstrength <- lapply(fit$path_est_mats, function(x){
     if(!is.double(x)){
       NA
     }
     else{
-      colSums(abs(x[, temp_ind]))/n_var
+      beta_tmp <- x[, temp_ind]
+      if(isTRUE(ignore_ar)){
+        diag(beta_tmp) <- 0
+      }
+      colSums(abs(beta_tmp))/n_var
     }
   })
   instrength <- lapply(fit$path_est_mats, function(x){
@@ -505,6 +522,10 @@ centrality_gimme <- function(fit, var_only = FALSE){
       NA
     }
     else{
+      beta_tmp <- x[, temp_ind]
+      if(isTRUE(ignore_ar)){
+        diag(beta_tmp) <- 0
+      }
       rowSums(abs(x[, temp_ind]))/n_var
     }
   })
@@ -543,7 +564,8 @@ centrality_gimme <- function(fit, var_only = FALSE){
 # mlVAR helper functions --------------------------------------------------
 # -------------------------------------------------------------------------
 # Obtain centrality of fitted mlVAR object
-centrality_mlvar <- function(fit){
+centrality_mlvar <- function(fit,
+                             ignore_ar = TRUE){
   
   #--- Prepare
   n_var <- length(fit$fit$var)
@@ -597,9 +619,15 @@ centrality_mlvar <- function(fit){
   #--- Centrality
   # Important: in mlVAR, the lagged vars are rows, not columns
   outstrength <- lapply(l_beta, function(x){
+    if(isTRUE(ignore_ar)){
+      diag(x) <- 0
+    }
     rowSums(abs(x))/n_var
   })
   instrength <- lapply(l_beta, function(x){
+    if(isTRUE(ignore_ar)){
+      diag(x) <- 0
+    }
     colSums(abs(x))/n_var
   })
   strength <- lapply(l_pcor, function(x){
@@ -619,7 +647,8 @@ centrality_mlvar <- function(fit){
 # Obtain centrality of simulated mlVAR object
 # works with mlvar_sim or sim_gvar_loop
 centrality_mlvar_sim <- function(simobj,
-                                 sim_fn = "sim_gvar_loop"){
+                                 sim_fn = "sim_gvar_loop",
+                                 ignore_ar = TRUE){
   
   if(sim_fn == "mlvar_sim"){
     #--- Prepare
@@ -669,9 +698,15 @@ centrality_mlvar_sim <- function(simobj,
   #--- Centrality
   # Important: in mlVAR, the lagged vars are rows, not columns
   outstrength <- lapply(l_beta, function(x){
+    if(isTRUE(ignore_ar)){
+      diag(x) <- 0
+    }
     rowSums(abs(x))/n_var
   })
   instrength <- lapply(l_beta, function(x){
+    if(isTRUE(ignore_ar)){
+      diag(x) <- 0
+    }
     colSums(abs(x))/n_var  
   })
   strength <- lapply(l_pcor, function(x){
