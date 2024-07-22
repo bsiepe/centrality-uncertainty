@@ -246,3 +246,132 @@ saveRDS(graph_nonsparse_koval, here("data/graph_nonsparse_koval.RDS"))
 
 ```
 
+
+
+# Synthetic DGP
+To make it easier to manipulate centrality etc., we generate a synthetic DGP that is oriented at the numerical values in the fitted models.
+
+
+## VAR Matrix
+
+First, the nonsparse network: 
+```{r}
+graph_nonsp <- readRDS(here("data/graph_nonsparse.RDS"))
+
+beta_nonsp <- round(graph_nonsp$beta, 3)
+beta_nonsp_new <- matrix(c(0.30,  0.15,  0.10, -0.10,  0.10, -0.10,
+                    0.15,  0.25,  0.05, -0.04,  0.02,  0.01,
+                    0.10,  0.05,  0.20,-0.02, -0.03, -0.03,
+                    -0.05, -0.05, -0.05, 0.2,  -0.03,  0.03,
+                    0.05,  0.03,  0.03, -0.03,  0.15,  0.03,
+                    -0.05, -0.03, -0.05, 0.05, -0.01,  0.10), 
+                  nrow = 6, ncol = 6, byrow = TRUE)
+
+# Calculate implied centrality values
+beta_nonsp_temp <- beta_nonsp_new
+diag(beta_nonsp_temp) <- 0
+colSums(abs(beta_nonsp_temp))
+rowSums(abs(beta_nonsp_temp))
+
+# check stability
+ev_b <- eigen(beta_nonsp_temp)$values
+all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1)
+
+```
+
+Then the sparse network: 
+```{r}
+# set all edges smaller that 0.05 to 0
+beta_sp_new <- beta_nonsp_new
+beta_sp_new[abs(beta_sp_new) < 0.05] <- 0
+
+# Calculate implied centrality values
+beta_sp_temp <- beta_sp_new
+diag(beta_sp_temp) <- 0
+colSums(abs(beta_sp_temp))
+rowSums(abs(beta_sp_temp))
+
+# calculate sparsity (number of nonzero edges in the off-diagonal)
+sum(beta_sp_new == 0) / 30
+
+# check stability
+ev_b <- eigen(beta_sp_new)$values
+all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1)
+
+
+```
+
+
+
+## Contemporaneous Matrix
+Use the kappa matrix of the nonsparse network as our basis. 
+```{r}
+graph_nonsp <- readRDS(here("data/graph_nonsparse.RDS"))
+kappa_nonsp <- round(graph_nonsp$kappa, 3)
+
+kappa_nonsp_new <- matrix(c(3.00, -1.00, -0.435, -0.060, -0.029, 0.141,
+                      -1.00, 3.00, -0.781, 0.092, -0.100, 0.005,
+                      -0.5, -0.78, 3.00, 0.245, -0.168, -0.015,
+                      -0.2, 0.09, 0.25, 2.50, 0.350, -0.460,
+                      -0.5, -0.10, -0.18, 0.40, 2.00, 0.197,
+                      0.2, 0.05, -0.02, -0.40, 0.20, 1.5),
+                    nrow = 6, ncol = 6, byrow = TRUE)
+kappa_nonsp_new <- as.matrix(Matrix::forceSymmetric(kappa_nonsp_new, uplo = "L"))
+
+# Obtain pcor matrix
+pcor_nonsp_new <- -stats::cov2cor(kappa_nonsp_new)
+
+# Calculate implied centrality values of partial correlations
+pcor_nonsp_temp <- pcor_nonsp_new
+diag(pcor_nonsp_temp) <- 0
+colSums(abs(pcor_nonsp_temp))
+rowSums(abs(pcor_nonsp_temp))
+
+# check stability
+ev_k <- eigen(kappa_nonsp_new)$values
+all(ev_k >= 0)
+
+```
+
+Then create a sparse contemporaneous matrix: 
+```{r}
+kappa_sp_new <- kappa_nonsp_new
+
+# obtain indices of all pcor_nonsp_new smaller that 0.05
+idx <- which(abs(pcor_nonsp_new) < 0.05, arr.ind = TRUE)
+
+# set them to zero in the kappa matrix
+kappa_sp_new[idx] <- 0
+
+# obtain pcor matrix
+pcor_sp_new <- -stats::cov2cor(kappa_sp_new)
+
+# calculate implied centrality values
+pcor_sp_temp <- pcor_sp_new
+diag(pcor_sp_temp) <- 0
+colSums(abs(pcor_sp_temp))
+rowSums(abs(pcor_sp_temp))
+
+# calculate sparsity (number of nonzero edges in the off-diagonal)
+sum(kappa_sp_new == 0) / 30
+
+# check stability
+ev_k <- eigen(kappa_sp_new)$values
+all(ev_k >= 0)
+
+
+```
+
+Save the synthetic DGPs:
+
+```{r}
+graph_nonsp_synth <- list(beta = beta_nonsp_new, pcor = pcor_nonsp_new, kappa = kappa_nonsp_new)
+saveRDS(graph_nonsp_synth, here("data/graph_nonsparse_synth.RDS"))
+graph_sp_synth <- list(beta = beta_sp_new, pcor = pcor_sp_new, kappa = kappa_sp_new)
+saveRDS(graph_sp_synth, here("data/graph_sparse_synth.RDS"))
+
+
+```
+
+
+
