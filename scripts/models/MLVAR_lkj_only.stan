@@ -97,6 +97,7 @@ transformed parameters{
       
       // Ignore autoregressive effects in centrality estimation
       // by ignoring the diagonal elements
+      Beta_out_strength[i,k] = 0; // Initialize to zero
       for(j in 1:K){
         if(j != k){
           Beta_out_strength[i,k] += abs(Beta[i,j,k]);
