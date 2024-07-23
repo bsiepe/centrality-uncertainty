@@ -10,7 +10,13 @@ sim_gvar_loop <- function(graph,
                           max_try = 1000,
                           sparse_sim = FALSE,
                           failsafe = FALSE,
-                          listify = FALSE) {
+                          listify = FALSE,
+                          # should there be a minimum difference between the most central
+                          # and the second most central node in the temporal network
+                          most_cent_diff_temp = FALSE,
+                          # if most_cent_diff_temp is TRUE, this is the minimum difference
+                          # as a proportion of the centrality of the most central node
+                          most_cent_diff_temp_min = 0.1) {
   # browser()
   
   # Create a list to store the data for each person
@@ -49,6 +55,23 @@ sim_gvar_loop <- function(graph,
       if(isTRUE(sparse_sim)){
         beta[,,i][zeros_beta] <- 0
       }
+      
+      # if minimum centrality difference is required
+      if(isTRUE(most_cent_diff_temp)){
+        # ignore autoregressive effects
+        beta_tmp <- beta[,,i]
+        diag(beta_tmp) <- 0
+        centralities <- rowSums(abs(beta_tmp))/n_node
+        # check if the difference between the most central and the second most central node
+        # is large enough
+        cent_check <- max(centralities) - sort(centralities, decreasing = TRUE)[2] < most_cent_diff_temp_min * max(centralities)
+        # if not, try again
+        if(!cent_check){
+          next
+        }
+        
+      }
+      
       
       # Check if beta matrix is stable
       ev_b <- eigen(beta[, , i])$values

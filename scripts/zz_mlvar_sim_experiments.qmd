@@ -385,6 +385,7 @@ Taken from here: https://github.com/bsiepe/var-compare/blob/main/true-networks.R
 # Graph to simulate from
 graph_nonsparse <- readRDS(here("data/graph_nonsparse.RDS"))
 graph_sparse <- readRDS(here("data/graph_sparse.RDS"))
+
 ```
 
 This function should:
@@ -488,12 +489,14 @@ Idea: In the function above (`sim_gvar`), all beta and kappa matrices are genera
 
 
 
-Try the function
+Try the function with synthetic data
 ```{r}
+graph_nonsparse_synth <- readRDS(here("data/graph_nonsparse_synth.RDS"))
+graph_sparse_synth <- readRDS(here("data/graph_sparse_synth.RDS"))
 sim_data_loop <- sim_gvar_loop(
-                     graph = graph_sparse,
-                     beta_sd = 0.75,
-                     kappa_sd = 0.3,
+                     graph = graph_sparse_synth,
+                     beta_sd = 0.1,
+                     kappa_sd = 0.1,
                      n_person = 100,
                      n_time = 150,
                      n_node = 6,
@@ -699,7 +702,9 @@ graph_nonsparse <- readRDS(here::here("data/graph_nonsparse.RDS"))
 graph_sparse <- readRDS(here::here("data/graph_sparse.RDS"))
 graph_nonsparse_koval <- readRDS(here::here("data/graph_nonsparse_koval.RDS"))
 graph_sparse_koval <- readRDS(here::here("data/graph_sparse_koval.RDS"))
-dgp_graph <- graph_nonsparse_koval
+graph_sparse_synth <- readRDS(here::here("data/graph_sparse_synth.RDS"))
+graph_nonsparse_synth <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
+dgp_graph <- graph_nonsparse_synth
 
 
 
@@ -722,7 +727,9 @@ ml_sim_low <- sim_gvar_loop(
                      n_node = n_var,
                      max_try = 10000,
                      listify = TRUE,
-                     sparse_sim = TRUE)
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.33)
 ml_sim_high <- sim_gvar_loop(
                      graph = dgp_graph,
                      beta_sd = beta_sd_high,
@@ -732,7 +739,9 @@ ml_sim_high <- sim_gvar_loop(
                      n_node = n_var,
                      max_try = 10000,
                      listify = TRUE,
-                     sparse_sim = TRUE)
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.33)
 
 # Obtain true centralities
 true_cent_low <- centrality_mlvar_sim(ml_sim_low,
@@ -795,7 +804,7 @@ do.call(rbind, true_cent_low$outstrength) %>%
   geom_point() +
   ggdist::stat_halfeye()+
   theme_centrality() +
-  labs(title = "Difference between most central and second most central edge",
+  labs(title = "Difference between most central and second most central node",
        subtitle = "For outstrength")
 ```
 
