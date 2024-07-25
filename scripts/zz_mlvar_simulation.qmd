@@ -1,7 +1,7 @@
 ---
 title: "mlvar_simulation"
 format: html
-editor: visual
+editor: source
 ---
 
 # Preparation
@@ -28,10 +28,10 @@ Load DGP based on estimated network structures:
 
 ```{r}
 # non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_koval.RDS"))
+graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
 
 # sparse DGP
-graph_sparse <- readRDS(here::here("data/graph_sparse_koval.RDS"))
+graph_sparse <- readRDS(here::here("data/graph_sparse_synth.RDS"))
 ```
 
 ## Setting parameters
@@ -63,8 +63,7 @@ n_var <- 6
 n_tp <- 80
 
 # for regression
-# TODO changed this as a trial
-reg_error_sd = 0.1
+reg_error_sd = 1
 
 gimme_var_only = TRUE
 
@@ -736,6 +735,12 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   # rmse_list <- list()
 
+  # should we use lm_beta to standardize?
+  # needs to be set to true to work properly
+  std <- TRUE
+  
+  
+  
   for (method in methods) {
       for (measure in measures) {
         for (summary in summaries) {
@@ -745,7 +750,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
             results = results, 
             method = method, 
             measure = measure,
-            rmse = ifelse(summary == "rmse", TRUE, FALSE))
+            rmse = ifelse(summary == "rmse", TRUE, FALSE),
+            lm_beta = std)
           mean_tmp <- rowMeans(calc_list, na.rm = TRUE)
           # bit of a hack to add the names for the different correlation
           # levels
@@ -764,7 +770,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
             results, 
             method, 
             measure,
-            rmse = FALSE)
+            rmse = FALSE,
+            lm_beta = std)
             mse_mean_tmp <- rowMeans(mse_tmp, na.rm = TRUE)
             # names(mean_tmp) <- paste0(summary, 
             #                        "_reg",
@@ -803,7 +810,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
           calc_list_pwr <- regression_power(
             results = results, 
             method = method, 
-            measure = measure)
+            measure = measure,
+            lm_beta = std)
           pwr_mean <- rowMeans(calc_list_pwr, na.rm = TRUE)
           names(pwr_mean) <- paste0("power", 
                                    "_reg",
@@ -1011,19 +1019,19 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 ```{r run-sim}
 # For testing
 # df_design_test <- df_design[2,]
-sim_pars$n_id <- 200
-# sim_pars$n_var <- 4
-# n_var <- 4
-n_id <- 200
-# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
-# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
-# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
-# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
-# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
-# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
+sim_pars$n_id <- 400
+sim_pars$n_var <- 5
+n_var <- 5
+n_id <- 400
+sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:5,1:5]
+sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:5,1:5]
+sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:5,1:5]
+sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:5,1:5]
+sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:5,1:5]
+sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:5,1:5]
 
 
-n_rep <- 5
+n_rep <- 2
 library(future)
 library(progressr)
 future::plan(multisession, workers = n_rep)
@@ -1045,15 +1053,16 @@ sim_results_mlvar <- SimDesign::runSimulation(
                                                  "gimme",
                                                  "mlVAR",
                                                  "graphicalVAR",
-                                                 "lm.beta",
-                                                 "bayestestR",
-                                                 "posterior",
-                                                 "rstan",
-                                                 "Rcpp"),
+                                                 "lm.beta"
+                                                 # "bayestestR",
+                                                 # "posterior",
+                                                 # "rstan",
+                                                 # "Rcpp"
+                                                 ),
                                     save_results = TRUE,
                                     ncores = n_rep,
                                     # debug = "analyse"
-                                    filename = "mlvar-prelim-simulation-small-error",
+                                    filename = "mlvar-prelim-sim-synthdata-highn",
                                     # save_seeds = TRUE
                                     )
 
