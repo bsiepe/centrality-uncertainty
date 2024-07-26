@@ -729,7 +729,9 @@ ml_sim_low <- sim_gvar_loop(
                      listify = TRUE,
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
-                     most_cent_diff_temp_min = 0.33)
+                     most_cent_diff_temp_min = 0.1,
+                     change_density = TRUE,
+                     change_density_factors = c(0.6, 1.4))
 ml_sim_high <- sim_gvar_loop(
                      graph = dgp_graph,
                      beta_sd = beta_sd_high,
@@ -741,7 +743,9 @@ ml_sim_high <- sim_gvar_loop(
                      listify = TRUE,
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
-                     most_cent_diff_temp_min = 0.33)
+                     most_cent_diff_temp_min = 0.1,
+                     change_density = TRUE,
+                     change_density_factors = c(0.6, 1.4))
 
 # Obtain true centralities
 true_cent_low <- centrality_mlvar_sim(ml_sim_low,
@@ -816,8 +820,8 @@ do.call(rbind, true_cent_low$outstrength) %>%
 
 Create plot for densities
 ```{r}
-df_dens <- data.frame(dens_temp = do.call(rbind, true_cent$dens_temp),
-                      dens_cont = do.call(rbind, true_cent$dens_cont)) %>% 
+df_dens <- data.frame(dens_temp = do.call(rbind, true_cent_low$dens_temp),
+                      dens_cont = do.call(rbind, true_cent_low$dens_cont)) %>% 
   pivot_longer(everything(), names_to = "type", values_to = "density") |>
   mutate(type = ifelse(type == "dens_temp", "Temporal", "Contemporaneous"))
 
@@ -829,6 +833,10 @@ df_dens |>
 
 ```
 
+Check if the new density manipulation worked: 
+```{r}
+
+```
 
 
 

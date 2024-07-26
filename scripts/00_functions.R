@@ -16,7 +16,13 @@ sim_gvar_loop <- function(graph,
                           most_cent_diff_temp = FALSE,
                           # if most_cent_diff_temp is TRUE, this is the minimum difference
                           # as a proportion of the centrality of the most central node
-                          most_cent_diff_temp_min = 0.1) {
+                          most_cent_diff_temp_min = 0.1,
+                          # do we induce differences in the density of the temporal network
+                          change_density = FALSE,
+                          # if change_density is TRUE, these are the minimum and 
+                          # maximum scaling factors
+                          change_density_factors = c(0.75, 1.25)
+                          ) {
   # browser()
   
   # Create a list to store the data for each person
@@ -32,6 +38,14 @@ sim_gvar_loop <- function(graph,
     }
     zeros_beta <- find_zero_indices(graph$beta)
     zeros_kappa <- find_zero_indices(graph$kappa)
+  }
+  
+  # if change_density is true, generate uniform scaling factors
+  # across the n persons
+  if(isTRUE(change_density)){
+    density_factors <- runif(n_person, 
+                             min = change_density_factors[1], 
+                             max = change_density_factors[2])
   }
   
   
@@ -56,6 +70,12 @@ sim_gvar_loop <- function(graph,
         beta[,,i][zeros_beta] <- 0
       }
       
+      # if change_density is TRUE, scale the beta matrix
+      if(isTRUE(change_density)){
+        beta[,,i] <- beta[,,i] * density_factors[i]
+      }
+      
+      
       # if minimum centrality difference is required
       if(isTRUE(most_cent_diff_temp)){
         # ignore autoregressive effects
@@ -71,6 +91,7 @@ sim_gvar_loop <- function(graph,
         }
         
       }
+      
       
       
       # Check if beta matrix is stable
