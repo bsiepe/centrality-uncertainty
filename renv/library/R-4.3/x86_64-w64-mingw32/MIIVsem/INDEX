@@ -1,0 +1,19 @@
+MIIVsem-package         Model Implied Instrumental Variable Estimation
+                        of Structural Equation Models
+bollen1989a             Industrialization-Democracy Data
+bollen1989b             Union sentiment data
+bollen1989c             Subjective class data
+bollen1996              Perceived accessibility data
+estimatesTable          return a dataframe of parameter estimates for a
+                        fitted model.
+felson1979              Attractiveness and academic ability
+miive                   Model-implied instrumental variable (MIIV)
+                        estimation
+miivs                   Model-implied instrumental variable (MIIV)
+                        search
+print.miive             Print method for a MIIV estimation object
+print.miivs             Print method for a MIIV search object
+reisenzein1986          Reisenzein data
+summary.miive           Summary information for a MIIV estimation
+                        object
+summary.miivs           Summary information for a MIIV search object

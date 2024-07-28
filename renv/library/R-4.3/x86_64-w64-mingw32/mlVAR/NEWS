@@ -1,0 +1,55 @@
+Changes in Version 0.5.2
+  - Removed deprecated function mlVARsim0
+
+Changes in Version 0.5.1
+  - Fixed remaining deprecated dplyr functions
+
+Changes in Version 0.5
+  - The 'mlVARsample' function has been added to mlVAR
+  - Added Myrthe Veenman to contributor list
+  - Fixed a bug where contemporaneous standard deviations were reported as variances instead of standard deviations
+  - Fixed a bug with the beepvar argument
+  - Replaced deprecated dplyr functions
+  - Added a warning for when a beep is used multiple times
+  - The 'nonsig' argument in the plot method now defaults to 'show' when SD=TRUE
+  - Fixed a bug in the summary method when fixed effects estimation was used
+
+Changes in version 0.4.3
+  o mlVAR now issues a warning when < 20 observations per subject are used
+  o Fixed a bug with 'lmerResults2'
+  o Now suppressing warnings and messages from lmer
+  o Added a progress bar for computing random effects
+
+Changes in version 0.4.2
+  o Contemporaneous multi-level models are now returned in the output
+
+Changes in version 0.4.1
+  o mlVAR now uses correlations of residuals as estimate for the contemporaneous correlation matrix (not partial) if estimated inverse covariance matrix is not properly invetable
+  o Added mlVARsample function to run a simulation study 
+given a mlVAR object.
+  o Fixed a bug with estimator = "mPlus"
+  o mlVAR now gives a warning when between-subject networks could not be computed, rather than breaking with an uninformative error.
+
+Changes in version 0.4
+  o Added AR argument to mlVAR to fit AR models only
+  o estimator = "Mplus" is now supported! Requires Mplus 8 to be installed.
+    o Several arguments have been added to mlVAR to handle Mplus estimation
+
+Changes in version 0.3.3
+  o The plot method for mlVAR sim objects now uses nonsig = "show"
+  o plot method now uses nonsig = "show" by default!
+  o Summary method now shows p-values for contemporaneous effects
+  o Several small bugfixes
+
+Changes in version 0.3.1
+  o The 'partial' argument in 'plot.mlVAR' now defaults to TRUE
+  o Added 'contemporaneous' argument to mlVAR
+  o Added 'lm' estimator for fitting unique VAR models per subject
+  o Added 'rule' argument to plot.mlVAR to set the rule of choosing significance in nodewise GGM estimation
+
+Changes in version 0.3
+  o Complete rework of package! 
+    o mlVAR, mlVARsim, and relevant methods have been completely rewritten
+    o Now support contemporaneous effects and between-subjects effects
+    o Old functions are now labeled mlVAR0, mlVARsim0, etcetera
+  

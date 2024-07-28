@@ -1,0 +1,70 @@
+# importFrom(rstan, "stan")
+export(mlVARsample)
+
+importFrom(rlang,.data)
+
+export(mlVARsample)
+S3method(summary, mlVARsample)
+
+importFrom(clusterGeneration,"genPositiveDefMat")
+export(mlVARsim)
+# export(mlVARsim0)
+export(simulateVAR)
+export(mlVAR)
+export(fixedEffects)
+export(randomEffects)
+S3method(plot, mlVAR)
+S3method(print, mlVAR)
+S3method(summary, mlVAR)
+S3method(print, mlVARcompare)
+# S3method(plot, mlVARsim0)
+S3method(plot, mlVARsim)
+#importFrom(plyr, "ddply")
+import(lme4)
+importFrom(plyr, "join")
+#importFrom(lme4, "lmer")
+#importFrom(lme4, "fixef")
+#importFrom(lme4, "ranef")
+#importFrom(lme4, "VarCorr")
+#importFrom(lme4, "lmerControl")
+#importFrom(lme4, "sigma")
+importFrom(arm, "se.fixef")
+importFrom(qgraph, "qgraph")
+# importFrom(R2jags, "jags")
+import(dplyr)
+importFrom(mvtnorm,"rmvnorm")
+export(getNet)
+import(abind)
+importFrom(corpcor,"cor2pcor")
+importFrom(corpcor,"pseudoinverse")
+importFrom(plyr,"aaply")
+importFrom(plyr,"alply")
+export(mlVARcompare)
+import(MplusAutomation)
+
+# Retro:
+export(mlVAR0)
+S3method(plot, mlVAR0)
+S3method(print, mlVAR0)
+S3method(summary, mlVAR0)
+
+importFrom("stats", "coef", "lm", "resid")
+
+  importFrom("graphics", "plot")
+  importFrom("methods", "is")
+  importFrom("stats", "AIC", "BIC", "as.formula", "ave", "cov",
+             "cov2cor", "na.omit", "pnorm", "quantile", "rWishart",
+             "residuals", "rnorm", "runif", "sd")
+  importFrom("utils", "head", "setTxtProgressBar", "txtProgressBar")
+  
+  
+import(parallel)
+import(graphicalVAR)
+
+importFrom("utils", "capture.output", "combn", "read.table",
+             "write.table")
+
+importFrom("stats", "sigma")
+
+export(importMplus)
+ importFrom("stats", "cor", "median")

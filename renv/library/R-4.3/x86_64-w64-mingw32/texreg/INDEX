@@ -1,0 +1,181 @@
+createTexreg            Constructor for texreg objects
+extract                 Extract details from statistical models for
+                        table construction
+extract,ANY-method      'extract' method for 'broom' objects
+extract,Arima-method    'extract' method for 'Arima' objects
+extract,H2OBinomialModel-method
+                        'extract' method for 'H2OBinomialModel' objects
+extract,Sarlm-method    'extract' method for 'Sarlm' objects
+extract,aftreg-method   'extract' method for 'aftreg' objects
+extract,averaging-method
+                        'extract' method for 'averaging' objects
+extract,bam-method      'extract' method for 'bam' objects
+extract,bergm-method    'extract' method for 'bergm' objects
+extract,betamfx-method
+                        'extract' method for 'betamfx' objects
+extract,betaor-method   'extract' method for 'betaor' objects
+extract,betareg-method
+                        'extract' method for 'betareg' objects
+extract,bife-method     'extract' method for 'bife' objects
+extract,biglm-method    'extract' method for 'biglm' objects
+extract,brglm-method    'extract' method for 'brglm' objects
+extract,brmsfit-method
+                        'extract' method for 'brmsfit' objects
+extract,btergm-method   'extract' method for 'btergm' objects
+extract,censReg-method
+                        'extract' method for 'censReg' objects
+extract,clm-method      'extract' method for 'clm' objects
+extract,clmm-method     'extract' method for 'clmm' objects
+extract,clogit-method   'extract' method for 'clogit' objects
+extract,coeftest-method
+                        'extract' method for 'coeftest' objects
+extract,coxph-method    'extract' method for 'coxph' objects
+extract,coxph.penal-method
+                        'extract' method for 'coxph.penal' objects
+extract,coxreg-method   'extract' method for 'coxreg' objects
+extract,dynlm-method    'extract' method for 'dynlm' objects
+extract,ergm-method     'extract' method for 'ergm' objects
+extract,ergmm-method    'extract' method for 'ergmm' objects
+extract,ets-method      'extract' method for 'ets' objects
+extract,fGARCH-method   'extract' method for 'fGARCH' objects
+extract,feglm-method    'extract' method for 'feglm' objects
+extract,feis-method     'extract' method for 'feis' objects
+extract,felm-method     'extract' method for 'felm' objects
+extract,fixest-method   'extract' method for 'fixest' objects
+extract,forecast-method
+                        'extract' method for 'forecast' objects
+extract,forecast_ARIMA-method
+                        'extract' method for 'forecast_ARIMA' objects
+extract,gam-method      'extract' method for 'gam' objects
+extract,gamlss-method   'extract' method for 'gamlss' objects
+extract,gamlssZadj-method
+                        'extract' method for 'gamlssZadj' objects
+extract,gee-method      'extract' method for 'gee' objects
+extract,geeglm-method   'extract' method for 'geeglm' objects
+extract,gel-method      'extract' method for 'gel' objects
+extract,glm-method      'extract' method for 'glm' objects
+extract,glm.cluster-method
+                        'extract' method for 'glm.cluster' objects
+extract,glmerMod-method
+                        'extract' method for 'glmerMod' objects
+extract,glmmPQL-method
+                        'extract' method for 'glmmPQL' objects
+extract,glmmTMB-method
+                        'extract' method for 'glmmTMB' objects
+extract,glmmadmb-method
+                        'extract' method for 'glmmadmb' objects
+extract,glmrob-method   'extract' method for 'glmrob' objects
+extract,gls-method      'extract' method for 'gls' objects
+extract,gmm-method      'extract' method for 'gmm' objects
+extract,gnls-method     'extract' method for 'gnls' objects
+extract,gnm-method      'extract' method for 'gnm' objects
+extract,hurdle-method   'extract' method for 'hurdle' objects
+extract,ivreg-method    'extract' method for 'ivreg' objects
+extract,lm-method       'extract' method for 'lm' objects
+extract,lm.cluster-method
+                        'extract' method for 'lm.cluster' objects
+extract,lme-method      'extract' method for 'lme' objects
+extract,lme4-method     'extract' method for 'lme4' objects
+extract,lmerMod-method
+                        'extract' method for 'lmerMod' objects
+extract,lmrob-method    'extract' method for 'lmrob' objects
+extract,lnam-method     'extract' method for 'lnam' objects
+extract,logitmfx-method
+                        'extract' method for 'logitmfx' objects
+extract,logitor-method
+                        'extract' method for 'logitor' objects
+extract,logitr-method   'extract' method for 'logitr' objects
+extract,lqmm-method     'extract' method for 'lqmm' objects
+extract,lrm-method      'extract' method for 'lrm' objects
+extract,maBina-method   'extract' method for 'maBina' objects
+extract,maxLik-method   'extract' method for 'maxLik' objects
+extract,merMod-method   'extract' method for 'merMod' objects
+extract,mhurdle-method
+                        'extract' method for 'mhurdle' objects
+extract,mlogit-method   'extract' method for 'mlogit' objects
+extract,mnlogit-method
+                        'extract' method for 'mnlogit' objects
+extract,model.selection-method
+                        'extract' method for 'model.selection' objects
+extract,mtergm-method   'extract' method for 'mtergm' objects
+extract,multinom-method
+                        'extract' method for 'multinom' objects
+extract,negbin-method   'extract' method for 'negbin' objects
+extract,negbinirr-method
+                        'extract' method for 'negbinirr' objects
+extract,negbinmfx-method
+                        'extract' method for 'negbinmfx' objects
+extract,netlogit-method
+                        'extract' method for 'netlogit' objects
+extract,nlme-method     'extract' method for 'nlme' objects
+extract,nlmerMod-method
+                        'extract' method for 'nlmerMod' objects
+extract,oglmx-method    'extract' method for 'oglmx' objects
+extract,ols-method      'extract' method for 'ols' objects
+extract,pcce-method     'extract' method for 'pcce' objects
+extract,pglm-method     'extract' method for 'pglm' objects
+extract,pgmm-method     'extract' method for 'pgmm' objects
+extract,phreg-method    'extract' method for 'phreg' objects
+extract,plm-method      'extract' method for 'plm' objects
+extract,pmg-method      'extract' method for 'pmg' objects
+extract,poissonirr-method
+                        'extract' method for 'poissonirr' objects
+extract,poissonmfx-method
+                        'extract' method for 'poissonmfx' objects
+extract,polr-method     'extract' method for 'polr' objects
+extract,probitmfx-method
+                        'extract' method for 'probitmfx' objects
+extract,rem.dyad-method
+                        'extract' method for 'rem.dyad' objects
+extract,rlm-method      'extract' method for 'rlm' objects
+extract,rq-method       'extract' method for 'rq' objects
+extract,sclm-method     'extract' method for 'sclm' objects
+extract,selection-method
+                        'extract' method for 'selection' objects
+extract,sienaFit-method
+                        'extract' method for 'sienaFit' objects
+extract,simex-method    'extract' method for 'simex' objects
+extract,speedglm-method
+                        'extract' method for 'speedglm' objects
+extract,speedlm-method
+                        'extract' method for 'speedlm' objects
+extract,stergm-method   'extract' method for 'stergm' objects
+extract,summary.lm-method
+                        'extract' method for 'summary.lm' objects
+extract,survreg-method
+                        'extract' method for 'survreg' objects
+extract,survreg.penal-method
+                        'extract' method for 'survreg.penal' objects
+extract,svyglm-method   'extract' method for 'svyglm' objects
+extract,systemfit-method
+                        'extract' method for 'systemfit' objects
+extract,texreg-method   'extract' method for 'texreg' objects
+extract,tobit-method    'extract' method for 'tobit' objects
+extract,truncreg-method
+                        'extract' method for 'truncreg' objects
+extract,vglm-method     'extract' method for 'vglm' objects
+extract,weibreg-method
+                        'extract' method for 'weibreg' objects
+extract,wls-method      'extract' method for 'wls' objects
+extract,zelig-method    'extract' method for 'zelig' objects
+extract,zeroinfl-method
+                        'extract' method for 'zeroinfl' objects
+htmlreg                 Convert regression output to a HTML table
+huxtablereg             Create a huxtable object from multiple
+                        statistical models
+knitreg                 Flexibly choose the right table output format
+                        for use with 'knitr'
+matrixreg               Convert regression output to a 'character'
+                        matrix
+plotreg                 Create coefficient plots from statistical model
+                        output using 'ggplot2'.
+praise                  Publish praise about 'texreg'
+print.texregTable       Prints a 'texregTable' object.
+screenreg               Convert regression output to an ASCII table
+show,texreg-method      Show method for pretty output of texreg objects
+texreg                  Convert regression output to a LaTeX table
+texreg-class            An S4 class to represent a statistical model as
+                        a texreg object
+texreg-package          Conversion of R Regression Output to LaTeX or
+                        HTML Tables
+wordreg                 Export regression output to an MS Word file

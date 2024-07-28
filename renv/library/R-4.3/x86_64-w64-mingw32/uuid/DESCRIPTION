@@ -1,0 +1,17 @@
+Package: uuid
+Version: 1.2-0
+Title: Tools for Generating and Handling of UUIDs
+Author: Simon Urbanek <Simon.Urbanek@r-project.org> (R package), Theodore Ts'o <tytso@thunk.org> (libuuid)
+Maintainer: Simon Urbanek <Simon.Urbanek@r-project.org>
+Depends: R (>= 2.9.0)
+Description: Tools for generating and handling of UUIDs (Universally Unique Identifiers).
+License: MIT + file LICENSE
+URL: https://www.rforge.net/uuid
+BugReports: https://github.com/s-u/uuid
+NeedsCompilation: yes
+Packaged: 2024-01-13 00:03:03 UTC; rforge
+Repository: RSPM
+Date/Publication: 2024-01-14 15:20:05 UTC
+Encoding: UTF-8
+Built: R 4.3.0; x86_64-w64-mingw32; 2024-01-19 11:41:20 UTC; windows
+Archs: x64

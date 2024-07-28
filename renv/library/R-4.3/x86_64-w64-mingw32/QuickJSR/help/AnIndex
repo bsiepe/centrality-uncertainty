@@ -1,0 +1,7 @@
+QuickJSR-package	QuickJSR-package
+cxxflags	cxxflags
+JSContext	JSContext
+ldflags	ldflags
+qjs_eval	qjs_eval
+QuickJSR	QuickJSR-package
+quickjs_version	quickjs_version
