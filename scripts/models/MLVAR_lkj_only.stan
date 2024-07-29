@@ -13,9 +13,19 @@ data {
   matrix[I,P] reg_covariate; // regression outcome
 }
 ////////////////////////////////////////////////////////////////////////////////
+transformed data{
+  // sparsity level affecting the hyper-priors for Beta
+  int <lower=1, upper= 3> sparsity = 1;
+}
+////////////////////////////////////////////////////////////////////////////////
 parameters {
   // Temporal
   array[I] matrix<lower=-pi()/2, upper=pi()/2>[K,K] Beta_raw; // raw Beta matrix
+  
+  if(sparsity == 1 | sparsity == 2){
+    // only estimate the means of Betas for less sparse prior settings
+    matrix[K,K] mu_Beta; // means of Betas
+  }
   matrix[K,K] mu_Beta; // means of Betas
   matrix[K,K] sigma_Beta; // SDs of Betas
   matrix[I,K] Intercepts_raw; // raw intercepts
@@ -66,7 +76,13 @@ transformed parameters{
     // Implied: Beta ~ cauchy(mu_Beta, sigma_Beta)
     // 0.5*exp(sigma_Beta) implies that the mode of the hyper-prior 
     // for sigma_Beta is at 0.5
-    Beta[i] = mu_Beta + 0.5*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+    if(sparsity == 1 | sparsity == 2){
+      // for less sparse prior settings estimate the means of Betas
+      Beta[i] = mu_Beta + 0.5*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+    }else{
+      // for sparsest prior setting fix means of Beta to zero
+      Beta[i] = 0 + 0.5*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+    }
     Intercepts[i,] = mu_Intercepts' + 0.5*exp(sigma_Intercepts') .* Intercepts_raw[i, ];
   
   // Contemporaneous ///////////////////////////////////////////////////
@@ -141,7 +157,12 @@ model {
     position_Beta += K*K; // increment position counter  
   } // end i
   Beta_raw_vec ~ uniform(-pi()/2, pi()/2); // prior on Beta
-  to_vector(mu_Beta) ~ std_normal(); // prior on mu_Beta
+  if(sparsity == 1){
+    to_vector(mu_Beta) ~ normal(0, 1); // prior on mu_Beta
+  }
+  if(sparsity == 2){
+    to_vector(mu_Beta) ~ student_t(3, 0, .3); // prior on mu_Beta
+  }
   to_vector(sigma_Beta) ~ std_normal(); // prior on sigma_Beta
   to_vector(Intercepts_raw) ~ std_normal(); // prior on Intercepts
   mu_Intercepts ~ student_t(3, 0, 2); // prior on mu_Intercepts
