@@ -1,7 +1,0 @@
-na.stinterp             Replace NAs by Stineman interpolation
-parabolaSlopes          Estimate the slope of an interpolating function
-                        using a parabola
-stinemanSlopes          Estimate the slope of an interpolating function
-                        using an arc
-stinterp                A consistently well behaved method of
-                        interpolation
