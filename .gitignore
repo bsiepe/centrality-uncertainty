@@ -1,6 +1,5 @@
-fits/
-fits/mlvar_fit.rds
 
+fits/
 scripts/graveyard.qmd
 
 .Rproj.user
@@ -12,4 +11,7 @@ fits/mlvar_fit.rds
 fits/mlvar_fit.rds
 fits/mlvar_fit.rds
 fits/mlvar_fit.rds
+fits/mlvar_fit.rds
+fits/mlvar_fit.rds
+/fits
 fits/mlvar_fit.rds

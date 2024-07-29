@@ -21,11 +21,6 @@ transformed data{
 parameters {
   // Temporal
   array[I] matrix<lower=-pi()/2, upper=pi()/2>[K,K] Beta_raw; // raw Beta matrix
-  
-  //if(sparsity == 1 | sparsity == 2){
-    // only estimate the means of Betas for less sparse prior settings
-    //matrix[K,K] mu_Beta; // means of Betas
-  //}
   matrix[K,K] mu_Beta; // means of Betas
   matrix[K,K] sigma_Beta; // SDs of Betas
   matrix[I,K] Intercepts_raw; // raw intercepts
