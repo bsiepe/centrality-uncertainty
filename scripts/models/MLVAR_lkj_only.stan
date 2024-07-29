@@ -22,10 +22,10 @@ parameters {
   // Temporal
   array[I] matrix<lower=-pi()/2, upper=pi()/2>[K,K] Beta_raw; // raw Beta matrix
   
-  if(sparsity == 1 | sparsity == 2){
+  //if(sparsity == 1 | sparsity == 2){
     // only estimate the means of Betas for less sparse prior settings
-    matrix[K,K] mu_Beta; // means of Betas
-  }
+    //matrix[K,K] mu_Beta; // means of Betas
+  //}
   matrix[K,K] mu_Beta; // means of Betas
   matrix[K,K] sigma_Beta; // SDs of Betas
   matrix[I,K] Intercepts_raw; // raw intercepts
@@ -76,12 +76,12 @@ transformed parameters{
     // Implied: Beta ~ cauchy(mu_Beta, sigma_Beta)
     // 0.5*exp(sigma_Beta) implies that the mode of the hyper-prior 
     // for sigma_Beta is at 0.5
-    if(sparsity == 1 | sparsity == 2){
-      // for less sparse prior settings estimate the means of Betas
-      Beta[i] = mu_Beta + 0.5*exp(sigma_Beta) .* tan(Beta_raw[i]); 
-    }else{
+    if(sparsity == 3){
       // for sparsest prior setting fix means of Beta to zero
       Beta[i] = 0 + 0.5*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+    }else{
+      // for less sparse prior settings estimate the means of Betas
+      Beta[i] = mu_Beta + 0.5*exp(sigma_Beta) .* tan(Beta_raw[i]); 
     }
     Intercepts[i,] = mu_Intercepts' + 0.5*exp(sigma_Intercepts') .* Intercepts_raw[i, ];
   
