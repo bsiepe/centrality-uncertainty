@@ -1,12 +1,12 @@
 ---
 title: "bmlvar_simulation"
 format: html
-editor: visual
+editor: source
 ---
 
 # Preparation
 
-In this script, we will conduct some additional simulations for the BmlVAR model. It mostly adapts code from `centrality_simulation.qmd`.
+In this script, we will conduct some additional simulations for different levels of sparsity of the BmlVAR model. It mostly adapts code from `centrality_simulation.qmd`, but will only focus on some of the main outcomes 
 
 ```{r packages}
 library(tidyverse)
@@ -15,7 +15,7 @@ library(mlVAR)
 library(graphicalVAR)
 library(gimme)
 library(here)
-source(here::here("scripts", "functions.R"))
+source(here::here("scripts", "00_functions.R"))
 set.seed(35037)
 ```
 
@@ -125,7 +125,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      n_time = n_tp,
                      n_node = n_var,
                      max_try = 10000,
-                     listify = TRUE)
+                     listify = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.1)
   if(any(is.na(ml_sim$beta))){
     stop("Generation of Betas failed")
   }
@@ -754,8 +756,8 @@ saveRDS(sim_results_bmlvar, here("output/prelim_sim_results_bmlvar.RDS"))
 
 # Results
 
-
 Something went wrong with some of the performance measures, so I have to remove some NAs
+
 ```{r}
 sr_bmlvar_edit <- sim_results_bmlvar %>% 
   select(!heterogeneity) %>% # only low here
@@ -791,9 +793,3 @@ sr_bmlvar_edit <- sim_results_bmlvar %>%
   # pivot_wider(names_from = summary, values_from = value) %>% 
   # ungroup()
 ```
-
-
-
-
-
-
