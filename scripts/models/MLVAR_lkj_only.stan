@@ -71,13 +71,26 @@ transformed parameters{
     // Implied: Beta ~ cauchy(mu_Beta, sigma_Beta)
     // 0.5*exp(sigma_Beta) implies that the mode of the hyper-prior 
     // for sigma_Beta is at 0.5
-    if(sparsity == 3){
-      // for sparsest prior setting fix means of Beta to zero
-      Beta[i] = 0 + 0.5*exp(sigma_Beta) .* tan(Beta_raw[i]); 
-    }else{
-      // for less sparse prior settings estimate the means of Betas
-      Beta[i] = mu_Beta + 0.5*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+
+    if(sparsity == 1){
+      // lowest sparsity level
+      // wide prior on Beta means
+      // high variance of random effects
+      Beta[i] = mu_Beta + 0.3*exp(sigma_Beta) .* tan(Beta_raw[i]); 
     }
+    if(sparsity == 2){
+      // medium sparsity level
+      // narrow prior on Beta means
+      // low variance of random effects      
+      Beta[i] = mu_Beta + 0.1*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+    }
+    if(sparsity == 3){
+      // high sparsity level
+      // Beta means are fixed to zero
+      // high variance of random effects to compensate fixed means
+      Beta[i] = 0 + 0.3*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+    }
+    
     Intercepts[i,] = mu_Intercepts' + 0.5*exp(sigma_Intercepts') .* Intercepts_raw[i, ];
   
   // Contemporaneous ///////////////////////////////////////////////////
@@ -109,6 +122,7 @@ transformed parameters{
       // Ignore autoregressive effects in centrality estimation
       // by ignoring the diagonal elements
       Beta_out_strength[i,k] = 0; // Initialize to zero
+      Beta_in_strength[i,k] = 0; // Initialize to zero
       for(j in 1:K){
         if(j != k){
           Beta_out_strength[i,k] += abs(Beta[i,j,k]);
@@ -158,7 +172,7 @@ model {
   if(sparsity == 2){
     to_vector(mu_Beta) ~ student_t(3, 0, .3); // prior on mu_Beta
   }
-  to_vector(sigma_Beta) ~ std_normal(); // prior on sigma_Beta
+  to_vector(sigma_Beta) ~ student_t(3, 0, 1); // prior on sigma_Beta
   to_vector(Intercepts_raw) ~ std_normal(); // prior on Intercepts
   mu_Intercepts ~ student_t(3, 0, 2); // prior on mu_Intercepts
   sigma_Intercepts ~ std_normal(); // prior on sigma_Intercepts
