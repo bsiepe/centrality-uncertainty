@@ -74,15 +74,15 @@ transformed parameters{
 
     if(sparsity == 1){
       // lowest sparsity level
-      // wide prior on Beta means
+      // wide normal prior on Beta means
       // high variance of random effects
       Beta[i] = mu_Beta + 0.3*exp(sigma_Beta) .* tan(Beta_raw[i]); 
     }
     if(sparsity == 2){
       // medium sparsity level
-      // narrow prior on Beta means
+      // narrow, fat-tailed prior on Beta means
       // low variance of random effects      
-      Beta[i] = mu_Beta + 0.1*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+      Beta[i] = 0.1*mu_Beta + 0.1*exp(sigma_Beta) .* tan(Beta_raw[i]); 
     }
     if(sparsity == 3){
       // high sparsity level
@@ -170,7 +170,7 @@ model {
     to_vector(mu_Beta) ~ normal(0, 1); // prior on mu_Beta
   }
   if(sparsity == 2){
-    to_vector(mu_Beta) ~ student_t(3, 0, .3); // prior on mu_Beta
+    to_vector(mu_Beta) ~ cauchy(0, 1); // prior on mu_Beta
   }
   to_vector(sigma_Beta) ~ student_t(3, 0, 1); // prior on sigma_Beta
   to_vector(Intercepts_raw) ~ std_normal(); // prior on Intercepts
