@@ -11,6 +11,7 @@ This repository contains files for the project "Uncertainty is central for good 
 - **folder: archive** contains the unused scripts
 - **centrality_simulation.qmd** contains code to replicate the main simulation study
 - **bmlvar_simulation.qmd** contains code to replicate the simulation study for the bmlVAR model. It mostly uses adapted code fom **centrality_simulation.qmd**
+- **bmlvar_sparsity_simulation.qmd** contains code to compare different levels of sparsity in the bmlVAR model. 
 - **simulated_example.qmd** contains code to build up a simulation study
 - **functions.R** contains auxiliary functions
 - **MLVAR_stan_recovery_checks.qmd** contains code to experiment with the mlVAR stan model on a single data set
