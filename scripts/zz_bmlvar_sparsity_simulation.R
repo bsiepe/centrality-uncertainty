@@ -1,14 +1,4 @@
----
-title: "bmlvar_simulation"
-format: html
-editor: source
----
-
-# Preparation
-
-In this script, we will conduct some additional simulations for the BmlVAR model. It mostly adapts code from `centrality_simulation.qmd`.
-
-```{r packages}
+## ----packages-------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -17,23 +7,17 @@ library(gimme)
 library(here)
 source(here::here("scripts", "00_functions.R"))
 set.seed(35037)
-```
 
-# Data Generation
 
-New DGP with specific graph:
-
-```{r}
+## -------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse.RDS"))
 
 # sparse DGP
 graph_sparse <- readRDS(here::here("data/graph_sparse.RDS"))
-```
 
-## Setting parameters
 
-```{r params}
+## ----params---------------------------------------------------------------------
 # Type of DGP
 dgp <- c("sparse", "dense")
 
@@ -77,11 +61,9 @@ sim_pars <- list(
   graph_nonsparse = graph_nonsparse,
   graph_sparse = graph_sparse
 )
-```
 
-Pre-compiling the model
 
-```{r precompile}
+## ----precompile-----------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -90,11 +72,9 @@ sim_pars$mlvar_model <-
     model_name = model_name
   )
 
-```
 
-## Simulating Data
 
-```{r data-generation}
+## ----data-generation------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -195,11 +175,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
   
 }
 
-```
 
-# Analysis
 
-```{r data-analysis}
+## ----data-analysis--------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -419,12 +397,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   return(ret_results)
   
 }
-```
 
-# Summary
-Removed the regression part for now, only focus on network estimation performance. 
 
-```{r summarize}
+## ----summarize------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -823,11 +798,9 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 }
 
 
-```
 
-# Executing Simulation
 
-```{r sim-execution}
+## ----sim-execution--------------------------------------------------------------
 # For testing
 df_design_test <- df_design[2,]
 sim_pars$n_var <- 4
@@ -873,14 +846,9 @@ plan(sequential)
 SimClean()
 
 saveRDS(sim_results_bmlvar, here("output/prelim_sim_results_bmlvar.RDS"))
-```
 
 
-# Results
-
-Something went wrong with some of the performance measures, so I have to remove some NAs
-
-```{r}
+## -------------------------------------------------------------------------------
 sr_bmlvar_edit <- sim_results_bmlvar %>% 
   select(!heterogeneity) %>% # only low here
   mutate(dgp = factor(dgp, levels = c("dense", "sparse"))) %>% 
@@ -914,17 +882,8 @@ sr_bmlvar_edit <- sim_results_bmlvar %>%
   # group_by(dgp, heterogeneity, pm, outcome, method) %>%
   # pivot_wider(names_from = summary, values_from = value) %>% 
   # ungroup()
-```
 
 
-
-# Write to simple .R-file for the server
-
-On our Server1, we cannot run the sim with a markdown script, but rather need to use a simple R-file: 
-
-```{r}
-knitr::purl("zz_bmlvar_sparsity_simulation.qmd",
-            "zz_bmlvar_sparsity_simulation.R")
-```
-
+## -------------------------------------------------------------------------------
+knitr::purl()
 
