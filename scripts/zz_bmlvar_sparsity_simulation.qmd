@@ -347,13 +347,13 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   summary_bmlvar_sparse3 <- rstan::summary(fit_bmlvar_sparse3)
   
   # Convergence diagnostics
-  rhat_bmlvar_mean_sparse1 <- mean(summary_bmlvar_sparse1$summary$Rhat, na.rm = TRUE)
-  rhat_bmlvar_mean_sparse2 <- mean(summary_bmlvar_sparse2$summary$Rhat, na.rm = TRUE)
-  rhat_bmlvar_mean_sparse3 <- mean(summary_bmlvar_sparse3$summary$Rhat, na.rm = TRUE)
+  rhat_bmlvar_mean_sparse1 <- mean(summary_bmlvar_sparse1$summary[,"Rhat"], na.rm = TRUE)
+  rhat_bmlvar_mean_sparse2 <- mean(summary_bmlvar_sparse2$summary[,"Rhat"], na.rm = TRUE)
+  rhat_bmlvar_mean_sparse3 <- mean(summary_bmlvar_sparse3$summary[,"Rhat"], na.rm = TRUE)
   
-  rhat_bmlvar_11_sparse1 <- sum(summary_bmlvar_sparse1$summary$Rhat > 1.1) / length(summary_bmlvar_sparse1$summary$Rhat)
-  rhat_bmlvar_11_sparse2 <- sum(summary_bmlvar_sparse2$summary$Rhat > 1.1) / length(summary_bmlvar_sparse2$summary$Rhat)
-  rhat_bmlvar_11_sparse3 <- sum(summary_bmlvar_sparse3$summary$Rhat > 1.1) / length(summary_bmlvar_sparse3$summary$Rhat)
+  rhat_bmlvar_11_sparse1 <- sum(summary_bmlvar_sparse1$summary[,"Rhat"] > 1.1, na.rm = TRUE) / length(summary_bmlvar_sparse1$summary[,"Rhat"])
+  rhat_bmlvar_11_sparse2 <- sum(summary_bmlvar_sparse2$summary[,"Rhat"] > 1.1, na.rm = TRUE) / length(summary_bmlvar_sparse2$summary[,"Rhat"])
+  rhat_bmlvar_11_sparse3 <- sum(summary_bmlvar_sparse3$summary[,"Rhat"] > 1.1, na.rm = TRUE) / length(summary_bmlvar_sparse3$summary[,"Rhat"])
   
   divtrans_bmlvar_sparse1 <- rstan::get_num_divergent(fit_bmlvar_sparse1)
   divtrans_bmlvar_sparse2 <- rstan::get_num_divergent(fit_bmlvar_sparse2)
@@ -446,7 +446,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 }
 
   
-  methods <- c("bmlvar_sparse1, bmlvar_sparse2, bmlvar_sparse3")
+  methods <- c("bmlvar_sparse1", "bmlvar_sparse2", "bmlvar_sparse3")
   measures <- c("beta", "pcor")
   funcs <- list("rmse" = rmse_mean_list, 
                 "mse" = mse_mean_list, 
@@ -862,8 +862,8 @@ sim_results_bmlvar <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "Rcpp"),
                                     # save_results = TRUE,
-                                    ncores = n_rep
-                                    # debug = "summarise"
+                                    ncores = n_rep,
+                                    debug = "analyse"
                                     # filename = "bmlvar_prelim_500id"
                                     # save_seeds = TRUE
                                     )

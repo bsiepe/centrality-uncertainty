@@ -1,4 +1,4 @@
-## ----packages-------------------------------------------------------------------
+## ----packages--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -9,7 +9,7 @@ source(here::here("scripts", "00_functions.R"))
 set.seed(35037)
 
 
-## -------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse.RDS"))
 
@@ -17,7 +17,7 @@ graph_nonsparse <- readRDS(here::here("data/graph_nonsparse.RDS"))
 graph_sparse <- readRDS(here::here("data/graph_sparse.RDS"))
 
 
-## ----params---------------------------------------------------------------------
+## ----params----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Type of DGP
 dgp <- c("sparse", "dense")
 
@@ -63,7 +63,7 @@ sim_pars <- list(
 )
 
 
-## ----precompile-----------------------------------------------------------------
+## ----precompile------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -74,7 +74,7 @@ sim_pars$mlvar_model <-
 
 
 
-## ----data-generation------------------------------------------------------------
+## ----data-generation-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -177,7 +177,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 
 
 
-## ----data-analysis--------------------------------------------------------------
+## ----data-analysis---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -325,13 +325,13 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   summary_bmlvar_sparse3 <- rstan::summary(fit_bmlvar_sparse3)
   
   # Convergence diagnostics
-  rhat_bmlvar_mean_sparse1 <- mean(summary_bmlvar_sparse1$summary$Rhat, na.rm = TRUE)
-  rhat_bmlvar_mean_sparse2 <- mean(summary_bmlvar_sparse2$summary$Rhat, na.rm = TRUE)
-  rhat_bmlvar_mean_sparse3 <- mean(summary_bmlvar_sparse3$summary$Rhat, na.rm = TRUE)
+  rhat_bmlvar_mean_sparse1 <- mean(summary_bmlvar_sparse1$summary[,"Rhat"], na.rm = TRUE)
+  rhat_bmlvar_mean_sparse2 <- mean(summary_bmlvar_sparse2$summary[,"Rhat"], na.rm = TRUE)
+  rhat_bmlvar_mean_sparse3 <- mean(summary_bmlvar_sparse3$summary[,"Rhat"], na.rm = TRUE)
   
-  rhat_bmlvar_11_sparse1 <- sum(summary_bmlvar_sparse1$summary$Rhat > 1.1) / length(summary_bmlvar_sparse1$summary$Rhat)
-  rhat_bmlvar_11_sparse2 <- sum(summary_bmlvar_sparse2$summary$Rhat > 1.1) / length(summary_bmlvar_sparse2$summary$Rhat)
-  rhat_bmlvar_11_sparse3 <- sum(summary_bmlvar_sparse3$summary$Rhat > 1.1) / length(summary_bmlvar_sparse3$summary$Rhat)
+  rhat_bmlvar_11_sparse1 <- sum(summary_bmlvar_sparse1$summary[,"Rhat"] > 1.1, na.rm = TRUE) / length(summary_bmlvar_sparse1$summary[,"Rhat"])
+  rhat_bmlvar_11_sparse2 <- sum(summary_bmlvar_sparse2$summary[,"Rhat"] > 1.1, na.rm = TRUE) / length(summary_bmlvar_sparse2$summary[,"Rhat"])
+  rhat_bmlvar_11_sparse3 <- sum(summary_bmlvar_sparse3$summary[,"Rhat"] > 1.1, na.rm = TRUE) / length(summary_bmlvar_sparse3$summary[,"Rhat"])
   
   divtrans_bmlvar_sparse1 <- rstan::get_num_divergent(fit_bmlvar_sparse1)
   divtrans_bmlvar_sparse2 <- rstan::get_num_divergent(fit_bmlvar_sparse2)
@@ -399,7 +399,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 }
 
 
-## ----summarize------------------------------------------------------------------
+## ----summarize-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -421,7 +421,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 }
 
   
-  methods <- c("bmlvar_sparse1, bmlvar_sparse2, bmlvar_sparse3")
+  methods <- c("bmlvar_sparse1", "bmlvar_sparse2", "bmlvar_sparse3")
   measures <- c("beta", "pcor")
   funcs <- list("rmse" = rmse_mean_list, 
                 "mse" = mse_mean_list, 
@@ -800,7 +800,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 
 
-## ----sim-execution--------------------------------------------------------------
+## ----sim-execution---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # For testing
 df_design_test <- df_design[2,]
 sim_pars$n_var <- 4
@@ -835,8 +835,8 @@ sim_results_bmlvar <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "Rcpp"),
                                     # save_results = TRUE,
-                                    ncores = n_rep
-                                    # debug = "summarise"
+                                    ncores = n_rep,
+                                    debug = "summarise"
                                     # filename = "bmlvar_prelim_500id"
                                     # save_seeds = TRUE
                                     )
@@ -848,7 +848,7 @@ SimClean()
 saveRDS(sim_results_bmlvar, here("output/prelim_sim_results_bmlvar.RDS"))
 
 
-## -------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sr_bmlvar_edit <- sim_results_bmlvar %>% 
   select(!heterogeneity) %>% # only low here
   mutate(dgp = factor(dgp, levels = c("dense", "sparse"))) %>% 
@@ -884,6 +884,7 @@ sr_bmlvar_edit <- sim_results_bmlvar %>%
   # ungroup()
 
 
-## -------------------------------------------------------------------------------
-knitr::purl()
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+knitr::purl("zz_bmlvar_sparsity_simulation.qmd",
+            "zz_bmlvar_sparsity_simulation.R")
 
