@@ -248,7 +248,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   data = stan_data,
   seed = 2023,
   chains = 3,
-  cores = 3,
+  cores = 1,
   warmup = 400,
   iter = 800,
   init = 0,
@@ -269,7 +269,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   data = stan_data,
   seed = 2023,
   chains = 3,
-  cores = 3,
+  cores = 1,
   warmup = 400,
   iter = 800,
   init = 0,
@@ -290,7 +290,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   data = stan_data,
   seed = 2023,
   chains = 3,
-  cores = 3,
+  cores = 1,
   warmup = 400,
   iter = 800,
   init = 0,
@@ -921,6 +921,7 @@ sr_bmlvar_edit <- sim_results_bmlvar %>%
 # Write to simple .R-file for the server
 
 On our Server1, we cannot run the sim with a markdown script, but rather need to use a simple R-file: 
+TODO check right amount of samples etc. 
 
 ```{r}
 knitr::purl("zz_bmlvar_sparsity_simulation.qmd",
