@@ -6,7 +6,7 @@ data {
   int<lower=0> I; // number of respondents
   int<lower=0> N_total; // number of total response measurements
   int<lower=0> P; // number of covariates
-  int <lower=1, upper= 3> sparsity = 1; // sparsity level affecting the hyper-priors for Beta
+  int <lower=1, upper= 3> sparsity; // sparsity level affecting the hyper-priors for Beta
   int n_pc; // number of partial correlations
   array[n_pc] int idx_rho; // index for partial correlations
   array[I] int<lower=0> n_t; // number of time points per person
