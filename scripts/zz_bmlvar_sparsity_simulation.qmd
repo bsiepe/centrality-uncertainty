@@ -75,7 +75,10 @@ sim_pars <- list(
   # beta_sd = beta_sd,
   # kappa_sd = kappa_sd,
   graph_nonsparse = graph_nonsparse,
-  graph_sparse = graph_sparse
+  graph_sparse = graph_sparse,
+  n_chains = 3,
+  iter_warmup = 300,
+  iter_sampling = 400
 )
 ```
 
@@ -247,10 +250,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 3,
+  chains = fixed_objects$n_chains,
   cores = 1,
-  warmup = 400,
-  iter = 800,
+  warmup = fixed_objects$iter_warmup,
+  iter = fixed_objects$iter_sampling,
   init = 0,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
@@ -268,10 +271,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 3,
+  chains = fixed_objects$n_chains,
   cores = 1,
-  warmup = 400,
-  iter = 800,
+  warmup = fixed_objects$iter_warmup,
+  iter = fixed_objects$iter_sampling,
   init = 0,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
@@ -289,10 +292,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 3,
+  chains = fixed_objects$n_chains,
   cores = 1,
-  warmup = 400,
-  iter = 800,
+  warmup = fixed_objects$iter_warmup,
+  iter = fixed_objects$iter_sampling,
   init = 0,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
@@ -862,8 +865,8 @@ sim_results_bmlvar <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "Rcpp"),
                                     # save_results = TRUE,
-                                    ncores = n_rep,
-                                    debug = "analyse"
+                                    ncores = n_rep
+                                    # debug = "analyse"
                                     # filename = "bmlvar_prelim_500id"
                                     # save_seeds = TRUE
                                     )
@@ -925,7 +928,8 @@ TODO check right amount of samples etc.
 
 ```{r}
 knitr::purl("zz_bmlvar_sparsity_simulation.qmd",
-            "zz_bmlvar_sparsity_simulation.R")
+            "zz_bmlvar_sparsity_simulation.R",
+            documentation = 2)
 ```
 
 

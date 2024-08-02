@@ -1,4 +1,14 @@
-## ----packages------------------------------------------------------------------------------------------------------------------------------
+#' ---
+#' title: "bmlvar_simulation"
+#' format: html
+#' editor: source
+#' ---
+#' 
+#' # Preparation
+#' 
+#' In this script, we will conduct some additional simulations for the BmlVAR model. It mostly adapts code from `centrality_simulation.qmd`.
+#' 
+## ----packages--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -8,16 +18,22 @@ library(here)
 source(here::here("scripts", "00_functions.R"))
 set.seed(35037)
 
-
-## ------------------------------------------------------------------------------------------------------------------------------------------
+#' 
+#' # Data Generation
+#' 
+#' New DGP with specific graph:
+#' 
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse.RDS"))
 
 # sparse DGP
 graph_sparse <- readRDS(here::here("data/graph_sparse.RDS"))
 
-
-## ----params--------------------------------------------------------------------------------------------------------------------------------
+#' 
+#' ## Setting parameters
+#' 
+## ----params----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Type of DGP
 dgp <- c("sparse", "dense")
 
@@ -59,11 +75,16 @@ sim_pars <- list(
   # beta_sd = beta_sd,
   # kappa_sd = kappa_sd,
   graph_nonsparse = graph_nonsparse,
-  graph_sparse = graph_sparse
+  graph_sparse = graph_sparse,
+  n_chains = 3,
+  iter_warmup = 300,
+  iter_sampling = 400
 )
 
-
-## ----precompile----------------------------------------------------------------------------------------------------------------------------
+#' 
+#' Pre-compiling the model
+#' 
+## ----precompile------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -73,8 +94,10 @@ sim_pars$mlvar_model <-
   )
 
 
-
-## ----data-generation-----------------------------------------------------------------------------------------------------------------------
+#' 
+#' ## Simulating Data
+#' 
+## ----data-generation-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -176,8 +199,10 @@ sim_generate <- function(condition, fixed_objects = NULL){
 }
 
 
-
-## ----data-analysis-------------------------------------------------------------------------------------------------------------------------
+#' 
+#' # Analysis
+#' 
+## ----data-analysis---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -225,10 +250,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 3,
+  chains = fixed_objects$n_chains,
   cores = 1,
-  warmup = 400,
-  iter = 800,
+  warmup = fixed_objects$iter_warmup,
+  iter = fixed_objects$iter_sampling,
   init = 0,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
@@ -246,10 +271,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 3,
+  chains = fixed_objects$n_chains,
   cores = 1,
-  warmup = 400,
-  iter = 800,
+  warmup = fixed_objects$iter_warmup,
+  iter = fixed_objects$iter_sampling,
   init = 0,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
@@ -267,10 +292,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 3,
+  chains = fixed_objects$n_chains,
   cores = 1,
-  warmup = 400,
-  iter = 800,
+  warmup = fixed_objects$iter_warmup,
+  iter = fixed_objects$iter_sampling,
   init = 0,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
@@ -398,8 +423,11 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
 }
 
-
-## ----summarize-----------------------------------------------------------------------------------------------------------------------------
+#' 
+#' # Summary
+#' Removed the regression part for now, only focus on network estimation performance. 
+#' 
+## ----summarize-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -799,8 +827,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 
 
-
-## ----sim-execution-------------------------------------------------------------------------------------------------------------------------
+#' 
+#' # Executing Simulation
+#' 
+## ----sim-execution---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # For testing
 df_design_test <- df_design[2,]
 sim_pars$n_var <- 4
@@ -847,8 +877,13 @@ SimClean()
 
 saveRDS(sim_results_bmlvar, here("output/prelim_sim_results_bmlvar.RDS"))
 
-
-## ------------------------------------------------------------------------------------------------------------------------------------------
+#' 
+#' 
+#' # Results
+#' 
+#' Something went wrong with some of the performance measures, so I have to remove some NAs
+#' 
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sr_bmlvar_edit <- sim_results_bmlvar %>% 
   select(!heterogeneity) %>% # only low here
   mutate(dgp = factor(dgp, levels = c("dense", "sparse"))) %>% 
@@ -883,8 +918,18 @@ sr_bmlvar_edit <- sim_results_bmlvar %>%
   # pivot_wider(names_from = summary, values_from = value) %>% 
   # ungroup()
 
-
-## ------------------------------------------------------------------------------------------------------------------------------------------
+#' 
+#' 
+#' 
+#' # Write to simple .R-file for the server
+#' 
+#' On our Server1, we cannot run the sim with a markdown script, but rather need to use a simple R-file: 
+#' TODO check right amount of samples etc. 
+#' 
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 knitr::purl("zz_bmlvar_sparsity_simulation.qmd",
-            "zz_bmlvar_sparsity_simulation.R")
+            "zz_bmlvar_sparsity_simulation.R",
+            documentation = 2)
 
+#' 
+#' 
