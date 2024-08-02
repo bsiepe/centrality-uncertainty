@@ -121,7 +121,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      n_node = n_var,
                      max_try = 10000,
                      listify = TRUE,
-                     sparse_sim = TRUE)
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.2)
   
   if(any(is.na(ml_sim$beta))){
     stop("Generation of Betas failed")
@@ -1019,35 +1021,35 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 ```{r run-sim}
 # For testing
 # df_design_test <- df_design[2,]
-sim_pars$n_id <- 400
-sim_pars$n_var <- 5
-n_var <- 5
-n_id <- 400
-sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:5,1:5]
-sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:5,1:5]
-sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:5,1:5]
-sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:5,1:5]
-sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:5,1:5]
-sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:5,1:5]
+sim_pars$n_id <- 600
+sim_pars$n_var <- 4
+n_var <- 4
+n_id <- 600
+sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
+sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
+sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
+sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
+sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
+sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
 
 
 n_rep <- 2
-library(future)
-library(progressr)
-future::plan(multisession, workers = n_rep)
+# library(future)
+# library(progressr)
+# future::plan(multisession, workers = n_rep)
 # handlers("rstudio")
 # handlers('cli')
 
 # started 2024-07-03 15:00
 
 sim_results_mlvar <- SimDesign::runSimulation(
-                                    design = df_design, 
+                                    design = df_design[c(1,2),], 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    parallel = "future",
+                                    parallel = TRUE,
                                     max_errors = 2,
                                     packages = c("tidyverse", 
                                                  "gimme",
@@ -1062,7 +1064,7 @@ sim_results_mlvar <- SimDesign::runSimulation(
                                     save_results = TRUE,
                                     ncores = n_rep,
                                     # debug = "analyse"
-                                    filename = "mlvar-prelim-sim-synthdata-highn",
+                                    filename = "mlvar-prelim-n600",
                                     # save_seeds = TRUE
                                     )
 
