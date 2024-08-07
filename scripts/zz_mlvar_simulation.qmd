@@ -28,10 +28,10 @@ Load DGP based on estimated network structures:
 
 ```{r}
 # non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
+graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_koval.RDS"))
 
 # sparse DGP
-graph_sparse <- readRDS(here::here("data/graph_sparse_synth.RDS"))
+graph_sparse <- readRDS(here::here("data/graph_sparse_koval.RDS"))
 ```
 
 ## Setting parameters
@@ -92,6 +92,8 @@ sim_pars <- list(
 ```{r data-generation}
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
+  
+
 
   # obtain fixed params
   SimDesign::Attach(fixed_objects)
@@ -123,7 +125,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      listify = TRUE,
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
-                     most_cent_diff_temp_min = 0.2)
+                     most_cent_diff_temp_min = 0.1)
   
   if(any(is.na(ml_sim$beta))){
     stop("Generation of Betas failed")
@@ -137,11 +139,26 @@ sim_generate <- function(condition, fixed_objects = NULL){
   true_cent <- centrality_mlvar_sim(ml_sim,
                                     sim_fn = "sim_gvar_loop")
 
+  # helper to only scale when sd is not 0
+  scale_nonz <- function(x) {
+    if (sd(x) == 0) return(x)
+    return(scale(x))
+  }
   
-  # Exctract and scale network features  
-  tempdens <- unlist(true_cent$dens_temp) |> scale()
-  outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale()
-  contdens <- unlist(true_cent$dens_cont) |> scale()
+  
+  # Extract and scale network features  
+  tempdens <- unlist(true_cent$dens_temp) |> scale_nonz()
+  if(sd(tempdens) == 0){
+    stop("No variation in tempdens")
+  }
+  outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale_nonz()
+  if(sd(outstrength) == 0){
+    stop("No variation in outstrength")
+  }
+  contdens <- unlist(true_cent$dens_cont) |> scale_nonz()
+  if(sd(contdens) == 0){
+    stop("No variation in contdens")
+  }
   
   
   # Simulate covariate with certain error
@@ -213,10 +230,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- graphicalVAR
   # Fit models
   # fit_gvar <- lapply(dat$data, function(x){
-  #   tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
+  #   tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x,
   #                              nLambda = 50,
   #                              verbose = FALSE,
-  #                              gamma = 0, 
+  #                              gamma = 0,
   #                              scale = FALSE))}, error = function(e) NA)
   # })
   # 
@@ -321,8 +338,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   if(any(is.na(fit_mlvar))){
     stop("mlVAR did not converge.")
   }
-  
-  
+
+
 
   # Obtain centralities
   cent_mlvar <- centrality_mlvar(fit_mlvar)
@@ -331,7 +348,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   outstrength_mlvar <- lapply(cent_mlvar$outstrength, function(x) unname(x))
   strength_mlvar <- lapply(cent_mlvar$strength, function(x) unname(x))
   outstrength_mlvar_first <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
-  
+
   # Create list of subject-specific estimates
   beta_mlvar <- lapply(1:n_id, function(i){
     mlVAR::getNet(fit_mlvar,
@@ -345,7 +362,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                   type = "contemporaneous",
                   nonsig = "show")
   })
-  
+
   # # Calculate fixed effects adjacency matrix
   adj_mat_beta <- ifelse(
     mlVAR::getNet(fit_mlvar,
@@ -1021,10 +1038,12 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 ```{r run-sim}
 # For testing
 # df_design_test <- df_design[2,]
-sim_pars$n_id <- 600
+sim_pars$n_id <- 200
 sim_pars$n_var <- 4
 n_var <- 4
-n_id <- 600
+n_id <- 200
+n_tp <- 200
+sim_pars$n_tp <- 200
 sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
 sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
 sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
@@ -1063,8 +1082,8 @@ sim_results_mlvar <- SimDesign::runSimulation(
                                                  ),
                                     save_results = TRUE,
                                     ncores = n_rep,
-                                    # debug = "analyse"
-                                    filename = "mlvar-prelim-n600",
+                                    debug = "generate",
+                                    filename = "mlvar-prelim-tp200",
                                     # save_seeds = TRUE
                                     )
 
@@ -1127,8 +1146,8 @@ Plot the regression:
 
 ```{r}
 data.frame(
-  est = sapply(res1$results[[4]]$mlvar$outstrength, function(x) x[1]),
-  true = sapply(res1$results[[4]]$true_cent$outstrength, function(x) x[1])
+  est = sapply(res1$results[[1]]$gvar$outstrength, function(x) x[1]),
+  true = sapply(res1$results[[1]]$true_cent$instrength, function(x) x[1])
 ) %>% 
   ggplot(aes(x = est, y = true)) + 
   geom_smooth(method = "lm")+

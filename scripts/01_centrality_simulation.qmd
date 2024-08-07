@@ -150,10 +150,25 @@ sim_generate <- function(condition, fixed_objects = NULL){
                                     sim_fn = "sim_gvar_loop")
 
   
-  # Exctract and scale network features  
-  tempdens <- unlist(true_cent$dens_temp) |> scale()
-  outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale()
-  contdens <- unlist(true_cent$dens_cont) |> scale()
+  # helper to only scale when sd is not 0
+  scale_nonz <- function(x) {
+    if (sd(x) == 0) return(x)
+    return(scale(x))
+  }
+  
+  # Extract and scale network features  
+  tempdens <- unlist(true_cent$dens_temp) |> scale_nonz()
+  if(sd(tempdens) == 0){
+    stop("No variation in tempdens")
+  }
+  outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale_nonz()
+  if(sd(outstrength) == 0){
+    stop("No variation in outstrength")
+  }
+  contdens <- unlist(true_cent$dens_cont) |> scale_nonz()
+  if(sd(contdens) == 0){
+    stop("No variation in contdens")
+  }
   
   
   # Simulate covariate with certain error
