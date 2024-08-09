@@ -1,7 +1,7 @@
 ---
 title: "simulation_fits_inspection"
 format: html
-editor: visual
+editor: source
 ---
 
 # Prep
@@ -76,9 +76,9 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:2){
-  l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_tempdens[[1]])$standardized.coefficients[2]
-  l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_tempdens[[2]])$standardized.coefficients[2]
-  l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_tempdens[[3]])$standardized.coefficients[2]
+  l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
+  l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
+  l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
 l_coefs %>% 
@@ -104,6 +104,61 @@ Reduce("+", Map("abs", Map("-", sim_res_4$results[[1]]$mlvar$fit_mlvar$beta,sim_
 # Contemporaneous Network
 Reduce("+", Map("abs", Map("-", sim_res_4$results[[1]]$mlvar$fit_mlvar$pcor,sim_res_4$results[[1]]$pcor))) / 200
 ```
+
+Create a long PDF with a heatmap of the differences for each individual, maybe we can find some patterns on why it didn't work:
+
+```{r}
+# Create a function to generate heatmaps and save them to a PDF
+generate_heatmaps <- function(true_matrices, estimated_matrices, output_file, n_ind) {
+  
+  # Check that both lists are of the same length
+  if (length(true_matrices) != length(estimated_matrices)) {
+    stop("The lists of matrices must have the same length.")
+  }
+  
+  # Open a PDF device
+  pdf(file = output_file, width = 8, height = 10)
+  
+  # Loop over each pair of matrices
+  for (i in 1:n_ind) {
+    
+    # Compute the difference matrix
+    diff_matrix <- true_matrices[[i]] - estimated_matrices[[i]]
+    
+    # Convert the difference matrix to a data frame for ggplot
+    diff_df <- reshape2::melt(diff_matrix)
+    
+    # Generate the heatmap
+    p <- ggplot(diff_df, aes(x = Var1, y = Var2, fill = value)) +
+      geom_tile() +
+      scale_fill_gradient2(low = "darkblue", mid = "white", high = "darkred", midpoint = 0) +
+      # plot the numerical value
+      geom_text(aes(label = round(value, 2)), color = "black", size = 3) +
+      labs(title = paste("Difference Matrix for Individual", i),
+           x = "",
+           y = "",
+           fill = "Difference") +
+      theme_minimal()
+    
+    # Print the plot to the PDF
+    print(p)
+  }
+  
+  # Close the PDF device
+  dev.off()
+}
+
+# Example usage
+# Assuming true_matrices and estimated_matrices are defined
+# true_matrices <- list(matrix(rnorm(25), nrow = 5), matrix(rnorm(25), nrow = 5))
+# estimated_matrices <- list(matrix(rnorm(25), nrow = 5), matrix(rnorm(25), nrow = 5))
+
+# Call the function
+generate_heatmaps(sim_res_4$results[[1]]$beta, sim_res_4$results[[1]]$mlvar$fit_mlvar$beta, "heatmaps.pdf", n_ind = 200)
+
+```
+
+
 
 ### Centrality
 
@@ -145,7 +200,6 @@ l_coefs %>%
 
 ```
 
-
 ## GIMME
 
 ### Regression Outcomes
@@ -170,4 +224,3 @@ l_coefs %>%
   ggplot(aes(x = reg_coef, y = value)) + 
   geom_point()
 ```
-

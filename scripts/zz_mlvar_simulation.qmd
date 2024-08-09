@@ -28,10 +28,10 @@ Load DGP based on estimated network structures:
 
 ```{r}
 # non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_koval.RDS"))
+graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
 
 # sparse DGP
-graph_sparse <- readRDS(here::here("data/graph_sparse_koval.RDS"))
+graph_sparse <- readRDS(here::here("data/graph_sparse_synth.RDS"))
 ```
 
 ## Setting parameters
@@ -1069,7 +1069,7 @@ sim_results_mlvar <- SimDesign::runSimulation(
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
                                     parallel = TRUE,
-                                    max_errors = 2,
+                                    max_errors = 3,
                                     packages = c("tidyverse", 
                                                  "gimme",
                                                  "mlVAR",
@@ -1083,7 +1083,7 @@ sim_results_mlvar <- SimDesign::runSimulation(
                                     save_results = TRUE,
                                     ncores = n_rep,
                                     debug = "generate",
-                                    filename = "mlvar-prelim-tp200",
+                                    filename = "mlvar-prelim-tp200"
                                     # save_seeds = TRUE
                                     )
 
