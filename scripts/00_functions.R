@@ -81,7 +81,7 @@ sim_gvar_loop <- function(graph,
         # ignore autoregressive effects
         beta_tmp <- beta[,,i]
         diag(beta_tmp) <- 0
-        centralities <- rowSums(abs(beta_tmp))/n_node
+        centralities <- colSums(abs(beta_tmp))/n_node
         # check if the difference between the most central and the second most central node
         # is large enough
         cent_check <- max(centralities) - sort(centralities, decreasing = TRUE)[2] < most_cent_diff_temp_min * max(centralities)
@@ -701,7 +701,8 @@ centrality_mlvar_sim <- function(simobj,
     
     #--- Obtain networks
     l_beta <- lapply(1:n_id, function(i){
-      simobj$model$Beta$subject[[i]][,,1]
+      # transpose to get the same format as graphicalVAR
+      t(simobj$model$Beta$subject[[i]][,,1])
     })
     
     l_pcor <- lapply(1:n_id, function(i){
@@ -711,6 +712,7 @@ centrality_mlvar_sim <- function(simobj,
     })
     
   }
+  
   if(sim_fn == "sim_gvar_loop"){
     #--- Prepare
     n_id <- dim(simobj$beta)[3]
@@ -741,17 +743,18 @@ centrality_mlvar_sim <- function(simobj,
   
   #--- Centrality
   # Important: in mlVAR, the lagged vars are rows, not columns
+  # this is only true for objects obtained with mlVAR::getNet
   outstrength <- lapply(l_beta, function(x){
     if(isTRUE(ignore_ar)){
       diag(x) <- 0
     }
-    rowSums(abs(x))/n_var
+    colSums(abs(x))/n_var
   })
   instrength <- lapply(l_beta, function(x){
     if(isTRUE(ignore_ar)){
       diag(x) <- 0
     }
-    colSums(abs(x))/n_var  
+    rowSums(abs(x))/n_var  
   })
   strength <- lapply(l_pcor, function(x){
     colSums(abs(x))/n_var
