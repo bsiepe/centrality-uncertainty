@@ -662,6 +662,7 @@ centrality_mlvar <- function(fit,
   
   #--- Centrality
   # Important: in mlVAR, the lagged vars are rows, not columns
+  # but only for the getNet function!
   outstrength <- lapply(l_beta, function(x){
     if(isTRUE(ignore_ar)){
       diag(x) <- 0

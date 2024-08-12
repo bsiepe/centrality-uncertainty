@@ -27,10 +27,10 @@ source(here::here("scripts", "00_functions.R"))
 Load DGP based on estimated network structures:  
 ```{r}
 # non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here::here("data/graph_nonsparse.RDS"))
+graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
 
 # sparse DGP
-graph_sparse <- readRDS(here::here("data/graph_sparse.RDS"))
+graph_sparse <- readRDS(here::here("data/graph_sparse_synth.RDS"))
 ```
 
 
@@ -266,7 +266,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Create list of subject-specific estimates
   beta_gvar <- lapply(fit_gvar, function(x){
-    t(x$beta[,-1])
+    x$beta[,-1]
   })
   pcor_gvar <- lapply(fit_gvar, function(x){
     x$PCC
@@ -314,7 +314,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Create list of subject-specific estimates
   beta_gimme <- lapply(fit_gimme$path_est_mats, function(x){
-    t(x[,1:n_var])
+    x[,1:n_var]
   })
   
   if(isFALSE(gimme_var_only)){
@@ -362,10 +362,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Create list of subject-specific estimates
   beta_mlvar <- lapply(1:n_id, function(i){
-    mlVAR::getNet(fit_mlvar,
+    t(mlVAR::getNet(fit_mlvar,
                   subject = i,
                   type = "temporal",
-                  nonsig = "show")
+                  nonsig = "show"))
   })
   pcor_mlvar <- lapply(1:n_id, function(i){
     mlVAR::getNet(fit_mlvar,
@@ -376,9 +376,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # # Calculate fixed effects adjacency matrix
   adj_mat_beta <- ifelse(
-    mlVAR::getNet(fit_mlvar,
+    t(mlVAR::getNet(fit_mlvar,
        type = "temporal",
-       nonsig = "hide") != 0, 1, 0)
+       nonsig = "hide") != 0, 1, 0))
   adj_mat_pcor <- ifelse(
     mlVAR::getNet(fit_mlvar,
        type = "contemporaneous",
@@ -549,11 +549,13 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 # Summary
 
 To note about data structure:
-- GVAR fit: already transposed into rows as lagged, cols as contemp
-- mlVAR fit: rows as lagged, cols as contemp
-- gimme fit: already transposed into rows as lagged, cols as contemp
+- GVAR fit: cols as lagged
+- mlVAR fit: rows as lagged, cols as contemp --> now transposed
+- gimme fit: cols as lagged
 - bmlVAR fit: different data structure anyway
 
+
+However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 
 ```{r summarize}
 sim_summarise <- function(condition, results, fixed_objects = NULL){
