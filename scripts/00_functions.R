@@ -1020,23 +1020,37 @@ extract_estimates <- function(fit, par) {
 
 
 # Extract estimates for all parameters
-extract_all_estimates <- function(fit, n_id, n_var) {
+# if transpose_beta is TRUE, the beta estimates are transposed
+# which means that they then have the lagged variables as columns
+extract_all_estimates <- function(fit, 
+                                  n_id, 
+                                  n_var, 
+                                  transpose_beta = FALSE) {
+  browser()
   # compute estimates
   beta_est <- extract_estimates(fit, "Beta") %>%
-    map(function(x){
-      est_vector2matrix(x, n_id, n_var)})
+    map(function(x) {
+      est_vector2matrix(x, n_id, n_var)
+    })
+  if(isTRUE(transpose_beta)){
+    beta_est <- map(beta_est, ~map(.x, t))
+  }
+  
   pcor_est <-  extract_estimates(fit, "Rho_vec") %>%
-    map(function(x){
-      est_vector2vector(x, n_id, (n_var*(n_var-1))/2)})
+    map(function(x) {
+      est_vector2vector(x, n_id, (n_var * (n_var - 1)) / 2)
+    })
   pcor_centrality_est <-
     extract_estimates(fit, "Rho_centrality") %>%
-    map(function(x){
-      est_vector2vector(x, n_id, n_var)})
+    map(function(x) {
+      est_vector2vector(x, n_id, n_var)
+    })
   contdens_est <-  extract_estimates(fit, "Rho_density")
   tempdens_est <-  extract_estimates(fit, "Beta_density")
-  outstrength_est <-  extract_estimates(fit, "Beta_out_strength") %>% 
-    map(function(x){
-      est_vector2vector(x, n_id, n_var)})
+  outstrength_est <-  extract_estimates(fit, "Beta_out_strength") %>%
+    map(function(x) {
+      est_vector2vector(x, n_id, n_var)
+    })
   regression_slope_est <-
     extract_estimates(fit, "reg_slope_density_z")
   regression_intercept_est <-

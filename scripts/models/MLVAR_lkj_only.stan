@@ -125,8 +125,8 @@ transformed parameters{
       Beta_in_strength[i,k] = 0; // Initialize to zero
       for(j in 1:K){
         if(j != k){
-          Beta_out_strength[i,k] += abs(Beta[i,j,k]);
-          Beta_in_strength[i,k]  += abs(Beta[i,k,j]);
+          Beta_out_strength[i,k] += abs(Beta[i,j,k]); // rowsums
+          Beta_in_strength[i,k]  += abs(Beta[i,k,j]); // colsums
         }
       }
       // Divide by number of predictors to obtain the mean

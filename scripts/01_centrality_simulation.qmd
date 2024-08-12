@@ -447,9 +447,13 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     stop("BmlVAR model failed.")
   }
   
+  # Transpose beta matrices for later summaries
+  # in the DGP, cols represent lagged vars
+  # but in BmlVAR, rows represent lagged vars
   ests_bmlvar <- extract_all_estimates(fit_bmlvar,
                                        n_id = n_id, 
-                                       n_var = n_var)
+                                       n_var = n_var, 
+                                       transpose_beta = TRUE)
   
   # Obtain centralities
   dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
@@ -549,10 +553,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 # Summary
 
 To note about data structure:
-- GVAR fit: cols as lagged
+- GVAR fit: cols as lagged, also in the DGP
 - mlVAR fit: rows as lagged, cols as contemp --> now transposed
 - gimme fit: cols as lagged
-- bmlVAR fit: different data structure anyway
+- bmlVAR fit: different data structure, but uses rows as lagged
 
 
 However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
