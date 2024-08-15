@@ -1026,7 +1026,7 @@ extract_all_estimates <- function(fit,
                                   n_id, 
                                   n_var, 
                                   transpose_beta = FALSE) {
-  browser()
+  
   # compute estimates
   beta_est <- extract_estimates(fit, "Beta") %>%
     map(function(x) {

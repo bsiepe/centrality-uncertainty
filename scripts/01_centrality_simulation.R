@@ -1,13 +1,13 @@
----
-title: "Centrality Simulation"
-format: html
----
-
-# Background
-This script contains the `SimDesign` code for the simulation study. 
-
-We first load all relevant packages: 
-```{r packages}
+#' ---
+#' title: "Centrality Simulation"
+#' format: html
+#' ---
+#' 
+#' # Background
+#' This script contains the `SimDesign` code for the simulation study. 
+#' 
+#' We first load all relevant packages: 
+## ----packages----------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -15,31 +15,31 @@ library(graphicalVAR)
 library(gimme)
 library(here)
 source(here::here("scripts", "00_functions.R"))
-```
 
-
-
-
-# Data Generation
-
-## Data-Generating Processes
-
-Load DGP based on estimated network structures:  
-```{r}
+#' 
+#' 
+#' 
+#' 
+#' # Data Generation
+#' 
+#' ## Data-Generating Processes
+#' 
+#' Load DGP based on estimated network structures:  
+## ----------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
 
 # sparse DGP
 graph_sparse <- readRDS(here::here("data/graph_sparse_synth.RDS"))
-```
 
-
-
-## Setting parameters
-
-We define the conditions and the fixed parameters for the simulation.
-
-```{r params}
+#' 
+#' 
+#' 
+#' ## Setting parameters
+#' 
+#' We define the conditions and the fixed parameters for the simulation.
+#' 
+## ----params------------------------------------------------------------------------------------------------------------------------------
 # Type of DGP
 dgp <- c("sparse", "dense")
 
@@ -86,10 +86,10 @@ sim_pars <- list(
   graph_sparse = graph_sparse,
   gimme_var_only = gimme_var_only
 )
-```
 
-Pre-compiling the Stan model
-```{r precompile}
+#' 
+#' Pre-compiling the Stan model
+## ----precompile--------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -98,13 +98,13 @@ sim_pars$mlvar_model <-
     model_name = model_name
   )
 
-```
 
-
-
-
-## Simulating Data
-```{r data-generation}
+#' 
+#' 
+#' 
+#' 
+#' ## Simulating Data
+## ----data-generation---------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -220,12 +220,12 @@ sim_generate <- function(condition, fixed_objects = NULL){
   
 }
 
-```
 
-
-# Analysis
-
-```{r data-analysis}
+#' 
+#' 
+#' # Analysis
+#' 
+## ----data-analysis-----------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -547,22 +547,22 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
 }
 
-```
 
-
-
-# Summary
-
-To note about data structure:
-- GVAR fit: cols as lagged, also in the DGP
-- mlVAR fit: rows as lagged, cols as contemp --> now transposed
-- gimme fit: cols as lagged
-- bmlVAR fit: different data structure, but uses rows as lagged
-
-
-However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
-
-```{r summarize}
+#' 
+#' 
+#' 
+#' # Summary
+#' 
+#' To note about data structure:
+#' - GVAR fit: cols as lagged, also in the DGP
+#' - mlVAR fit: rows as lagged, cols as contemp --> now transposed
+#' - gimme fit: cols as lagged
+#' - bmlVAR fit: different data structure, but uses rows as lagged
+#' 
+#' 
+#' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
+#' 
+## ----summarize---------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -1047,12 +1047,12 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 }
 
 
-```
 
-
-# Executing Simulation
-
-```{r run-sim}
+#' 
+#' 
+#' # Executing Simulation
+#' 
+## ----run-sim-----------------------------------------------------------------------------------------------------------------------------
 # For testing
 df_design_test <- df_design[3,]
 sim_pars$n_id <- 150
@@ -1068,9 +1068,9 @@ n_id <- 150
 
 
 n_rep <- 2
-library(future)
-library(progressr)
-future::plan(multisession, workers = n_rep)
+# library(future)
+# library(progressr)
+# future::plan(multisession, workers = n_rep)
 # handlers("rstudio")
 # handlers('cli')
 
@@ -1083,7 +1083,7 @@ sim_results <- SimDesign::runSimulation(
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    parallel = "future",
+                                    parallel = TRUE,
                                     max_errors = 2,
                                     packages = c("tidyverse", 
                                                  "gimme",
@@ -1101,17 +1101,17 @@ sim_results <- SimDesign::runSimulation(
                                     # save_seeds = TRUE
                                     )
 
-plan(sequential)
+# plan(sequential)
 
 SimClean()
 saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
 
-```
 
-# Visualization
-
-TEMPORARY: Remove all Rhat columns, way too many in the pilot sim_results
-```{r}
+#' 
+#' # Visualization
+#' 
+#' TEMPORARY: Remove all Rhat columns, way too many in the pilot sim_results
+## ----------------------------------------------------------------------------------------------------------------------------------------
 sim_results <- readRDS(here("output/pilot_sim_results_clean_2104.RDS"))
 sim_res_cut <- sim_results %>%
   select(-contains("rhat")) %>%
@@ -1119,13 +1119,13 @@ sim_res_cut <- sim_results %>%
 
 # sim_res_cut <- sim_results
 
-```
 
-
-
-
-Prepare dataframe 
-```{r}
+#' 
+#' 
+#' 
+#' 
+#' Prepare dataframe 
+## ----------------------------------------------------------------------------------------------------------------------------------------
 sr_edit <- sim_res_cut %>% 
   mutate(dgp = factor(dgp, levels = c("dense", "sparse")),
          heterogeneity = factor(heterogeneity, levels = c("low", "high"))) %>% 
@@ -1160,26 +1160,26 @@ sr_edit <- sim_res_cut %>%
 
 
 
-```
 
-
-
-Prepare different colors and settings for visualization: 
-```{r viz-prep}
+#' 
+#' 
+#' 
+#' Prepare different colors and settings for visualization: 
+## ----viz-prep----------------------------------------------------------------------------------------------------------------------------
 meth_colors <- ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)]
 
-```
 
-
-
-
-
-
-## Point Estimates
-
-Plot point estimate recovery (RMSE), not directly relevant for the manuscript, but maybe helpful to understand the overall performance of the different methods.
-
-```{r viz-point-estimates}
+#' 
+#' 
+#' 
+#' 
+#' 
+#' 
+#' ## Point Estimates
+#' 
+#' Plot point estimate recovery (RMSE), not directly relevant for the manuscript, but maybe helpful to understand the overall performance of the different methods.
+#' 
+## ----viz-point-estimates-----------------------------------------------------------------------------------------------------------------
 plot_mse <- sr_edit %>% 
   mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
   mutate(outcome = case_when(
@@ -1223,11 +1223,11 @@ plot_mse <- sr_edit %>%
 
 plot_mse
 
-```
 
-Plot Bias:
-
-```{r viz-bias}
+#' 
+#' Plot Bias:
+#' 
+## ----viz-bias----------------------------------------------------------------------------------------------------------------------------
 plot_bias <- sr_edit %>% 
   mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
   mutate(outcome = case_when(
@@ -1270,16 +1270,16 @@ plot_bias <- sr_edit %>%
        y = "Bias of Network Estimation")
 
 plot_bias
-```
 
-
-
-
-## Centrality
-
-### Plot most central identical 
-
-```{r viz-most-central}
+#' 
+#' 
+#' 
+#' 
+#' ## Centrality
+#' 
+#' ### Plot most central identical 
+#' 
+## ----viz-most-central--------------------------------------------------------------------------------------------------------------------
 plot_mostcentral <- sr_edit %>% 
   # if mcse is missing, set to 0
   mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
@@ -1327,12 +1327,12 @@ ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 5, width = 9,
 
 plot_mostcentral
 
-```
 
-
-### Plot rank correlation of centrality measures
-
-```{r viz-rank-correlation}
+#' 
+#' 
+#' ### Plot rank correlation of centrality measures
+#' 
+## ----viz-rank-correlation----------------------------------------------------------------------------------------------------------------
 plot_rankcor <- sr_edit %>% 
   # if mcse is missing, set to 0
   mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
@@ -1380,17 +1380,17 @@ plot_rankcor <- sr_edit %>%
 plot_rankcor
 
 
-``` 
 
-Here seems to be something wrong
-
-## Regression
-
-Need to find a way to nest the different strengths of regression coefficient
-
-### Plot power of regression
-Prep data
-```{r viz-regression-power-prep}
+#' 
+#' Here seems to be something wrong
+#' 
+#' ## Regression
+#' 
+#' Need to find a way to nest the different strengths of regression coefficient
+#' 
+#' ### Plot power of regression
+#' Prep data
+## ----viz-regression-power-prep-----------------------------------------------------------------------------------------------------------
 # Split data set into three based on true effect
 power_list <- sr_edit %>% 
   filter(!str_detect(pm, "poweroneside")) %>% 
@@ -1413,11 +1413,11 @@ power_list <- sr_edit %>%
   separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
   # split data set into list based on true effect
   split(.$true_effect)
-```
 
-
-Create plot under the Null
-```{r viz-regression-power0}
+#' 
+#' 
+#' Create plot under the Null
+## ----viz-regression-power0---------------------------------------------------------------------------------------------------------------
 plot0 <- power_list[[1]] %>% 
   ggplot(aes(x = method, 
              y = mean, 
@@ -1447,10 +1447,10 @@ plot0 <- power_list[[1]] %>%
        y = "False-Positive Rate")
 plot0
 
-```
 
-Create plot for .2 
-```{r viz-regression-power2}
+#' 
+#' Create plot for .2 
+## ----viz-regression-power2---------------------------------------------------------------------------------------------------------------
 plot2 <- power_list[[2]] %>% 
   ggplot(aes(x = method, 
              y = mean, 
@@ -1479,11 +1479,11 @@ plot2 <- power_list[[2]] %>%
        y = "Power")
 
 
-```
 
-
-Create plot for .4
-```{r viz-regression-power4}
+#' 
+#' 
+#' Create plot for .4
+## ----viz-regression-power4---------------------------------------------------------------------------------------------------------------
 plot4 <- power_list[[3]] %>% 
   ggplot(aes(x = method, 
              y = mean, 
@@ -1511,11 +1511,11 @@ plot4 <- power_list[[3]] %>%
        colour = "Method",
        y = "Power")
 plot4
-```
 
-
-Combine them with patchwork
-```{r viz-regression-power-combined}
+#' 
+#' 
+#' Combine them with patchwork
+## ----viz-regression-power-combined-------------------------------------------------------------------------------------------------------
 plot_power_combined <- cowplot::plot_grid(plot0, plot2, plot4, ncol = 1,
                                           labels = c("True Effect: 0", 
                                                      "True Effect: 0.2",
@@ -1526,12 +1526,12 @@ ggsave("plot_power_combined_mock.svg", plot_power_combined, height = 12, width =
 
 plot_power_combined
 
-```
 
-
-### Plot RMSE of regression
-
-```{r viz-regression-rmse}
+#' 
+#' 
+#' ### Plot RMSE of regression
+#' 
+## ----viz-regression-rmse-----------------------------------------------------------------------------------------------------------------
 rmse_list <- sr_edit %>% 
   filter(str_detect(pm, "rmsereg")) %>% 
   mutate(outcome = case_when(
@@ -1551,11 +1551,11 @@ rmse_list <- sr_edit %>%
   separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
   # split data set into list based on true effect
   split(.$true_effect)
-```
 
-
-Create plot under the Null
-```{r viz-regression-rmse0}
+#' 
+#' 
+#' Create plot under the Null
+## ----viz-regression-rmse0----------------------------------------------------------------------------------------------------------------
 plot0_rmsereg <- rmse_list[[1]] %>% 
   ggplot(aes(x = method, 
              y = mean, 
@@ -1585,10 +1585,10 @@ plot0_rmsereg <- rmse_list[[1]] %>%
        y = "RMSE")
 
 
-```
 
-Create plot for .2 
-```{r viz-regression-rmse2}
+#' 
+#' Create plot for .2 
+## ----viz-regression-rmse2----------------------------------------------------------------------------------------------------------------
 plot2_rmsereg <- rmse_list[[2]] %>% 
   ggplot(aes(x = method, 
              y = mean, 
@@ -1617,11 +1617,11 @@ plot2_rmsereg <- rmse_list[[2]] %>%
        y = "RMSE")
 
 
-```
 
-
-Create plot for .4
-```{r viz-regression-rmse4}
+#' 
+#' 
+#' Create plot for .4
+## ----viz-regression-rmse4----------------------------------------------------------------------------------------------------------------
 plot4_rmsereg <- rmse_list[[3]] %>% 
   ggplot(aes(x = method, 
              y = mean, 
@@ -1650,11 +1650,11 @@ plot4_rmsereg <- rmse_list[[3]] %>%
        y = "RMSE")
 
 plot4_rmsereg
-```
 
-Combine Plots:
-
-```{r plot-rmsereg-combined}
+#' 
+#' Combine Plots:
+#' 
+## ----plot-rmsereg-combined---------------------------------------------------------------------------------------------------------------
 plot_rmse_combined <- cowplot::plot_grid(plot0_rmsereg, 
                                          plot2_rmsereg, 
                                          plot4_rmsereg, 
@@ -1667,27 +1667,27 @@ ggsave("plot_reg_rmse_combined_mock.svg", plot_rmse_combined, height = 12, width
 
 plot_rmse_combined
 
-```
+
+#' 
+#' 
+#' 
+#' 
+#' # Create Overview Table for Supplement
+#' Create one long overview table over all performance measures for the supplement.
+#' Probably will be long and unwieldy. 
+#' 
+## ----overview-table----------------------------------------------------------------------------------------------------------------------
 
 
-
-
-# Create Overview Table for Supplement
-Create one long overview table over all performance measures for the supplement.
-Probably will be long and unwieldy. 
-
-```{r overview-table}
-
-``` 
-
-
-# Write to standard R script
-
-To run the simulation on the server, it can be easier to just execute an R script.
-
-```{r}
+#' 
+#' 
+#' # Write to standard R script
+#' 
+#' To run the simulation on the server, it can be easier to just execute an R script.
+#' 
+## ----------------------------------------------------------------------------------------------------------------------------------------
 knitr::purl(here("scripts", "01_centrality_simulation.qmd"), 
             output = here("scripts", "01_centrality_simulation.R"),
             documentation = 2)
-```
 
+#' 
