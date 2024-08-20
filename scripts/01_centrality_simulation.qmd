@@ -435,10 +435,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 3,
+  chains = 4,
   cores = 1,
-  warmup = 300,
-  iter = 600,
+  warmup = 400,
+  iter = 500,
   init = 0,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
