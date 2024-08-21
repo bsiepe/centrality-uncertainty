@@ -142,7 +142,8 @@ sim_gvar_loop <- function(graph,
         tryCatch({
           graphicalVAR::graphicalVARsim(nTime = n_time,
                                         beta = beta[, , i],
-                                        kappa = kappa[, , i])
+                                        kappa = kappa[, , i],
+                                        warmup = 250)
         }, error = function(e)
           NA)
     } else {
@@ -150,7 +151,8 @@ sim_gvar_loop <- function(graph,
       counter <- counter + 1
       data[[i]] <- graphicalVAR::graphicalVARsim(nTime = n_time,
                                                  beta = beta[, , i],
-                                                 kappa = kappa[, , i])
+                                                 kappa = kappa[, , i],
+                                                 warmup = 250)
       if(!is.null(data[[i]])) break
       
       
