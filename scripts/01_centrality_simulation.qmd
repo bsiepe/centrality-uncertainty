@@ -472,7 +472,25 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     regression_slope = ests_bmlvar$regression_slope_est)
   
   # save summary 
-  summary_bmlvar <- rstan::summary(fit_bmlvar)
+  summary_bmlvar <- rstan::summary(fit_bmlvar,
+                                   pars = c("Beta",
+                                            "Beta_out_strength",
+                                            "mu_Beta",
+                                            "sigma_Beta",
+                                            "mu_Intercepts",
+                                            "sigma_Intercepts",
+                                            "reg_intercept",
+                                            "reg_slope_density",
+                                            "reg_residual",
+                                            "Intercepts",
+                                            "Sigma",
+                                            "Rho_vec",
+                                            "Beta_out_strength",
+                                            "Beta_in_strength",
+                                            "Rho_centrality",
+                                            "mu_regression",
+                                            "reg_slope_density_z",
+                                            "reg_intercept_z"))
   
   # convergence diagnostics
   rhat_bmlvar_tmp <- summary_bmlvar$summary %>% as.data.frame() %>% pull(Rhat)
