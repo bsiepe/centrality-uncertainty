@@ -425,7 +425,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     idx_rho = array(idx_rho, dim = length(idx_rho)),
     Y = Y,
     reg_covariate = reg_data,
-    sparsity = 1
+    sparsity = 2
   )
   
   
@@ -440,7 +440,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   warmup = 400,
   iter = 500,
   init = 0,
-  control = list(adapt_delta = 0.8),
+  control = list(adapt_delta = 0.95),
   verbose = FALSE
   )
   
@@ -550,7 +550,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       strength = strength_bmlvar,
       reg_bmlvar = reg_bmlvar,
       ests_bmlvar = ests_bmlvar,
-      summary_bmlvar = summary_bmlvar,
+      # delete the chain summary of individual chains
+      summary_bmlvar = summary_bmlvar$summary,
       rhat_bmlvar_mean = rhat_bmlvar_mean,
       rhat_bmlvar_11 = rhat_bmlvar_11,
       divtrans_bmlvar = divtrans_bmlvar
@@ -1704,8 +1705,8 @@ Probably will be long and unwieldy.
 To run the simulation on the server, it can be easier to just execute an R script.
 
 ```{r}
-knitr::purl(here("scripts", "01_centrality_simulation.qmd"), 
-            output = here("scripts", "01_centrality_simulation.R"),
+knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
+            output = here::here("scripts", "01_centrality_simulation.R"),
             documentation = 2)
 ```
 
