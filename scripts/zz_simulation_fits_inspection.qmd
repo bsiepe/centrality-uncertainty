@@ -30,7 +30,23 @@ ut <- function(x){
 sim_res_4$results[[1]]$bmlvar$fit_bmlvar$pcor[[2]]
 ut(sim_res_4$results[[1]]$pcor[[2]])
 
+
 ```
+
+
+Look at temporal fit:
+
+```{r}
+# Look at absolute differences across all individuals
+Reduce("+", Map("abs", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, sim_res_4$results[[1]]$beta))) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
+
+# Only look at bias, not absolute
+Reduce("+", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, sim_res_4$results[[1]]$beta)) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
+
+
+```
+
+
 
 ## Regression outcomes
 
