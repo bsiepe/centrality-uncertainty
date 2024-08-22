@@ -192,7 +192,7 @@ model {
   int position_Y = 1; // position counter for the data
   for (i in 1:I) {
     // Precision Matrix prior
-    L_Theta[i] ~ lkj_corr_cholesky(1); // prior on L_Theta
+    L_Theta[i] ~ lkj_corr_cholesky(4); // prior on L_Theta
     
     //// Likelihood //////////////////////////////////////////////////////////
     
