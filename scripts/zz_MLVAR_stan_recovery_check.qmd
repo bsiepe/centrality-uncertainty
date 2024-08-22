@@ -7,8 +7,8 @@ format: html
 
 ```{r setup, include = FALSE}
 # Libraries
-library(tidyverse)
 library(plyr)
+library(tidyverse)
 library(rmarkdown)
 library(graphicalVAR)
 library(mlVAR)
@@ -23,7 +23,7 @@ library(gridExtra)
 library(psych)
 library(bayestestR)
 
-source(here("scripts", "00_functions.R"))
+source(here::here("scripts", "00_functions.R"))
 set.seed(35032)
 ```
 
@@ -49,7 +49,7 @@ beta_sd <- 0.1
 kappa_sd <- 0.1
 
 # non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here("data","graph_nonsparse.RDS"))
+graph_nonsparse <- readRDS(here("data","graph_nonsparse_synth.RDS"))
 # sparse DGP
 #graph_sparse <- readRDS(here("data/graph_sparse.RDS"))
 
@@ -61,7 +61,11 @@ ml_sim <- sim_gvar_loop(
                      n_person = I,
                      n_time = n_t,
                      n_node = K,
-                     max_try = 10000)
+                     max_try = 10000,
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.1
+                     )
 
 # Obtain individual models and data
 Y <- ml_sim$data %>% 
@@ -283,7 +287,6 @@ plot_neff <-
     title = element_text(size = 16, face = "bold")
   )
 # Rhat
-# BS: Why does this have missings?
 plot_rhat <-
   bayesplot::mcmc_rhat_hist(bayesplot::rhat(mlvar_fit)) +
   labs(title = "B") +

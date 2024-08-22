@@ -136,7 +136,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      n_node = n_var,
                      max_try = 10000,
                      listify = TRUE,
-                     sparse_sim = TRUE)
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.1)
   if(any(is.na(ml_sim$beta))){
     stop("Generation of Betas failed")
   }
