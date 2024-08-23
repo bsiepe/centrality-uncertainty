@@ -1,5 +1,6 @@
 
 fits/
+fits/mlvar_fit.rds
 scripts/graveyard.qmd
 
 .Rproj.user
@@ -7,11 +8,3 @@ scripts/graveyard.qmd
 .RData
 .Ruserdata
 
-fits/mlvar_fit.rds
-fits/mlvar_fit.rds
-fits/mlvar_fit.rds
-fits/mlvar_fit.rds
-fits/mlvar_fit.rds
-fits/mlvar_fit.rds
-/fits
-fits/mlvar_fit.rds
