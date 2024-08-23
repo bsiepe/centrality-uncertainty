@@ -26,8 +26,8 @@ parameters {
   // Contemporaneous: Partial Correlations
   array[I] cholesky_factor_corr[K] L_Theta; // cholesky factor of the correlation matrix of innovations
   // Contemporaneous: Variances
-  matrix<lower=0>[I,K] theta_sd_raw; // SDs of the innovations
-  real<lower=0> sigma_theta_sd; // SDs of the innovation SDs
+  matrix<lower=0>[I,K] theta_sd_raw; // SDs of the innovations, half-t
+  real<lower=0> sigma_theta_sd; // only one SD for all innovation SDs, half-t
   // Regression
   vector[P] reg_intercept;   // Intercept of Regression
   vector[P] reg_slope_density; // Slope of Regression
@@ -91,7 +91,9 @@ transformed parameters{
   // Contemporaneous ///////////////////////////////////////////////////
     
     // Covariance matrix from cholesky corr matrix and SDs
-    theta_sd[i,] = sigma_theta_sd .* theta_sd_raw[i,];
+    
+    // SDs of the innovations, half-t, so there is no mu_theta_sd, shared hyper-prior SD
+    theta_sd[i,] = theta_sd_raw[i,] * sigma_theta_sd;
     // Correlation Matrix
     Sigma[i] = multiply_lower_tri_self_transpose(L_Theta[i]); 
     // Precision matrix from covariance matrix
