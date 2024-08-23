@@ -7,9 +7,13 @@ sim_gvar_loop <- function(graph,
                           n_person,
                           n_time,
                           n_node,
+                          # which package is used to simulate the data
+                          # either graphicalVAR or mlVAR
+                          sim_pkg = "graphicalVAR",
                           max_try = 1000,
                           sparse_sim = FALSE,
                           failsafe = FALSE,
+                          # if listify is TRUE, convert 3D-Array to list
                           listify = FALSE,
                           # should there be a minimum difference between the most central
                           # and the second most central node in the temporal network
@@ -137,27 +141,56 @@ sim_gvar_loop <- function(graph,
         }
     }
     
-    if (failsafe) {
-      data[[i]] <-
-        tryCatch({
-          graphicalVAR::graphicalVARsim(nTime = n_time,
-                                        beta = beta[, , i],
-                                        kappa = kappa[, , i],
-                                        warmup = 250)
-        }, error = function(e)
-          NA)
-    } else {
-      repeat{
-      counter <- counter + 1
-      data[[i]] <- graphicalVAR::graphicalVARsim(nTime = n_time,
-                                                 beta = beta[, , i],
-                                                 kappa = kappa[, , i],
-                                                 warmup = 250)
-      if(!is.null(data[[i]])) break
-      
-      
+    if(sim_pkg == "graphicalVAR"){
+      if (failsafe) {
+        data[[i]] <-
+          tryCatch({
+            graphicalVAR::graphicalVARsim(nTime = n_time,
+                                          beta = beta[, , i],
+                                          kappa = kappa[, , i],
+                                          warmup = 250)
+          }, error = function(e)
+            NA)
+      } else {
+        repeat{
+          counter <- counter + 1
+          data[[i]] <- graphicalVAR::graphicalVARsim(nTime = n_time,
+                                                     beta = beta[, , i],
+                                                     kappa = kappa[, , i],
+                                                     warmup = 250)
+          if(!is.null(data[[i]])) break
+          
+          
+        }
+      }
     }
+    if(sim_pkg == "mlVAR"){
+      if (failsafe) {
+        data[[i]] <-
+          tryCatch({
+            mlVAR::simulateVAR(nT = n_time,
+                               pars = beta[, , i],
+                               # means = rnorm(n = n_node, mean = 0, sd = 0.3),
+                               # residuals = solve(kappa[,,i]),
+                               burnin = 250)
+          }, error = function(e)
+            NA)
+      } else {
+        repeat{
+          counter <- counter + 1
+          data[[i]] <- mlVAR::simulateVAR(nT = n_time,
+                                          pars = beta[, , i],
+                                          # means = (n = n_node, mean = 0, sd = 0.3),
+                                          # kappa = kappa[, , i],
+                                          # residuals = solve(kappa[,,i]),
+                                          burnin = 250)
+          if(!is.null(data[[i]])) break
+          
+          
+        }
+      }
     }
+
   }
   ret <- list()
   if(isTRUE(listify)) {
