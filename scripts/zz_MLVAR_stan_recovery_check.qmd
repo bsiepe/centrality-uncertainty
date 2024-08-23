@@ -245,18 +245,18 @@ n_chains <- 4
 # Run sampler
 mlvar_fit <- rstan::sampling(
   object = mlvar_model,
-  pars = c("Beta_raw",
-           "Intercepts_raw",
-           "theta_sd_raw",
-           "lp__"),
-  include = FALSE,
+  # pars = c("Beta_raw",
+  #          "Intercepts_raw",
+  #          "theta_sd_raw",
+  #          "lp__"),
+  # include = FALSE,
   data = stan_data,
   seed = 2023,
   chains = 4,
   cores = n_chains,
-  warmup = 500,
-  iter = 1000,
-  init = 0.01,
+  warmup = 400,
+  iter = 800,
+  init = 0.1,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
 )
@@ -270,6 +270,12 @@ saveRDS(mlvar_fit, here("fits", paste0(model_name, "_fit.rds")))
 
 ```{r}
 mlvar_fit <- readRDS(here("fits", "mlvar_fit.rds"))
+```
+
+```{r}
+param_ests <- summary(mlvar_fit)$summary %>% 
+  as.data.frame() %>% 
+  rownames_to_column("parameter")
 ```
 
 ## Effective sample size (ESS) & Rhat Plots
@@ -300,15 +306,50 @@ plot_rhat <-
 # Combined plot
 plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
 ```
+
+
+### Sampler Diagnostics
 ```{r}
 rstan::check_hmc_diagnostics(mlvar_fit)
 ```
 
+
 ```{r}
-param_ests <- summary(mlvar_fit)$summary %>% 
-  as.data.frame() %>% 
-  rownames_to_column("parameter")
+lp <- log_posterior(mlvar_fit)
+np <- nuts_params(mlvar_fit)
+mcmc_nuts_divergence(np, lp)
 ```
+
+### Trace Plots
+```{r}
+pars <- c(
+  "Beta",
+  "Beta_out_strength",
+  "mu_Beta",
+  "sigma_Beta",
+  "mu_Intercepts",
+  "sigma_Intercepts",
+  "reg_intercept",
+  "reg_slope_density",
+  "reg_residual",
+  "Intercepts",
+  "Sigma",
+  "Rho_vec",
+  "Beta_out_strength",
+  "Beta_in_strength",
+  "Rho_centrality",
+  "mu_regression"
+)
+div_style <- parcoord_style_np(div_color = "green", div_size = .5, div_alpha = 1)
+
+for(x in 1:length(pars)) {
+  posterior <- as.array(mlvar_fit, pars[x])
+  
+  print(mcmc_parcoord(posterior, np = np, alpha = .1, np_style = div_style))
+}
+```
+
+
 
 ## Parameter Recovery
 ### Betas

@@ -14,25 +14,20 @@ data {
   matrix[I,P] reg_covariate; // regression outcome
 }
 ////////////////////////////////////////////////////////////////////////////////
-transformed data{
-
-}
-////////////////////////////////////////////////////////////////////////////////
 parameters {
   // Temporal
   array[I] matrix<lower=-pi()/2, upper=pi()/2>[K,K] Beta_raw; // raw Beta matrix
   matrix[K,K] mu_Beta; // means of Betas
-  matrix[K,K] sigma_Beta; // SDs of Betas
+  matrix<lower=0>[K,K] sigma_Beta; // SDs of Betas
   matrix[I,K] Intercepts_raw; // raw intercepts
   vector[K] mu_Intercepts; // means of the intercepts
-  vector[K] sigma_Intercepts; // SDs of the intercepts
+  vector<lower=0>[K] sigma_Intercepts; // SDs of the intercepts
   
   // Contemporaneous: Partial Correlations
   array[I] cholesky_factor_corr[K] L_Theta; // cholesky factor of the correlation matrix of innovations
   // Contemporaneous: Variances
-  matrix[I,K] theta_sd_raw; // SDs of the innovations
-  row_vector[K] mu_theta_sd; // means of the innovation SDs
-  row_vector[K] sigma_theta_sd; // SDs of the innovation SDs
+  matrix<lower=0>[I,K] theta_sd_raw; // SDs of the innovations
+  real<lower=0> sigma_theta_sd; // SDs of the innovation SDs
   // Regression
   vector[P] reg_intercept;   // Intercept of Regression
   vector[P] reg_slope_density; // Slope of Regression
@@ -76,27 +71,27 @@ transformed parameters{
       // lowest sparsity level
       // wide normal prior on Beta means
       // high variance of random effects
-      Beta[i] = mu_Beta + 0.3*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+      Beta[i] = mu_Beta + sigma_Beta .* tan(Beta_raw[i]); 
     }
     if(sparsity == 2){
       // medium sparsity level
       // narrow, fat-tailed prior on Beta means
       // low variance of random effects      
-      Beta[i] = 0.1*mu_Beta + 0.1*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+      Beta[i] = 0.1*mu_Beta + .5 .* sigma_Beta .* tan(Beta_raw[i]); 
     }
     if(sparsity == 3){
       // high sparsity level
       // Beta means are fixed to zero
       // high variance of random effects to compensate fixed means
-      Beta[i] = 0 + 0.3*exp(sigma_Beta) .* tan(Beta_raw[i]); 
+      Beta[i] = 0 + 2 .* sigma_Beta .* tan(Beta_raw[i]); 
     }
     
-    Intercepts[i,] = mu_Intercepts' + 0.5*exp(sigma_Intercepts') .* Intercepts_raw[i, ];
+    Intercepts[i,] = mu_Intercepts' + sigma_Intercepts' .* Intercepts_raw[i, ];
   
   // Contemporaneous ///////////////////////////////////////////////////
     
     // Covariance matrix from cholesky corr matrix and SDs
-    theta_sd[i,] = exp(mu_theta_sd + 0.5*exp(sigma_theta_sd) .* theta_sd_raw[i,]);
+    theta_sd[i,] = sigma_theta_sd .* theta_sd_raw[i,];
     // Correlation Matrix
     Sigma[i] = multiply_lower_tri_self_transpose(L_Theta[i]); 
     // Precision matrix from covariance matrix
@@ -165,23 +160,22 @@ model {
     Beta_raw_vec[position_Beta:(position_Beta - 1 + K*K)] = to_vector(Beta_raw[i]);
     position_Beta += K*K; // increment position counter  
   } // end i
-  Beta_raw_vec ~ uniform(-pi()/2, pi()/2); // prior on Beta
+  Beta_raw_vec              ~ uniform(-pi()/2, pi()/2); // prior on Beta
   if(sparsity == 1){
-    to_vector(mu_Beta) ~ normal(0, 1); // prior on mu_Beta
+    to_vector(mu_Beta)      ~ normal(0, 1); // prior on mu_Beta
   }
   if(sparsity == 2){
-    to_vector(mu_Beta) ~ cauchy(0, 1); // prior on mu_Beta
+    to_vector(mu_Beta)      ~ cauchy(0, 1); // prior on mu_Beta
   }
-  to_vector(sigma_Beta) ~ student_t(3, 0, 1); // prior on sigma_Beta
+  to_vector(sigma_Beta)     ~ student_t(3, 0, .2);; // prior on sigma_Beta
   to_vector(Intercepts_raw) ~ std_normal(); // prior on Intercepts
-  mu_Intercepts ~ student_t(3, 0, 2); // prior on mu_Intercepts
-  sigma_Intercepts ~ std_normal(); // prior on sigma_Intercepts
+  mu_Intercepts             ~ student_t(3, 0, 2); // prior on mu_Intercepts
+  sigma_Intercepts          ~ student_t(3, 0, .2); // prior on sigma_Intercepts
   
   // Priors Contemporaneous ///////////////////////////////////////////////////
   // Theta
-  to_vector(theta_sd_raw) ~ std_normal(); // prior on sigma_theta
-  mu_theta_sd             ~ std_normal(); // prior on mu_theta_sd
-  sigma_theta_sd          ~ std_normal(); // prior on sigma_theta_sd
+  to_vector(theta_sd_raw) ~ student_t(3, 0, 1); // prior on sigma_theta
+  sigma_theta_sd          ~ student_t(3, 0, .2); // prior on sigma_theta_sd
 
   // Regression
   reg_intercept     ~ student_t(3, 0, 2); // prior on reg_intercept
