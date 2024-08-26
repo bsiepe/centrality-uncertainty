@@ -492,7 +492,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                                             "Rho_centrality",
                                             "mu_regression",
                                             "reg_slope_density_z",
-                                            "reg_intercept_z"))
+                                            "reg_intercept_z",
+                                            "theta_sd"))
   
   # convergence diagnostics
   rhat_bmlvar_tmp <- summary_bmlvar$summary %>% as.data.frame() %>% pull(Rhat)
