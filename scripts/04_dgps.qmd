@@ -305,6 +305,7 @@ all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1)
 
 
 ## Contemporaneous Matrix
+
 Use the kappa matrix of the nonsparse network as our basis. 
 ```{r}
 graph_nonsp <- readRDS(here("data/graph_nonsparse.RDS"))
@@ -321,6 +322,8 @@ kappa_nonsp_new <- as.matrix(Matrix::forceSymmetric(kappa_nonsp_new, uplo = "L")
 
 # Obtain pcor matrix
 pcor_nonsp_new <- -stats::cov2cor(kappa_nonsp_new)
+
+
 
 # Calculate implied centrality values of partial correlations
 pcor_nonsp_temp <- pcor_nonsp_new
@@ -363,6 +366,10 @@ all(ev_k >= 0)
 
 ```
 
+
+
+
+
 Save the synthetic DGPs:
 
 ```{r}
@@ -374,5 +381,70 @@ saveRDS(graph_sp_synth, here("data/graph_sparse_synth.RDS"))
 
 ```
 
+
+## Alternative synthetic graph: Specify covariance directly
+
+Here, we directly specify the residual covariance, which gives us easier control over the innovation variance etc. 
+```{r}
+matrix_upper <- matrix(c(1.00, 0.20, 0.10, 0.10, 0.10, -0.10,
+                        -1.00, 1.00, 0.05, -0.04, -0.05, -0.05,
+                        -0.50, -0.78, 1.00, 0.05, 0.05, -0.05,
+                        -0.20, 0.09, 0.25, 1.00, -0.05, 0.05,
+                        -0.50, -0.10, -0.18, 0.40, 1.00, -0.05,
+                         0.20, 0.05, -0.02, -0.40, 0.20, 1.00),
+                    nrow = 6, ncol = 6, byrow = TRUE)
+# make symmetric
+sigma_nonsp_new <- matrix_upper
+sigma_nonsp_new[lower.tri(sigma_nonsp_new)] <- t(matrix_upper)[lower.tri(matrix_upper)]
+
+# Obtain pcor matrix
+pcor_nonsp_new <- -stats::cov2cor(solve(sigma_nonsp_new))
+diag(pcor_nonsp_new) <- 0
+
+# Calculate implied centrality values of partial correlations
+colSums(abs(pcor_nonsp_new))
+
+# check stability
+ev_k <- eigen(kappa_nonsp_new)$values
+all(ev_k >= 0)
+```
+
+
+Then create a sparse contemporaneous matrix: 
+
+```{r}
+sigma_sp_new <- sigma_nonsp_new
+
+# set smallest half of values to zero
+# first obtain all values in upper triangle
+sigma_sp_new_upper <- sigma_sp_new[upper.tri(sigma_sp_new)]
+
+# find number of unique elements in covariance matrix
+n_val <- length(sigma_sp_new[upper.tri(sigma_sp_new)])
+
+# then set smallest half to zero
+sigma_sp_new_upper[order(abs(sigma_sp_new_upper))[1:(n_val * 0.5)]] <- 0
+
+# then reattach to be covariance matrix again
+sigma_sp_new[upper.tri(sigma_sp_new)] <- sigma_sp_new_upper
+sigma_sp_new[lower.tri(sigma_sp_new)] <- t(sigma_sp_new)[lower.tri(sigma_sp_new)]
+isSymmetric(sigma_sp_new)
+
+
+# Obtain pcor and kappa matrix
+kappa_sp_new <- solve(sigma_sp_new)
+pcor_sp_new <- -stats::cov2cor(kappa_sp_new)
+```
+Save new DGPs
+```{r}
+graph_nonsp_synth_new <- list(beta = beta_nonsp_new, 
+                          pcor = pcor_nonsp_new, 
+                          sigma = sigma_nonsp_new)
+graph_sp_synth_new <- list(beta = beta_sp_new, 
+                          pcor = pcor_sp_new, 
+                          sigma = sigma_sp_new)
+
+
+```
 
 
