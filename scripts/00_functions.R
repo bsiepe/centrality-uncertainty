@@ -2,8 +2,9 @@
 # argument sparse_sim: if TRUE, no random noise/random effects will be added
 # to zero fixed effects
 sim_gvar_loop <- function(graph,
-                          beta_sd,
-                          kappa_sd,
+                          beta_sd = 1,
+                          kappa_sd = 1,
+                          sigma_sd = 1,
                           n_person,
                           n_time,
                           n_node,
@@ -31,9 +32,10 @@ sim_gvar_loop <- function(graph,
   
   # Create a list to store the data for each person
   data <- vector("list", n_person)
-  beta <- array(NA, c(n_node, n_node, n_person))
-  kappa <- array(NA, c(n_node, n_node, n_person))
-  pcor <- array(NA, c(n_node, n_node, n_person))
+  beta <- array(NA, c(n_node, n_node, n_person))   # VAR
+  kappa <- array(NA, c(n_node, n_node, n_person))  # precision
+  sigma <- array(NA, c(n_node, n_node, n_person))  # covariance
+  pcor <- array(NA, c(n_node, n_node, n_person))   # pcors
   
   if(isTRUE(sparse_sim)){
     # helper function to identify zero elements by index
@@ -42,6 +44,9 @@ sim_gvar_loop <- function(graph,
     }
     zeros_beta <- find_zero_indices(graph$beta)
     zeros_kappa <- find_zero_indices(graph$kappa)
+    if(!is.null(sigma)){
+      zeros_sigma <- find_zero_indices(graph$sigma)
+    }
   }
   
   # if change_density is true, generate uniform scaling factors
@@ -58,6 +63,7 @@ sim_gvar_loop <- function(graph,
     counter <- 0
     beta_counter <- 0
     kappa_counter <- 0
+    sigma_counter <- 0
     repeat {
       beta_counter <- beta_counter + 1
       if (beta_counter > max_try)
@@ -104,7 +110,10 @@ sim_gvar_loop <- function(graph,
         break
     }
     
-    
+    # use kappa if no covariance matrix is provided
+    if(is.null(graph$sigma)){
+      
+
     repeat {
       kappa_counter <- counter + 1
       if (kappa_counter > max_try)
@@ -140,6 +149,47 @@ sim_gvar_loop <- function(graph,
         
         }
     }
+    } # end if(is.null(graph$sigma))  
+    
+    # if covariance matrix is provided
+    if(!is.null(graph$sigma)){
+      repeat{
+        sigma_counter <- counter + 1
+        if (sigma_counter > max_try)
+          stop(
+            "Exceeded maximum number of attempts to generate semi-positive definite sigma matrix."
+          )
+        
+        sigma[ , , i] <- as.matrix(Matrix::forceSymmetric(graph$sigma + matrix(
+          rnorm(n_node * n_node,
+                mean = 0,
+                sd = sigma_sd),
+          nrow = n_node,
+          ncol = n_node
+        )))
+        # if sparse matrix should be generated, set true zero effects to zero
+        if(isTRUE(sparse_sim)){
+          sigma[ , , i][zeros_sigma] <- 0
+        }
+        
+        # Check if sigma matrix is semi-positive definite
+        ev_s <- eigen(sigma[, , i])$values
+        
+        # add small tolerance
+        if (all(ev_s >= 0 - 1e-6)){
+          pcor[, , i] <- solve(sigma[, , i])
+          diag(pcor[, , i]) <- 0
+          if(!any(is.na(pcor[,,i]))){
+            break
+          }
+          
+        }
+
+      }
+
+    } # end sigma generation
+    
+    
     
     if(sim_pkg == "graphicalVAR"){
       if (failsafe) {
@@ -168,21 +218,32 @@ sim_gvar_loop <- function(graph,
       if (failsafe) {
         data[[i]] <-
           tryCatch({
-            mlVAR::simulateVAR(nT = n_time,
+            if(!is.null(graph$sigma)){
+              resid_cov = graph$sigma
+            } else {
+              resid_cov = solve(kappa[,,i])
+            }
+            
+            mlVAR::simulateVAR(Nt = n_time,
                                pars = beta[, , i],
                                # means = rnorm(n = n_node, mean = 0, sd = 0.3),
-                               # residuals = solve(kappa[,,i]),
+                               residuals = resid_cov,
                                burnin = 250)
           }, error = function(e)
             NA)
       } else {
         repeat{
           counter <- counter + 1
-          data[[i]] <- mlVAR::simulateVAR(nT = n_time,
+          if(!is.null(graph$sigma)){
+            resid_cov = graph$sigma
+          } else {
+            resid_cov = solve(kappa[,,i])
+          }
+          data[[i]] <- mlVAR::simulateVAR(Nt = n_time,
                                           pars = beta[, , i],
                                           # means = (n = n_node, mean = 0, sd = 0.3),
                                           # kappa = kappa[, , i],
-                                          # residuals = solve(kappa[,,i]),
+                                          residuals = resid_cov,
                                           burnin = 250)
           if(!is.null(data[[i]])) break
           
