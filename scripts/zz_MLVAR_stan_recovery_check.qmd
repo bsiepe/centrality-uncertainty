@@ -32,199 +32,227 @@ set.seed(35032)
 ## Simulate time series data with specific centrality/density
 We simulate data from a multilevel model for now.
 
-TODO: The following does not work yet when we scale the variables, because the true values are not scaled. Maybe we can just not scale the variables for LASSO, because the variances will be roughly equal anyway.
-
-Alternatively, I could just use the simulated matrices to again simulate graphicalVAR data. This would solve the issue. 
-```{r sim-data}
-I <- 100
-K <- 6
-# number of regression outcomes
-P <- 9
-n_pc <-  K * (K - 1) / 2
-idx_rho <- upper.tri(matrix(1, K, K, byrow = F)) %>% 
-  c() %>% 
-  which(.)
-n_t <- rep(200, I)
-beta_sd <- 0.1
-kappa_sd <- 0.1
-
+Load DGP based on estimated network structures:  
+```{r}
 # non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here("data","graph_nonsparse_synth.RDS"))
-# sparse DGP
-#graph_sparse <- readRDS(here("data/graph_sparse.RDS"))
+graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
 
-# Simulate data
-ml_sim <- sim_gvar_loop(
-                     graph = graph_nonsparse,
+# sparse DGP
+graph_sparse <- readRDS(here::here("data/graph_sparse_synth.RDS"))
+```
+
+
+## Setting parameters
+
+We define the conditions and the fixed parameters for the simulation.
+
+```{r params}
+# Type of DGP
+dgp <- c("sparse", "dense")
+
+# Heterogeneity
+heterogeneity <- c("low", "high")
+
+# Design Conditions
+df_design <- SimDesign::createDesign(
+  dgp = dgp,
+  heterogeneity = heterogeneity
+  )
+
+
+# Simulation parameters
+# Number of individuals 
+n_id <- 200
+
+# Number of variables
+n_var <- 6
+
+# Number of timepoints
+n_tp <- 80
+
+# for regression
+reg_error_sd = 1
+
+gimme_var_only = TRUE
+
+# random effects sds
+# beta_sd <- 0.1
+# kappa_sd <- 0.1
+# # Strength of the correlation
+# hard-coded down below
+# beta_reg <- c(0, 0.2, 0.4)
+
+sim_pars <- list(
+  n_id = n_id,
+  n_var = n_var,
+  n_tp = n_tp,
+  reg_error_sd = reg_error_sd,
+  # beta_sd = beta_sd,
+  # kappa_sd = kappa_sd,
+  graph_nonsparse = graph_nonsparse,
+  graph_sparse = graph_sparse,
+  gimme_var_only = gimme_var_only
+)
+```
+
+## Simulating Data
+```{r data-generation}
+sim_generate <- function(condition, fixed_objects = NULL){
+  source(here::here("scripts", "00_functions.R"))
+
+  # obtain fixed params
+  SimDesign::Attach(fixed_objects)
+
+  dgp_graph <- ifelse(condition$dgp == "sparse", 
+                      "graph_sparse", 
+                      "graph_nonsparse")
+  beta_sd <- ifelse(condition$heterogeneity == "low",
+                    0.05,
+                    0.1)
+  
+  # scale kappa random effects w.r.t diagonal elements
+  mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
+  kappa_sd_low <- 0.05 * mean_diag_kappa
+  kappa_sd_high <- 0.1 * mean_diag_kappa
+  
+  kappa_sd <- ifelse(condition$heterogeneity == "low",
+                     kappa_sd_low,
+                     kappa_sd_high)
+  
+  ml_sim <- sim_gvar_loop(
+                     graph = fixed_objects[[dgp_graph]],
                      beta_sd = beta_sd,
                      kappa_sd = kappa_sd,
-                     n_person = I,
-                     n_time = n_t,
-                     n_node = K,
+                     n_person = n_id,
+                     n_time = n_tp,
+                     n_node = n_var,
                      max_try = 10000,
+                     listify = TRUE,
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
-                     most_cent_diff_temp_min = 0.1
-                     )
+                     most_cent_diff_temp_min = 0.1)
+  if(any(is.na(ml_sim$beta))){
+    stop("Generation of Betas failed")
+  }
+  
+  if(any(is.na(ml_sim$pcor))){
+    stop("Generation of PCORs failed")
+  } 
+  
+  # Obtain true centralities
+  true_cent <- centrality_mlvar_sim(ml_sim,
+                                    sim_fn = "sim_gvar_loop")
 
-# Obtain individual models and data
-Y <- ml_sim$data %>% 
-  do.call(rbind, .) %>% 
+  
+  # helper to only scale when sd is not 0
+  scale_nonz <- function(x) {
+    if (sd(x) == 0) return(x)
+    return(scale(x))
+  }
+  
+  # Extract and scale network features  
+  tempdens <- unlist(true_cent$dens_temp) |> scale_nonz()
+  if(sd(tempdens) == 0){
+    stop("No variation in tempdens")
+  }
+  outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale_nonz()
+  if(sd(outstrength) == 0){
+    stop("No variation in outstrength")
+  }
+  contdens <- unlist(true_cent$dens_cont) |> scale_nonz()
+  if(sd(contdens) == 0){
+    stop("No variation in contdens")
+  }
+  
+  
+  # Simulate covariate with certain error
+  eps_sd <- reg_error_sd
+
+  # Simulate error
+  resid_dens <- rnorm(n_id, mean = 0, sd = eps_sd)
+  resid_cent <- rnorm(n_id, mean = 0, sd = eps_sd)
+
+  # correlation matrix of true effects
+  rho <- c(
+          1, 0, .2, .4,
+          0, 1, 0, 0,
+         .2, 0, 1, 0,
+         .4, 0 , 0, 1) |> matrix(4, 4, byrow = T)
+  
+  # cholesky decomposition of rho
+  L <- chol(rho)
+  
+  # Generate covariates with multiple levels of correlation
+  generate_covariate <- function(dens, n_id, L) {
+    repeat {
+      covariate <- cbind(dens, rnorm(n_id), rnorm(n_id), rnorm(n_id))
+      covariate <- covariate %*% L
+      if (!any(is.na(covariate))) return(covariate)
+    }
+  }
+
+  # Generate covariate matrices
+  covariate_temp_dens <- generate_covariate(tempdens, n_id, L)
+  covariate_cont_dens <- generate_covariate(contdens, n_id, L)
+  covariate_out_strength <- generate_covariate(outstrength, n_id, L)
+   
+  
+  # Return data and true centralities
+  ret_data <- list(
+    data = ml_sim$data,
+    beta = ml_sim$beta_l,
+    kappa = ml_sim$kappa_l,
+    pcor = ml_sim$pcor_l,
+    covariate_temp_dens = covariate_temp_dens,
+    covariate_out_strength = covariate_out_strength,
+    covariate_cont_dens = covariate_cont_dens,
+    true_cent = true_cent
+  )
+  
+  return(ret_data)
+  
+}
+
+dat <- sim_generate(df_design[3,], sim_pars)
+```
+
+
+## Prepare Data for Stan
+```{r sim-data}
+# Concatenate list of data into dataframe with id column
+df_data <- dplyr::bind_rows(purrr::map(dat$data, dplyr::as_tibble)
+                            , .id = "ID") %>%
+  dplyr::mutate(ID = as.factor(ID))
+
+# indicators for partial correlations
+idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) %>%
+  c() %>%
+  which(.)
+
+reg_data <- cbind(dat$covariate_temp_dens[, 2:4],
+                  dat$covariate_cont_dens[, 2:4],
+                  dat$covariate_out_strength[, 2:4])
+Y <- df_data %>%
+  dplyr::select(-"ID") %>%
   as.matrix()
 
-# Obtain parameters
-ml_beta <- ml_sim$beta %>% estimates_array2list()
-ml_prec <- ml_sim$kappa %>% estimates_array2list()
-ml_pcor <- ml_sim$pcor %>% estimates_array2list()
-
-#ml_pcor_fixed <-
-
-# Obtain centrality and density
-# TODO double check the matrix formatting here
-# where are the DVs, where is the IV
-ml_outstrength <- lapply(ml_beta, function(x) {
-  colMeans(abs(x))
-})
-ml_instrength <- lapply(ml_beta, function(x) {
-  rowMeans(abs(x))
-})
-ml_strength <- lapply(ml_pcor, function(x) {
-  diag(x) <- 0
-  #x[lower.tri(x)] <- 0L # Matze: I think this is wrong!
-  colMeans(abs(x))
-})
-ml_temporal_density <- lapply(ml_beta, function(x)
-  mean(abs(x)))
-# This should be equivalent to strength
-ml_contemporaneous_density <- lapply(ml_pcor, function(x) {
-  diag(x) <- 0
-  #x[lower.tri(x)] <- 0L
-  mean(abs(x))
-})
+# Prepare stan data
+stan_data <- list(
+  K = n_var,
+  I = n_id,
+  P = 9,
+  # number of regression outcomes
+  N_total = n_id * n_tp,
+  n_t = rep(n_tp, n_id),
+  n_pc = n_var * (n_var - 1) / 2,
+  idx_rho = array(idx_rho, dim = length(idx_rho)),
+  Y = Y,
+  reg_covariate = reg_data,
+  sparsity = 2
+)
 ```
 
-## Simulate regression data
-Simulate data from simple one-predictor regression model:
-```{r sim-covariate}
-true_cent <- centrality_mlvar_sim(ml_sim,
-                                  sim_fn = "sim_gvar_loop")
-
-tempdens <- unlist(true_cent$dens_temp) |> scale()
-out_strength_1 <- sapply(true_cent$outstrength, `[`, 1) |> scale()
-contemp_dens <- unlist(true_cent$dens_cont) |> scale()
-
-# Simulate linear model data with regression coefficient of 0.5
-eps <- 1
-
-# Simulate error
-resid <- rnorm(I, mean = 0, sd = eps)
-
-# correlation matrix of true effects
-rho <- c(1,  0, .2, .4,
-         0,  1,  0,  0,
-         .2, 0,  1,  0,
-         .4, 0,  0,  1) %>% matrix(4, 4, byrow = T)
-# cholesky decomposition of rho
-L <- chol(rho)
-
-# Simulate data for outcomes
-outcome_temp_dens <- cbind(tempdens, rnorm(I), rnorm(I), rnorm(I))
-outcome_contemp_dens <- cbind(contemp_dens, rnorm(I), rnorm(I), rnorm(I))
-outcome_out_strength <- cbind(out_strength_1, rnorm(I), rnorm(I), rnorm(I))
-
-# rotate outcomes to correlate with predictors and check resulting correlations
-outcome_temp_dens <- outcome_temp_dens %*% L
-(cor(outcome_temp_dens) - rho) %>% round(2)
-lm(outcome_temp_dens[, 2] ~ tempdens) %>% coef() %>% .[2]
-lm(outcome_temp_dens[, 3] ~ tempdens) %>% coef() %>% .[2]
-lm(outcome_temp_dens[, 4] ~ tempdens) %>% coef() %>% .[2]
-
-
-outcome_contemp_dens <- outcome_contemp_dens %*% L
-(cor(outcome_contemp_dens) - rho) %>% round(2)
-lm(outcome_contemp_dens[, 2] ~ contemp_dens) %>% coef() %>% .[2]
-lm(outcome_contemp_dens[, 3] ~ contemp_dens) %>% coef() %>% .[2]
-lm(outcome_contemp_dens[, 4] ~ contemp_dens) %>% coef() %>% .[2]
-
-outcome_out_strength <- outcome_out_strength %*% L
-(cor(outcome_out_strength) - rho) %>% round(2)
-lm(outcome_out_strength[, 2] ~ out_strength_1) %>% coef() %>% .[2]
-lm(outcome_out_strength[, 3] ~ out_strength_1) %>% coef() %>% .[2]
-lm(outcome_out_strength[, 4] ~ out_strength_1) %>% coef() %>% .[2]
-
-
-# define regression data and standardize
-reg_data <-
-  cbind(outcome_temp_dens[, 2:4] %>% apply(2, scale),
-        outcome_contemp_dens[, 2:4] %>% apply(2, scale),
-        outcome_out_strength[, 2:4] %>% apply(2, scale))
-
-```
-
-## Fit VAR Model in Stan
-```{r stan data, renv.ignore = TRUE}
-# prepare stan data
-stan_data <-
-  list(
-    K = K,
-    I = I,
-    P = P,
-    N_total = nrow(Y),
-    n_t = n_t,
-    n_pc = n_pc,
-    idx_rho = array(idx_rho, dim = length(idx_rho)),
-    Y = Y %>% apply(2, scale),
-    reg_covariate = reg_data,
-    sparsity = 2
-  )
-```
-
-#### Starting Values
-```{r  renv.ignore = TRUE}
-# # initial values
-# beta_start <-
-#   rho_start <-
-#   map(ml_data, function(x) {
-#     cov(x[, 1:K])
-#   }) %>% estimates_matrix_list2array()
-# intercept_start <-
-#   map(ml_data, function(x)
-#     colMeans(x[, 1:K])) %>% do.call(rbind, .)
-# theta_start <- map(ml_data, function(x) {
-#     cov(x[, 1:K]) %>% chol() %>% t()
-#   }) %>% estimates_matrix_list2array()
-# n_chains <- 4
-# 
-# init_values <- 
-#   lapply(1:n_chains, function(x) {
-#     list(
-#       # beta matrix
-#       Beta_raw = beta_start,
-#       mu_Beta = matrix(0, K, K),
-#       sigma_Beta = matrix(0, K, K),
-#       # network intercepts
-#       Intercepts = intercept_start,
-#       mu_Intercepts = rep(0, K),
-#       sigma_Intercepts = matrix(0, K, K),
-#       # matrix of innovations
-#       L_Theta = theta_start,
-#       rho_loc_raw = matrix(rep(0.5, I * n_pc), I, n_pc),
-#       rho_var_raw = matrix(rep(sqrt(0.5), I * n_pc), I, n_pc),
-#       mu_rho_loc = rep(0.5, n_pc),
-#       sigma_rho_loc = rep(1, n_pc),
-#       mu_rho_var = rep(sqrt(0.5), n_pc),
-#       sigma_rho_var = rep(0, n_pc),
-#       theta_sd_raw = matrix(rep(0, I * K), I, K),
-#       mu_theta_sd = rep(0, K),
-#       sigma_theta_sd = rep(0, K),
-#       # regression
-#       reg_intercept = rep(0, P),
-#       reg_slope_density = rep(0, P),
-#       reg_residual = rep(0, P)
-#     )
-#   })
-```
-
+## Compile Model
 ```{r compile, renv.ignore = TRUE}
 # Choose model to fit
 model_name <- "MLVAR_lkj_only"
@@ -239,41 +267,31 @@ mlvar_model <-
   )
 ```
 
+## Run Sampler
 ```{r sampling, message=FALSE, renv.ignore=TRUE, eval=FALSE}
-# number of MCMC chains
-n_chains <- 4
-# Run sampler
-mlvar_fit <- rstan::sampling(
+fit_bmlvar <- rstan::sampling(
   object = mlvar_model,
-  # pars = c("Beta_raw",
-  #          "Intercepts_raw",
-  #          "theta_sd_raw",
-  #          "lp__"),
-  # include = FALSE,
+  pars = c("Beta_raw", "L_Theta", "Intercepts_raw"),
+  include = FALSE,
   data = stan_data,
-  seed = 2023,
+  seed = 35032,
   chains = 4,
-  cores = n_chains,
-  warmup = 400,
-  iter = 800,
-  init = 0.1,
+  cores = 4,
+  warmup = 500,
+  iter = 1000,
+  init = .1,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
-)
-rstan::get_elapsed_time(mlvar_fit) %>%
-  as.data.frame() %>%
-  rowMeans() %>%
-  max() / 60
-
-saveRDS(mlvar_fit, here("fits", paste0(model_name, "_fit.rds")))
+  )
+saveRDS(fit_bmlvar, here("fits", paste0(model_name, "_fit.rds")))
 ```
 
 ```{r}
-mlvar_fit <- readRDS(here("fits", "mlvar_fit.rds"))
+fit_bmlvar <- readRDS(here("fits", paste0(model_name, "_fit.rds")))
 ```
 
 ```{r}
-param_ests <- summary(mlvar_fit)$summary %>% 
+param_ests <- summary(fit_bmlvar)$summary %>% 
   as.data.frame() %>% 
   rownames_to_column("parameter")
 ```
@@ -284,7 +302,7 @@ param_ests <- summary(mlvar_fit)$summary %>%
 color_scheme_set(scheme = "purple")
 # Effective sample sizes
 plot_neff <-
-  mcmc_neff_hist(bayesplot::neff_ratio(mlvar_fit), binwidth = .01) +
+  mcmc_neff_hist(bayesplot::neff_ratio(fit_bmlvar), binwidth = .01) +
   labs(title = "A") +
   guides(color = "none", fill = "none") +
   theme(
@@ -294,7 +312,7 @@ plot_neff <-
   )
 # Rhat
 plot_rhat <-
-  bayesplot::mcmc_rhat_hist(bayesplot::rhat(mlvar_fit)) +
+  bayesplot::mcmc_rhat_hist(bayesplot::rhat(fit_bmlvar)) +
   labs(title = "B") +
   guides(color = "none", fill = "none") +
   theme(
@@ -310,44 +328,74 @@ plot_diagnostics <- grid.arrange(plot_neff, plot_rhat, ncol = 2)
 
 ### Sampler Diagnostics
 ```{r}
-rstan::check_hmc_diagnostics(mlvar_fit)
+rstan::check_hmc_diagnostics(fit_bmlvar)
 ```
 
 
 ```{r}
-lp <- log_posterior(mlvar_fit)
-np <- nuts_params(mlvar_fit)
-mcmc_nuts_divergence(np, lp)
+# lp <- log_posterior(fit_bmlvar)
+# np <- nuts_params(fit_bmlvar)
+# mcmc_nuts_divergence(np, lp)
 ```
 
 ### Trace Plots
 ```{r}
-pars <- c(
-  "Beta",
-  "Beta_out_strength",
-  "mu_Beta",
-  "sigma_Beta",
-  "mu_Intercepts",
-  "sigma_Intercepts",
-  "reg_intercept",
-  "reg_slope_density",
-  "reg_residual",
-  "Intercepts",
-  "Sigma",
-  "Rho_vec",
-  "Beta_out_strength",
-  "Beta_in_strength",
-  "Rho_centrality",
-  "mu_regression"
-)
-div_style <- parcoord_style_np(div_color = "green", div_size = .5, div_alpha = 1)
-
-for(x in 1:length(pars)) {
-  posterior <- as.array(mlvar_fit, pars[x])
-  
-  print(mcmc_parcoord(posterior, np = np, alpha = .1, np_style = div_style))
-}
+# pars <- c(
+#   "Beta",
+#   "Beta_out_strength",
+#   "mu_Beta",
+#   "sigma_Beta",
+#   "mu_Intercepts",
+#   "sigma_Intercepts",
+#   "reg_intercept",
+#   "reg_slope_density",
+#   "reg_residual",
+#   "Intercepts",
+#   "Sigma",
+#   "Rho_vec",
+#   "Beta_out_strength",
+#   "Beta_in_strength",
+#   "Rho_centrality",
+#   "mu_regression"
+# )
+# div_style <- parcoord_style_np(div_color = "green", div_size = .5, div_alpha = 1)
+# 
+# for(x in 1:length(pars)) {
+#   posterior <- as.array(fit_bmlvar, pars[x])
+#   
+#   print(mcmc_parcoord(posterior, np = np, alpha = .1, np_style = div_style))
+# }
 ```
+
+
+
+
+```{r}
+# Transpose beta matrices for later summaries
+  # in the DGP, cols represent lagged vars
+  # but in BmlVAR, rows represent lagged vars
+  ests_bmlvar <- extract_all_estimates(fit_bmlvar,
+                                       n_id = n_id, 
+                                       n_var = n_var, 
+                                       transpose_beta = TRUE)
+  
+  # Obtain centralities
+  dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
+  dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
+  # Obtain centralities
+  dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
+  dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
+  outstrength_bmlvar <- ests_bmlvar$outstrength_est$median
+  strength_bmlvar <- ests_bmlvar$pcor_centrality_est$median
+  outstrength_bmlvar_first <- sapply(ests_bmlvar$outstrength_est$median, function(x) unname(x[1]))
+
+  # Obtain regression coefficients
+  reg_bmlvar <- list(
+    regression_intercept = ests_bmlvar$regression_intercept_est, 
+    regression_slope = ests_bmlvar$regression_slope_est)
+  
+```
+
 
 
 
@@ -355,10 +403,10 @@ for(x in 1:length(pars)) {
 ### Betas
 ```{r renv.ignore=TRUE}
 Beta_vec <-
-  rstan::summary(mlvar_fit, pars =  "Beta", probs = .5)[["summary"]][,4] %>%
+  rstan::summary(fit_bmlvar, pars =  "Beta", probs = .5)[["summary"]][,4] %>%
     unlist()
 
-Beta_true_vec <- ml_beta %>% map(., function(x)t(x)) %>% unlist()
+Beta_true_vec <- dat$beta %>% map(., function(x)t(x)) %>% unlist()
 
 cor.test(Beta_vec, Beta_true_vec, method = "pearson")
 cor.test(Beta_vec, Beta_true_vec, method = "spearman")
@@ -372,26 +420,27 @@ abline(a = 0, b = 1, col = "red")
 ```{r renv.ignore=TRUE}
 bayesplot::mcmc_recover_intervals(
   true = rep(c(0, .2, .4),3),
-  x = rstan::extract(object = mlvar_fit, "reg_slope_density_z") %>% do.call(cbind, .) %>%
+  x = rstan::extract(object = fit_bmlvar, "reg_slope_density_z") %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 
 bayesplot::mcmc_intervals(
-  x = rstan::extract(object = mlvar_fit, "reg_slope_density_z") %>% do.call(cbind, .) %>%
+  x = rstan::extract(object = fit_bmlvar, "reg_slope_density_z") %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 
 ```
 
+
 ```{r renv.ignore=TRUE}
 bayesplot::mcmc_recover_intervals(
   true = rep(0,9),
-  x = rstan::extract(object = mlvar_fit, c("reg_intercept_z")) %>% do.call(cbind, .) %>%
+  x = rstan::extract(object = fit_bmlvar, c("reg_intercept_z")) %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 
 bayesplot::mcmc_intervals(
-  x = rstan::extract(object = mlvar_fit, c("reg_intercept_z")) %>% do.call(cbind, .) %>%
+  x = rstan::extract(object = fit_bmlvar, c("reg_intercept_z")) %>% do.call(cbind, .) %>%
     as_draws_matrix()
 )
 ```
@@ -399,99 +448,69 @@ bayesplot::mcmc_intervals(
 ## Partial Correlations
 ```{r renv.ignore=TRUE}
 Rho_vec <- 
-  rstan::summary(mlvar_fit, pars =  "Rho", probs = .5)[["summary"]][,4] %>%
+  rstan::summary(fit_bmlvar, pars =  "Rho", probs = .5)[["summary"]][,4] %>%
     unlist()
 
-Rho_true_vec <- ml_pcor %>% map(., function(x)t(x)) %>% unlist()
+Rho_true_vec <- dat$pcor %>% map(., function(x)t(x)) %>% unlist()
 cor.test(Rho_vec, Rho_true_vec, method = "pearson")
 cor.test(Rho_vec, Rho_true_vec, method = "spearman")
 # plot
 plot(Rho_vec, Rho_true_vec, xlim = c(-1, 1), ylim = c(-1, 1))
 abline(a = 0, b = 1, col = "red")
 ```
-
-```{r}
-# Rho_vec <- 
-#   rstan::summary(mlvar_fit, pars =  "mu_rho_loc", probs = .5)[["summary"]][,4] %>%
-#     unlist() %>% pnorm(.)*2 - 1
-# 
-# Rho_true_vec <- ml_pcor_fixed %>% .[lower.tri(.)] %>%  unlist()
-# 
-# cor.test(Rho_vec, Rho_true_vec, method = "pearson")
-# cor.test(Rho_vec, Rho_true_vec, method = "spearman")
-# 
-# # plot
-# plot(Rho_vec, Rho_true_vec, xlim = c(-1, 1), ylim = c(-1, 1))
-# abline(a = 0, b = 1, col = "red")
-```
-
-### Density
+## Centrality
+### Beta Density
 ```{r renv.ignore=TRUE}
-Beta_density <-
-  rstan::summary(mlvar_fit, pars =  "Beta_density", probs = .5)[["summary"]][, 4] %>%
-  unlist()
+Beta_density <- ests_bmlvar$tempdens_est$median
 
-Beta_density_true <- ml_temporal_density %>% unlist()
+Beta_density_true <- dat$true_cent$dens_temp %>% unlist()
 
 cor.test(Beta_density, Beta_density_true, method = "pearson")
 cor.test(Beta_density, Beta_density_true, method = "spearman")
 # plot
-plot(Beta_density, Beta_density_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(Beta_density, Beta_density_true, xlim = c(0, .2), ylim = c(0, .2))
 abline(a = 0, b = 1, col = "red")
 ```
 
+### In-Strength
 ```{r renv.ignore=TRUE}
-Rho_density <-  rstan::summary(mlvar_fit, pars =  "Rho_density", probs = .5)[["summary"]][, 4] %>%
+in_strength <-  rstan::summary(fit_bmlvar, pars =  "Beta_in_strength", probs = .5)[["summary"]][, 4] %>%
   unlist()
 
-Rho_density_true <- ml_contemporaneous_density %>% unlist()
-
-cor.test(Rho_density, Rho_density_true, method = "pearson")
-cor.test(Rho_density, Rho_density_true, method = "spearman")
-# plot
-plot(Rho_density, Rho_density_true, xlim = c(0, 1), ylim = c(0, 1))
-abline(a = 0, b = 1, col = "red")
-```
-
-```{r renv.ignore=TRUE}
-in_strength <-  rstan::summary(mlvar_fit, pars =  "Beta_in_strength", probs = .5)[["summary"]][, 4] %>%
-  unlist()
-
-in_strength_true <- ml_instrength %>% unlist()
+in_strength_true <- dat$true_cent$instrength %>% unlist()
 
 
 cor.test(in_strength, in_strength_true, method = "pearson")
 cor.test(in_strength, in_strength_true, method = "spearman")
 # plot
-plot(in_strength, in_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(in_strength, in_strength_true, xlim = c(0, .25), ylim = c(0, .25))
 abline(a = 0, b = 1, col = "red")
 ```
 
+### Out-Strength
 ```{r renv.ignore=TRUE}
-out_strength <- rstan::summary(mlvar_fit, pars =  "Beta_out_strength", probs = .5)[["summary"]][, 4] %>%
-  unlist()
+out_strength <- ests_bmlvar$outstrength_est$median %>% unlist()
 
-out_strength_true <- ml_outstrength %>% unlist()
+out_strength_true <- dat$true_cent$outstrength %>% unlist()
+
 cor.test(out_strength, out_strength_true, method = "pearson")
 cor.test(out_strength, out_strength_true, method = "spearman")
 # plot
-plot(out_strength, out_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(out_strength,
+     out_strength_true,
+     xlim = c(0, .3),
+     ylim = c(0, .3))
 abline(a = 0, b = 1, col = "red")
 ```
-
+### PCOR Centrality
 ```{r renv.ignore=TRUE}
-Rho_strength <- rstan::summary(mlvar_fit, pars =  "Rho_centrality", probs = .5)[["summary"]][, 4] %>%
-  unlist()
+Rho_strength <- ests_bmlvar$contdens_est$median
 
-Rho_strength_true <- ml_strength %>% unlist()
+Rho_strength_true <- dat$true_cent$dens_cont %>% unlist()
+
 cor.test(Rho_strength, Rho_strength_true, method = "pearson")
 cor.test(Rho_strength, Rho_strength_true, method = "spearman")
 # plot
-plot(Rho_strength, Rho_strength_true, xlim = c(0, 1), ylim = c(0, 1))
+plot(Rho_strength, Rho_strength_true, xlim = c(0, .25), ylim = c(0, .25))
 abline(a = 0, b = 1, col = "red")
-```
-
-# Extract estimates
-```{r renv.ignore=TRUE}
-estimates_list <- extract_all_estimates(mlvar_fit, I, K)
 ```

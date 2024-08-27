@@ -26,8 +26,7 @@ parameters {
   // Contemporaneous: Partial Correlations
   array[I] cholesky_factor_corr[K] L_Theta; // cholesky factor of the correlation matrix of innovations
   // Contemporaneous: Variances
-  matrix<lower=0>[I,K] theta_sd_raw; // SDs of the innovations, half-t
-  real<lower=0> sigma_theta_sd; // only one SD for all innovation SDs, half-t
+  matrix<lower=0>[I,K] theta_sd; // SDs of the innovations, half-t
   // Regression
   vector[P] reg_intercept;   // Intercept of Regression
   vector[P] reg_slope_density; // Slope of Regression
@@ -45,8 +44,7 @@ transformed parameters{
   // Partial correlation matrix
   array[I] matrix[K,K] Rho;
   vector[I*n_pc] Rho_vec; // vectorize Rho
-    
-  matrix[I,K] theta_sd;      // 
+
   //  Centrality for each individual
   vector[I]  Beta_density;
   vector[I]  Rho_density;
@@ -90,10 +88,6 @@ transformed parameters{
   
   // Contemporaneous ///////////////////////////////////////////////////
     
-    // Covariance matrix from cholesky corr matrix and SDs
-    
-    // SDs of the innovations, half-t, so there is no mu_theta_sd, shared hyper-prior SD
-    theta_sd[i,] = theta_sd_raw[i,] * sigma_theta_sd;
     // Correlation Matrix
     Sigma[i] = multiply_lower_tri_self_transpose(L_Theta[i]); 
     // Precision matrix from covariance matrix
@@ -169,15 +163,14 @@ model {
   if(sparsity == 2){
     to_vector(mu_Beta)      ~ cauchy(0, 1); // prior on mu_Beta
   }
-  to_vector(sigma_Beta)     ~ student_t(3, 0, .2);; // prior on sigma_Beta
+  to_vector(sigma_Beta)     ~ student_t(3, 0, .2); // prior on sigma_Beta, half-t
   to_vector(Intercepts_raw) ~ std_normal(); // prior on Intercepts
   mu_Intercepts             ~ student_t(3, 0, 2); // prior on mu_Intercepts
-  sigma_Intercepts          ~ student_t(3, 0, .2); // prior on sigma_Intercepts
+  sigma_Intercepts          ~ student_t(3, 0, .2); // prior on sigma_Intercepts, half-t
   
   // Priors Contemporaneous ///////////////////////////////////////////////////
   // Theta
-  to_vector(theta_sd_raw) ~ student_t(3, 0, 1); // prior on sigma_theta
-  sigma_theta_sd          ~ student_t(3, 0, .2); // prior on sigma_theta_sd
+  to_vector(theta_sd) ~ student_t(3, 0, 1); // prior on residual variances, half-t
 
   // Regression
   reg_intercept     ~ student_t(3, 0, 2); // prior on reg_intercept
@@ -197,7 +190,7 @@ model {
     position_Y += n_t[i]; // increment position counter
     
     // Cholesky decomposition of the covariance matrix
-    matrix[K, K] Sigma_chol = diag_pre_multiply(0.5*exp(theta_sd[i]), L_Theta[i]);
+    matrix[K, K] Sigma_chol = diag_pre_multiply(theta_sd[i], L_Theta[i]);
     array[n_t[i]-1] vector[K] mu_network;
     
     // network predictions: loop over time points
