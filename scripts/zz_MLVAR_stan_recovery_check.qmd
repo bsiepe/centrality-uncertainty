@@ -268,7 +268,7 @@ mlvar_model <-
 ```
 
 ## Run Sampler
-```{r sampling, message=FALSE, renv.ignore=TRUE, eval=FALSE}
+```{r sampling, message=FALSE, renv.ignore=TRUE, eval=TRUE}
 fit_bmlvar <- rstan::sampling(
   object = mlvar_model,
   pars = c("Beta_raw", "L_Theta", "Intercepts_raw"),
@@ -278,7 +278,7 @@ fit_bmlvar <- rstan::sampling(
   chains = 4,
   cores = 4,
   warmup = 500,
-  iter = 1000,
+  iter = 1500,
   init = .1,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
