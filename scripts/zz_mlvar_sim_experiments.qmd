@@ -704,52 +704,93 @@ graph_nonsparse_koval <- readRDS(here::here("data/graph_nonsparse_koval.RDS"))
 graph_sparse_koval <- readRDS(here::here("data/graph_sparse_koval.RDS"))
 graph_sparse_synth <- readRDS(here::here("data/graph_sparse_synth.RDS"))
 graph_nonsparse_synth <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
-dgp_graph <- graph_nonsparse_synth
 
 
+# new synthetic graph
+graph_nonsparse_synth_new <- readRDS(here::here("data/graph_nonsparse_synth_new.RDS"))
+graph_sparse_synth_new <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
+dgp_graph <- graph_nonsparse_synth_new
 
-beta_sd_low <- 0.05
-beta_sd_high <- 0.1
+beta_sd_low <- 0.01
+beta_sd_high <- 0.03
 mean_diag_kappa <- mean(diag(dgp_graph$kappa)) 
-kappa_sd_low <- 0.05 * mean_diag_kappa
-kappa_sd_high <- 0.1 * mean_diag_kappa
+kappa_sd_low <- 0.01 * mean_diag_kappa
+kappa_sd_high <- 0.03 * mean_diag_kappa
+sigma_sd_low <- 0.01
+sigma_sd_high <- 0.03
 n_id <- 200
-n_tp <- 100
+n_tp <- 80
 n_var <- 6
 
-# simulate models
+# # simulate models
+# ml_sim_low <- sim_gvar_loop(
+#                      graph = dgp_graph,
+#                      beta_sd = beta_sd_low,
+#                      kappa_sd = kappa_sd_low,
+#                      n_person = n_id,
+#                      n_time = n_tp,
+#                      n_node = n_var,
+#                      max_try = 10000,
+#                      listify = TRUE,
+#                      sparse_sim = TRUE,
+#                      most_cent_diff_temp = TRUE,
+#                      most_cent_diff_temp_min = 0.1,
+#                      change_density = TRUE,
+#                      change_density_factors = c(0.6, 1.4))
+# ml_sim_high <- sim_gvar_loop(
+#                      graph = dgp_graph,
+#                      beta_sd = beta_sd_high,
+#                      kappa_sd = kappa_sd_high,
+#                      n_person = n_id,
+#                      n_time = n_tp,
+#                      n_node = n_var,
+#                      max_try = 10000,
+#                      listify = TRUE,
+#                      sparse_sim = TRUE,
+#                      most_cent_diff_temp = TRUE,
+#                      most_cent_diff_temp_min = 0.1,
+#                      change_density = TRUE,
+#                      change_density_factors = c(0.6, 1.4))
+
+
+# Simulate with simulateVAR function
 ml_sim_low <- sim_gvar_loop(
                      graph = dgp_graph,
                      beta_sd = beta_sd_low,
                      kappa_sd = kappa_sd_low,
+                     sigma_sd = sigma_sd_low,
                      n_person = n_id,
                      n_time = n_tp,
                      n_node = n_var,
+                     sim_pkg = "mlVAR",
                      max_try = 10000,
                      listify = TRUE,
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
                      most_cent_diff_temp_min = 0.1,
-                     change_density = TRUE,
-                     change_density_factors = c(0.6, 1.4))
+                     innov_var_fixed_sigma = TRUE)
+
 ml_sim_high <- sim_gvar_loop(
                      graph = dgp_graph,
                      beta_sd = beta_sd_high,
                      kappa_sd = kappa_sd_high,
+                     sigma_sd = sigma_sd_high,
                      n_person = n_id,
                      n_time = n_tp,
                      n_node = n_var,
+                     sim_pkg = "mlVAR",
                      max_try = 10000,
                      listify = TRUE,
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
                      most_cent_diff_temp_min = 0.1,
-                     change_density = TRUE,
-                     change_density_factors = c(0.6, 1.4))
+                     innov_var_fixed_sigma = TRUE)
+
 
 # Obtain true centralities
 true_cent_low <- centrality_mlvar_sim(ml_sim_low,
                                     sim_fn = "sim_gvar_loop")
+
 
 true_cent_high <- centrality_mlvar_sim(ml_sim_high,
                                     sim_fn = "sim_gvar_loop")

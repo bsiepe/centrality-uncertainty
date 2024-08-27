@@ -1,6 +1,9 @@
 # GVAR based ML sim function ----------------------------------------------
 # argument sparse_sim: if TRUE, no random noise/random effects will be added
 # to zero fixed effects
+
+# innov_var_fixed_sigma: if TRUE, the innovation variance is not sampled randomly
+
 sim_gvar_loop <- function(graph,
                           beta_sd = 1,
                           kappa_sd = 1,
@@ -26,7 +29,10 @@ sim_gvar_loop <- function(graph,
                           change_density = FALSE,
                           # if change_density is TRUE, these are the minimum and 
                           # maximum scaling factors
-                          change_density_factors = c(0.75, 1.25)
+                          change_density_factors = c(0.75, 1.25),
+                          # TODO add option to return where fn failed
+                          verbose = FALSE,
+                          innov_var_fixed_sigma = FALSE
                           ) {
   # browser()
   
@@ -94,9 +100,14 @@ sim_gvar_loop <- function(graph,
         centralities <- colSums(abs(beta_tmp))/n_node
         # check if the difference between the most central and the second most central node
         # is large enough
-        cent_check <- max(centralities) - sort(centralities, decreasing = TRUE)[2] < most_cent_diff_temp_min * max(centralities)
+        cent_check <- max(centralities) - sort(centralities, decreasing = TRUE)[2] > most_cent_diff_temp_min * max(centralities)
         # if not, try again
-        if(!cent_check){
+        if(!isTRUE(cent_check)){
+          if(isTRUE(verbose)){
+            print(paste0("Centrality difference too small, trying again. Difference: ", 
+                         max(centralities) - sort(centralities, decreasing = TRUE)[2],
+                         "Individual:", i))
+          }
           next
         }
         
@@ -106,14 +117,18 @@ sim_gvar_loop <- function(graph,
       
       # Check if beta matrix is stable
       ev_b <- eigen(beta[, , i])$values
-      if (all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1))
+      if (all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1)){
         break
-    }
+      }
+      else {
+        if(isTRUE(verbose)){
+          print(paste0("Beta matrix not stable, trying again. Individual: ", i))
+        }
+      }
+    } # end repeat statement
     
     # use kappa if no covariance matrix is provided
     if(is.null(graph$sigma)){
-      
-
     repeat {
       kappa_counter <- counter + 1
       if (kappa_counter > max_try)
@@ -147,9 +162,14 @@ sim_gvar_loop <- function(graph,
           break
         }
         
+      } 
+      else {
+        if(isTRUE(verbose)){
+          print("Kappa matrix not semi-positive definite, trying again.")
         }
     }
-    } # end if(is.null(graph$sigma))  
+    } # end repeat statement
+  } # end if(is.null(graph$sigma))  
     
     # if covariance matrix is provided
     if(!is.null(graph$sigma)){
@@ -160,13 +180,26 @@ sim_gvar_loop <- function(graph,
             "Exceeded maximum number of attempts to generate semi-positive definite sigma matrix."
           )
         
-        sigma[ , , i] <- as.matrix(Matrix::forceSymmetric(graph$sigma + matrix(
-          rnorm(n_node * n_node,
-                mean = 0,
-                sd = sigma_sd),
-          nrow = n_node,
-          ncol = n_node
-        )))
+        if(isTRUE(innov_var_fixed_sigma )){
+         noise_mat <- matrix(rnorm(n_node * n_node,
+                                   mean = 0,
+                                   sd = sigma_sd),
+                             nrow = n_node,
+                             ncol = n_node)
+         noise_mat <- as.matrix(Matrix::forceSymmetric(noise_mat))
+         diag(noise_mat) <- 0
+         sigma[ , , i] <- as.matrix(Matrix::forceSymmetric(graph$sigma + noise_mat))
+        }
+        else{
+          sigma[ , , i] <- as.matrix(Matrix::forceSymmetric(graph$sigma + matrix(
+            rnorm(n_node * n_node,
+                  mean = 0,
+                  sd = sigma_sd),
+            nrow = n_node,
+            ncol = n_node
+          )))
+        }
+
         # if sparse matrix should be generated, set true zero effects to zero
         if(isTRUE(sparse_sim)){
           sigma[ , , i][zeros_sigma] <- 0
@@ -177,15 +210,22 @@ sim_gvar_loop <- function(graph,
         
         # add small tolerance
         if (all(ev_s >= 0 - 1e-6)){
-          pcor[, , i] <- solve(sigma[, , i])
+          kappa[, , i] <- solve(sigma[, , i])
+          pcor[, , i] <- -stats::cov2cor(kappa[, , i])
           diag(pcor[, , i]) <- 0
           if(!any(is.na(pcor[,,i]))){
             break
           }
           
         }
+        else {
+          if(isTRUE(verbose)){
+            print("Sigma matrix not semi-positive definite, trying again.")
+          }
+        }
 
-      }
+      }  # end repeat statement
+      
 
     } # end sigma generation
     
