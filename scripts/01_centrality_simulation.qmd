@@ -1130,7 +1130,21 @@ saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
 
 ```
 
+
+
+# Check Warnings and Non-Convergence
+
+
+Check if any non-convergence occured:
+```{r}
+
+```
+
+
+
 # Visualization
+
+
 
 TEMPORARY: Remove all Rhat columns, way too many in the pilot sim_results
 ```{r}
