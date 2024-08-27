@@ -439,11 +439,15 @@ Save new DGPs
 ```{r}
 graph_nonsp_synth_new <- list(beta = beta_nonsp_new, 
                           pcor = pcor_nonsp_new, 
-                          sigma = sigma_nonsp_new)
+                          sigma = sigma_nonsp_new,
+                          kappa = kappa_nonsp_new)
 graph_sp_synth_new <- list(beta = beta_sp_new, 
                           pcor = pcor_sp_new, 
-                          sigma = sigma_sp_new)
-
+                          sigma = sigma_sp_new,
+                          kappa = kappa_sp_new)
+# save as rds
+saveRDS(graph_nonsp_synth_new, here("data/graph_nonsparse_synth_new.RDS"))
+saveRDS(graph_sp_synth_new, here("data/graph_sparse_synth_new.RDS"))
 
 ```
 
