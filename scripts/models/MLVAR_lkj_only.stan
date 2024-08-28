@@ -48,8 +48,8 @@ transformed parameters{
   //  Centrality for each individual
   vector[I]  Beta_density;
   vector[I]  Rho_density;
-  matrix[I,K] Beta_out_strength;
   matrix[I,K] Beta_in_strength;
+  matrix[I,K] Beta_out_strength;
   matrix[I,K] Rho_centrality;
   
   // Regression
@@ -112,17 +112,23 @@ transformed parameters{
       
       // Ignore autoregressive effects in centrality estimation
       // by ignoring the diagonal elements
-      Beta_out_strength[i,k] = 0; // Initialize to zero
       Beta_in_strength[i,k] = 0; // Initialize to zero
+      Beta_out_strength[i,k] = 0; // Initialize to zero
+      Rho_strength[i,k] = 0; // Initialize to zero
+      
       for(j in 1:K){
         if(j != k){
-          Beta_out_strength[i,k] += abs(Beta[i,j,k]); // rowsums
           Beta_in_strength[i,k]  += abs(Beta[i,k,j]); // colsums
+          Beta_out_strength[i,k] += abs(Beta[i,j,k]); // rowsums
+          Rho_strength[i,k]      += abs(Rho[i,j,k]); // sum of partial correlations
+          
         }
       }
       // Divide by number of predictors to obtain the mean
-      Beta_out_strength[i,k] = Beta_out_strength[i,k] / (K);
       Beta_in_strength[i,k]  = Beta_in_strength[i,k] / (K);
+      Beta_out_strength[i,k] = Beta_out_strength[i,k] / (K);
+      Rho_strength[i,k]      = Rho_strength[i,k] / (K*2);
+      
       Rho_centrality[i,k]    = mean(abs(Rho[i, ,k]));
     } // end k
     // Density
@@ -131,18 +137,18 @@ transformed parameters{
   } // end i
    }
   // Regression ////////////////////////////////////////////////////////
-    mu_regression[,1] = reg_intercept[1] + reg_slope_density[1] * Beta_density;
-    mu_regression[,2] = reg_intercept[2] + reg_slope_density[2] * Beta_density;
-    mu_regression[,3] = reg_intercept[3] + reg_slope_density[3] * Beta_density;
+    mu_regression[,1] = reg_intercept[1] + reg_slope_density[1] * Beta_in_strength[,1];
+    mu_regression[,2] = reg_intercept[2] + reg_slope_density[2] * Beta_in_strength[,1];
+    mu_regression[,3] = reg_intercept[3] + reg_slope_density[3] * Beta_in_strength[,1];
     
     
-    mu_regression[,4] = reg_intercept[4] + reg_slope_density[4] * Rho_density;
-    mu_regression[,5] = reg_intercept[5] + reg_slope_density[5] * Rho_density;
-    mu_regression[,6] = reg_intercept[6] + reg_slope_density[6] * Rho_density;
+    mu_regression[,4] = reg_intercept[4] + reg_slope_density[4] * Beta_out_strength[,1];
+    mu_regression[,5] = reg_intercept[5] + reg_slope_density[5] * Beta_out_strength[,1];
+    mu_regression[,6] = reg_intercept[6] + reg_slope_density[6] * Beta_out_strength[,1];
     
-    mu_regression[,7] = reg_intercept[7] + reg_slope_density[7] * Beta_out_strength[,1];
-    mu_regression[,8] = reg_intercept[8] + reg_slope_density[8] * Beta_out_strength[,1];
-    mu_regression[,9] = reg_intercept[9] + reg_slope_density[9] * Beta_out_strength[,1];
+    mu_regression[,7] = reg_intercept[7] + reg_slope_density[7] * Rho_strength[,1];
+    mu_regression[,8] = reg_intercept[8] + reg_slope_density[8] * Rho_strength[,1];
+    mu_regression[,9] = reg_intercept[9] + reg_slope_density[9] * Rho_strength[,1];
 
 } // end transformed parameters
 ////////////////////////////////////////////////////////////////////////////////
@@ -217,31 +223,33 @@ generated quantities{
   
   // Standardize Regression Coefficients
   // beta * sd(x) = beta_std;
-  reg_slope_density_z[1] = reg_slope_density[1] * sd(Beta_density);
-  reg_slope_density_z[2] = reg_slope_density[2] * sd(Beta_density);
-  reg_slope_density_z[3] = reg_slope_density[3] * sd(Beta_density);
+  reg_slope_density_z[1] = reg_slope_density[1] * sd(Beta_in_strength[,1]);
+  reg_slope_density_z[2] = reg_slope_density[2] * sd(Beta_in_strength[,1]);
+  reg_slope_density_z[3] = reg_slope_density[3] * sd(Beta_in_strength[,1]);
+
+  reg_slope_density_z[4] = reg_slope_density[4] * sd(Beta_out_strength[,1]);
+  reg_slope_density_z[5] = reg_slope_density[5] * sd(Beta_out_strength[,1]);
+  reg_slope_density_z[6] = reg_slope_density[6] * sd(Beta_out_strength[,1]);
   
-  reg_slope_density_z[4] = reg_slope_density[4] * sd(Rho_density);
-  reg_slope_density_z[5] = reg_slope_density[5] * sd(Rho_density);
-  reg_slope_density_z[6] = reg_slope_density[6] * sd(Rho_density);
+  reg_slope_density_z[7] = reg_slope_density[7] * sd(Rho_strength[,1]);
+  reg_slope_density_z[8] = reg_slope_density[8] * sd(Rho_strength[,1]);
+  reg_slope_density_z[9] = reg_slope_density[8] * sd(Rho_strength[,1]);
   
-  reg_slope_density_z[7] = reg_slope_density[7] * sd(Beta_out_strength[,1]);
-  reg_slope_density_z[8] = reg_slope_density[8] * sd(Beta_out_strength[,1]);
-  reg_slope_density_z[9] = reg_slope_density[9] * sd(Beta_out_strength[,1]);
+
   
   // Standardize Regression Intercept
   // alpha_std = alpha + (beta_std * mean(x)) / sd(x);
-  reg_intercept_z[1] = reg_intercept[1] + (reg_slope_density_z[1] * mean(Beta_density)) / sd(Beta_density);
-  reg_intercept_z[2] = reg_intercept[2] + (reg_slope_density_z[2] * mean(Beta_density)) / sd(Beta_density);
-  reg_intercept_z[3] = reg_intercept[3] + (reg_slope_density_z[3] * mean(Beta_density)) / sd(Beta_density);
+  reg_intercept_z[1] = reg_intercept[1] + (reg_slope_density_z[1] * mean(Beta_in_strength[,1])) / sd(Beta_in_strength[,1]);
+  reg_intercept_z[2] = reg_intercept[2] + (reg_slope_density_z[2] * mean(Beta_in_strength[,1])) / sd(Beta_in_strength[,1]);
+  reg_intercept_z[3] = reg_intercept[3] + (reg_slope_density_z[3] * mean(Beta_in_strength[,1])) / sd(Beta_in_strength[,1]);
   
-  reg_intercept_z[4] = reg_intercept[4] + (reg_slope_density_z[4] * mean(Rho_density)) / sd(Rho_density);
-  reg_intercept_z[5] = reg_intercept[5] + (reg_slope_density_z[5] * mean(Rho_density)) / sd(Rho_density);
-  reg_intercept_z[6] = reg_intercept[6] + (reg_slope_density_z[6] * mean(Rho_density)) / sd(Rho_density);
+  reg_intercept_z[4] = reg_intercept[4] + (reg_slope_density_z[4] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
+  reg_intercept_z[5] = reg_intercept[5] + (reg_slope_density_z[5] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
+  reg_intercept_z[6] = reg_intercept[6] + (reg_slope_density_z[6] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
   
-  reg_intercept_z[7] = reg_intercept[7] + (reg_slope_density_z[7] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
-  reg_intercept_z[8] = reg_intercept[8] + (reg_slope_density_z[8] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
-  reg_intercept_z[9] = reg_intercept[9] + (reg_slope_density_z[9] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
+  reg_intercept_z[7] = reg_intercept[7] + (reg_slope_density_z[7] * mean(Rho_strength[,1])) / sd(Rho_strength[,1]);
+  reg_intercept_z[8] = reg_intercept[8] + (reg_slope_density_z[8] * mean(Rho_strength[,1])) / sd(Rho_strength[,1]);
+  reg_intercept_z[9] = reg_intercept[9] + (reg_slope_density_z[9] * mean(Rho_strength[,1])) / sd(Rho_strength[,1]);
   
 } // end generated quantities
 
