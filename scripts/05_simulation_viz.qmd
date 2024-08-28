@@ -51,8 +51,8 @@ Load the simulation results:
 sim_results <- readRDS(here("centrality-sim-newsimfn.rds"))
 
 # Create a cut version of the simulation results without MCMC diagnostics
-sim_res_cut <- sim_results %>%
-  select(-contains("rhat")) %>%
+sim_res_cut <- sim_results |>
+  select(-contains("rhat")) |>
   select(-contains("divtrans"))
 ```
 
@@ -64,36 +64,41 @@ sim_res_cut <- sim_results %>%
 
 Prepare dataframe for visualization by giving proper names, removing unnecessary columns, and pivoting longer:
 ```{r}
-sr_edit <- sim_res_cut %>% 
+sr_edit <- sim_res_cut |> 
   mutate(dgp = factor(dgp, levels = c("dense", "sparse")),
-         heterogeneity = factor(heterogeneity, levels = c("low", "high"))) %>% 
+         heterogeneity = factor(heterogeneity, levels = c("low", "high"))) |>
   # remove "reg_" from all column names
-  rename_with(~str_remove(., "reg_")) %>% 
+  rename_with(~str_remove(., "reg_")) |> 
   # remove everything before a "." in the column names
-  rename_with(~str_remove(., ".*\\.")) %>% 
-  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "RAM_USED", "SEED", "COMPLETED", "WARNINGS")) %>% 
+  rename_with(~str_remove(., ".*\\.")) |> 
+  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS")) |> 
   # pivot longer except conditions cols
   pivot_longer(cols = -c("dgp", "heterogeneity"), 
                names_to = "measure", 
-               values_to = "value") %>% 
+               values_to = "value") |> 
   mutate(measure = str_replace(measure, "power_reg", "powerreg"),
          measure = str_replace(measure, "powertwoside_reg", "powertwosidereg"),
          measure = str_replace(measure, "poweroneside_reg", "poweronesidereg"),
          measure = str_replace(measure, "rmse_reg", "rmsereg"),
-         measure = str_replace(measure, "mse_reg", "msereg")) %>%
+         measure = str_replace(measure, "mse_reg", "msereg")) |>
   separate_wider_delim(measure, 
                        delim = "_",
-                       names = c("pm", "outcome", "method", "summary")) %>% 
+                       names = c("pm", "outcome", "method", "summary")) |> 
   mutate(method = case_when(
     method == "gvar" ~ "GVAR",
     method == "gimme" ~ "GIMME",
     method == "mlvar" ~ "mlVAR",
     method == "bmlvar" ~ "BmlVAR"
-  )) %>%
+  )) |>
   # treat method as factor and order 
-  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) %>%
-  group_by(dgp, heterogeneity, pm, outcome, method) %>%
-  pivot_wider(names_from = summary, values_from = value) %>% 
+  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) |>
+  mutate(outcome = case_when(
+    outcome == "beta" ~ "Temporal",
+    outcome == "pcor" ~ "Contemporaneous",
+    .default = outcome
+  )) |>
+  group_by(dgp, heterogeneity, pm, outcome, method) |>
+  pivot_wider(names_from = summary, values_from = value) |> 
   ungroup()
 
 
@@ -124,21 +129,17 @@ Check if any non-convergence occured:
 Plot point estimate recovery (RMSE), not directly relevant for the manuscript, but maybe helpful to understand the overall performance of the different methods.
 
 ```{r viz-point-estimates}
-plot_mse <- sr_edit %>% 
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
-  mutate(outcome = case_when(
-    outcome == "beta" ~ "Temporal",
-    outcome == "pcor" ~ "Contemporaneous"
-  )) %>%
+plot_mse <- sr_edit |> 
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
   mutate(heterogeneity = case_when(
     heterogeneity == "low" ~ "Low\nHeterogeneity",
     heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
+  )) |>
   mutate(dgp = case_when(
     dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
-  )) %>%
-  filter(pm == "mse") %>% 
+  )) |>
+  filter(pm == "mse") |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method
@@ -172,21 +173,17 @@ plot_mse
 Plot Bias:
 
 ```{r viz-bias}
-plot_bias <- sr_edit %>% 
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
-  mutate(outcome = case_when(
-    outcome == "beta" ~ "Temporal",
-    outcome == "pcor" ~ "Contemporaneous"
-  )) %>%
+plot_bias <- sr_edit |> 
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
   mutate(heterogeneity = case_when(
     heterogeneity == "low" ~ "Low\nHeterogeneity",
     heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
+  )) |>
   mutate(dgp = case_when(
     dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
-  )) %>%
-  filter(pm == "bias") %>% 
+  )) |>
+  filter(pm == "bias") |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method
@@ -224,22 +221,18 @@ plot_bias
 ## Plot most central identical 
 
 ```{r viz-most-central}
-plot_mostcentral <- sr_edit %>% 
+plot_mostcentral <- sr_edit |> 
   # if mcse is missing, set to 0
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
-  mutate(outcome = case_when(
-    outcome == "beta" ~ "Temporal",
-    outcome == "pcor" ~ "Contemporaneous"
-  )) %>%
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
   mutate(heterogeneity = case_when(
     heterogeneity == "low" ~ "Low\nHeterogeneity",
     heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
+  )) |>
   mutate(dgp = case_when(
     dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
-  )) %>%
-  filter(pm == "mostcent") %>% 
+  )) |>
+  filter(pm == "mostcent") |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method
@@ -277,23 +270,23 @@ plot_mostcentral
 ## Plot rank correlation of centrality measures
 
 ```{r viz-rank-correlation}
-plot_rankcor <- sr_edit %>% 
+plot_rankcor <- sr_edit |> 
   # if mcse is missing, set to 0
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
   # uselessly used temp and cont instead of beta and pcor here
   mutate(outcome = case_when(
     outcome == "temp" ~ "Temporal",
     outcome == "cont" ~ "Contemporaneous"
-  )) %>%
+  )) |>
   mutate(heterogeneity = case_when(
     heterogeneity == "low" ~ "Low\nHeterogeneity",
     heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
+  )) |>
   mutate(dgp = case_when(
     dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
-  )) %>%
-  filter(pm == "rankcor") %>% 
+  )) |>
+  filter(pm == "rankcor") |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method
@@ -336,25 +329,25 @@ Need to find a way to nest the different strengths of regression coefficient
 Prep data
 ```{r viz-regression-power-prep}
 # Split data set into three based on true effect
-power_list <- sr_edit %>% 
-  filter(!str_detect(pm, "poweroneside")) %>% 
-  mutate(pm = str_replace(pm, "powertwoside", "power")) %>% 
-  filter(str_detect(pm, "power")) %>% 
+power_list <- sr_edit |> 
+  filter(!str_detect(pm, "poweroneside")) |> 
+  mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
+  filter(str_detect(pm, "power")) |> 
   mutate(outcome = case_when(
     outcome == "tempdens" ~ "Temporal\nDensity",
     outcome == "contdens" ~ "Contemporaneous\nDensity",
     outcome == "outstrength" ~ "Temporal\nOutstrength"
-  )) %>%
+  )) |>
   mutate(heterogeneity = case_when(
     heterogeneity == "low" ~ "Low\nHeterogeneity",
     heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
+  )) |>
   mutate(dgp = case_when(
     dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
-  )) %>%
+  )) |>
   # split pm into two columns, take last number into new column
-  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) |> 
   # split data set into list based on true effect
   split(.$true_effect)
 ```
@@ -362,7 +355,7 @@ power_list <- sr_edit %>%
 
 Create plot under the Null
 ```{r viz-regression-power0}
-plot0 <- power_list[[1]] %>% 
+plot0 <- power_list[[1]] |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method,
@@ -395,7 +388,7 @@ plot0
 
 Create plot for .2 
 ```{r viz-regression-power2}
-plot2 <- power_list[[2]] %>% 
+plot2 <- power_list[[2]] |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method,
@@ -428,7 +421,7 @@ plot2 <- power_list[[2]] %>%
 
 Create plot for .4
 ```{r viz-regression-power4}
-plot4 <- power_list[[3]] %>% 
+plot4 <- power_list[[3]] |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method,
@@ -476,23 +469,23 @@ plot_power_combined
 ## RMSE of Regression
 
 ```{r viz-regression-rmse}
-rmse_list <- sr_edit %>% 
-  filter(str_detect(pm, "rmsereg")) %>% 
+rmse_list <- sr_edit |> 
+  filter(str_detect(pm, "rmsereg")) |> 
   mutate(outcome = case_when(
     outcome == "tempdens" ~ "Temporal\nDensity",
     outcome == "contdens" ~ "Contemporaneous\nDensity",
     outcome == "outstrength" ~ "Temporal\nOutstrength"
-  )) %>%
+  )) |>
   mutate(heterogeneity = case_when(
     heterogeneity == "low" ~ "Low\nHeterogeneity",
     heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
+  )) |>
   mutate(dgp = case_when(
     dgp == "dense" ~ "Non-Sparse",
     dgp == "sparse" ~ "Sparse"
-  )) %>%
+  )) |>
   # split pm into two columns, take last number into new column
-  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) |> 
   # split data set into list based on true effect
   split(.$true_effect)
 ```
@@ -500,7 +493,7 @@ rmse_list <- sr_edit %>%
 
 Create plot under the Null
 ```{r viz-regression-rmse0}
-plot0_rmsereg <- rmse_list[[1]] %>% 
+plot0_rmsereg <- rmse_list[[1]] |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method,
@@ -533,7 +526,7 @@ plot0_rmsereg <- rmse_list[[1]] %>%
 
 Create plot for .2 
 ```{r viz-regression-rmse2}
-plot2_rmsereg <- rmse_list[[2]] %>% 
+plot2_rmsereg <- rmse_list[[2]] |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method,
@@ -566,7 +559,7 @@ plot2_rmsereg <- rmse_list[[2]] %>%
 
 Create plot for .4
 ```{r viz-regression-rmse4}
-plot4_rmsereg <- rmse_list[[3]] %>% 
+plot4_rmsereg <- rmse_list[[3]] |> 
   ggplot(aes(x = method, 
              y = mean, 
              colour = method,

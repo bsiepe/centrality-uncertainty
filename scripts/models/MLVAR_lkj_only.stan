@@ -50,7 +50,7 @@ transformed parameters{
   vector[I]  Rho_density;
   matrix[I,K] Beta_in_strength;
   matrix[I,K] Beta_out_strength;
-  matrix[I,K] Rho_centrality;
+  matrix[I,K] Rho_strength;
   
   // Regression
   matrix[I,P] mu_regression;
