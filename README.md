@@ -18,6 +18,7 @@ This repository contains files for the project "Uncertainty is central for good 
 - **empirical_example_rowland_wenzel_2020.qmd** Empirical Example: Rowland & Wenzel (2020
 - **empirical_exmaple_bringmann_2016.qmd** Empirical Example: Bringmann et al. (2016)
 - **mlvar_sim_experiments.qmd** contains code to experiment with mlVAR simulation 
+- **05_simulation_viz.qmd** contains code to visualize the simulation results
 
 
 ## Figures

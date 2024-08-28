@@ -1,6 +1,9 @@
 ---
 title: "Centrality"
-format: html
+format: 
+  html:
+    embed-resources: true
+    code-fold: true
 ---
 
 # Preparation

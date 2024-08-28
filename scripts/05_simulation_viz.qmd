@@ -1,0 +1,641 @@
+---
+title: "Uncertainty is central to reliable inference"
+subtitle: "Simulation Study Visualizations"
+author: 
+ - name: Björn S. Siepe
+   orcid: 0000-0002-9558-4648
+   affiliations: University of Marburg
+ - name: Matthias Kloft
+   orcid: 0000-0003-1845-6957
+   affiliations: University of Marburg  
+ - name: Daniel W. Heck
+   orcid: 0000-0002-6302-9252
+   affiliations: University of Marburg
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+    code-fold: true
+    code-tools: true
+    code-summary: "Show the code"
+    fig-width: 7
+    fig-height: 4.5
+    fig-align: "center"
+    embed-resoureces: true
+execute:
+  message: false
+  warning: false
+---
+
+# Background
+
+This document contains code to reproduce the visualizations of the simulation study in the manuscript. It also contains additional results not shown in the main manuscript. 
+
+# Preparation
+
+Load relevant packages:
+
+```{r}
+library(tidyverse)
+library(here)
+library(cowplot)
+library(ggh4x)
+library(ggokabeito)
+source(here::here("scripts", "00_functions.R"))
+```
+
+Load the simulation results: 
+```{r}
+sim_results <- readRDS(here("centrality-sim-newsimfn.rds"))
+
+# Create a cut version of the simulation results without MCMC diagnostics
+sim_res_cut <- sim_results %>%
+  select(-contains("rhat")) %>%
+  select(-contains("divtrans"))
+```
+
+
+
+
+
+## Data Wrangling
+
+Prepare dataframe for visualization by giving proper names, removing unnecessary columns, and pivoting longer:
+```{r}
+sr_edit <- sim_res_cut %>% 
+  mutate(dgp = factor(dgp, levels = c("dense", "sparse")),
+         heterogeneity = factor(heterogeneity, levels = c("low", "high"))) %>% 
+  # remove "reg_" from all column names
+  rename_with(~str_remove(., "reg_")) %>% 
+  # remove everything before a "." in the column names
+  rename_with(~str_remove(., ".*\\.")) %>% 
+  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "RAM_USED", "SEED", "COMPLETED", "WARNINGS")) %>% 
+  # pivot longer except conditions cols
+  pivot_longer(cols = -c("dgp", "heterogeneity"), 
+               names_to = "measure", 
+               values_to = "value") %>% 
+  mutate(measure = str_replace(measure, "power_reg", "powerreg"),
+         measure = str_replace(measure, "powertwoside_reg", "powertwosidereg"),
+         measure = str_replace(measure, "poweroneside_reg", "poweronesidereg"),
+         measure = str_replace(measure, "rmse_reg", "rmsereg"),
+         measure = str_replace(measure, "mse_reg", "msereg")) %>%
+  separate_wider_delim(measure, 
+                       delim = "_",
+                       names = c("pm", "outcome", "method", "summary")) %>% 
+  mutate(method = case_when(
+    method == "gvar" ~ "GVAR",
+    method == "gimme" ~ "GIMME",
+    method == "mlvar" ~ "mlVAR",
+    method == "bmlvar" ~ "BmlVAR"
+  )) %>%
+  # treat method as factor and order 
+  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) %>%
+  group_by(dgp, heterogeneity, pm, outcome, method) %>%
+  pivot_wider(names_from = summary, values_from = value) %>% 
+  ungroup()
+
+
+
+```
+
+
+Prepare different colors and settings for visualization: 
+```{r viz-prep}
+meth_colors <- ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)]
+
+```
+
+
+
+
+
+# Check Warnings and Non-Convergence
+Check if any non-convergence occured:
+```{r sim-errors}
+
+```
+
+
+
+# Point Estimates
+
+Plot point estimate recovery (RMSE), not directly relevant for the manuscript, but maybe helpful to understand the overall performance of the different methods.
+
+```{r viz-point-estimates}
+plot_mse <- sr_edit %>% 
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  mutate(outcome = case_when(
+    outcome == "beta" ~ "Temporal",
+    outcome == "pcor" ~ "Contemporaneous"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  filter(pm == "mse") %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add horizontal line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.15,0.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none")+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "MSE of Network Estimation")
+
+plot_mse
+
+```
+
+Plot Bias:
+
+```{r viz-bias}
+plot_bias <- sr_edit %>% 
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  mutate(outcome = case_when(
+    outcome == "beta" ~ "Temporal",
+    outcome == "pcor" ~ "Contemporaneous"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  filter(pm == "bias") %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add horizontal line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none")+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Bias of Network Estimation")
+
+plot_bias
+```
+
+
+
+
+# Centrality
+
+## Plot most central identical 
+
+```{r viz-most-central}
+plot_mostcentral <- sr_edit %>% 
+  # if mcse is missing, set to 0
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  mutate(outcome = case_when(
+    outcome == "beta" ~ "Temporal",
+    outcome == "pcor" ~ "Contemporaneous"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  filter(pm == "mostcent") %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add horizontal line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none")+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Proportion of Correct Central Nodes")
+
+ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 5, width = 9,
+       path = here::here("figures/"), device = "svg")
+
+plot_mostcentral
+
+```
+
+
+## Plot rank correlation of centrality measures
+
+```{r viz-rank-correlation}
+plot_rankcor <- sr_edit %>% 
+  # if mcse is missing, set to 0
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
+  # uselessly used temp and cont instead of beta and pcor here
+  mutate(outcome = case_when(
+    outcome == "temp" ~ "Temporal",
+    outcome == "cont" ~ "Contemporaneous"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  filter(pm == "rankcor") %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add horizontal line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none")+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Centrality Rank Correlation")
+
+
+plot_rankcor
+
+
+``` 
+
+Here seems to be something wrong
+
+# Regression
+
+Need to find a way to nest the different strengths of regression coefficient
+
+## Power of Regression
+Prep data
+```{r viz-regression-power-prep}
+# Split data set into three based on true effect
+power_list <- sr_edit %>% 
+  filter(!str_detect(pm, "poweroneside")) %>% 
+  mutate(pm = str_replace(pm, "powertwoside", "power")) %>% 
+  filter(str_detect(pm, "power")) %>% 
+  mutate(outcome = case_when(
+    outcome == "tempdens" ~ "Temporal\nDensity",
+    outcome == "contdens" ~ "Contemporaneous\nDensity",
+    outcome == "outstrength" ~ "Temporal\nOutstrength"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  # split pm into two columns, take last number into new column
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
+  # split data set into list based on true effect
+  split(.$true_effect)
+```
+
+
+Create plot under the Null
+```{r viz-regression-power0}
+plot0 <- power_list[[1]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,.3)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
+        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"))+
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       y = "False-Positive Rate")
+plot0
+
+```
+
+Create plot for .2 
+```{r viz-regression-power2}
+plot2 <- power_list[[2]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_blank())+
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       y = "Power")
+
+
+```
+
+
+Create plot for .4
+```{r viz-regression-power4}
+plot4 <- power_list[[3]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_blank())+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Power")
+plot4
+```
+
+
+Combine them with patchwork
+```{r viz-regression-power-combined}
+plot_power_combined <- cowplot::plot_grid(plot0, plot2, plot4, ncol = 1,
+                                          labels = c("True Effect: 0", 
+                                                     "True Effect: 0.2",
+                                                     "True Effect: 0.4"))
+
+ggsave("plot_power_combined_mock.svg", plot_power_combined, height = 12, width = 16,
+       path = here::here("figures/"), device = "svg")
+
+plot_power_combined
+
+```
+
+
+## RMSE of Regression
+
+```{r viz-regression-rmse}
+rmse_list <- sr_edit %>% 
+  filter(str_detect(pm, "rmsereg")) %>% 
+  mutate(outcome = case_when(
+    outcome == "tempdens" ~ "Temporal\nDensity",
+    outcome == "contdens" ~ "Contemporaneous\nDensity",
+    outcome == "outstrength" ~ "Temporal\nOutstrength"
+  )) %>%
+  mutate(heterogeneity = case_when(
+    heterogeneity == "low" ~ "Low\nHeterogeneity",
+    heterogeneity == "high" ~ "High\nHeterogeneity"
+  )) %>%
+  mutate(dgp = case_when(
+    dgp == "dense" ~ "Non-Sparse",
+    dgp == "sparse" ~ "Sparse"
+  )) %>%
+  # split pm into two columns, take last number into new column
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
+  # split data set into list based on true effect
+  split(.$true_effect)
+```
+
+
+Create plot under the Null
+```{r viz-regression-rmse0}
+plot0_rmsereg <- rmse_list[[1]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
+        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"))+
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       y = "RMSE")
+
+
+```
+
+Create plot for .2 
+```{r viz-regression-rmse2}
+plot2_rmsereg <- rmse_list[[2]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_blank())+
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       y = "RMSE")
+
+
+```
+
+
+Create plot for .4
+```{r viz-regression-rmse4}
+plot4_rmsereg <- rmse_list[[3]] %>% 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method)) +
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                    ymax = mean + 1*mcse),
+                width = .8,
+                position = position_dodge(0.7),
+                show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete()+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        strip.text.x.top = ggplot2::element_blank())+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "RMSE")
+
+plot4_rmsereg
+```
+
+Combine Plots:
+
+```{r plot-rmsereg-combined}
+plot_rmse_combined <- cowplot::plot_grid(plot0_rmsereg, 
+                                         plot2_rmsereg, 
+                                         plot4_rmsereg, 
+                                         ncol = 1,
+                                        labels = c("True Effect: 0", 
+                                                   "True Effect: 0.2",
+                                                   "True Effect: 0.4"))
+ggsave("plot_reg_rmse_combined_mock.svg", plot_rmse_combined, height = 12, width = 16,
+       path = here::here("figures/"), device = "svg")
+
+plot_rmse_combined
+
+```
+
+
+
+
+# MCMC Diagnostics
+We can now look at the Bayesian models in more detail and check if the Rhats are satisfactory, as well as if there were any divergent transitions.
+
+First, look at Rhats:
+```{r viz-rhat}
+
+```
+
+Second, were there any divergent transitions:
+```{r check-divtrans}
+
+```
+
+
+
+
+# Create Overview Table for Supplement
+Create one long overview table over all performance measures for the supplement.
+Probably will be long and unwieldy. 
+
+```{r overview-table}
+
+``` 
