@@ -27,10 +27,10 @@ source(here::here("scripts", "00_functions.R"))
 Load DGP based on estimated network structures:  
 ```{r}
 # non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth.RDS"))
+graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth_new.RDS"))
 
 # sparse DGP
-graph_sparse <- readRDS(here::here("data/graph_sparse_synth.RDS"))
+graph_sparse <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
 ```
 
 
@@ -117,6 +117,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
   beta_sd <- ifelse(condition$heterogeneity == "low",
                     0.05,
                     0.1)
+  sigma_sd <- ifelse(condition$heterogeneity == "low",
+                    0.05,
+                    0.1)
   
   # scale kappa random effects w.r.t diagonal elements
   mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
@@ -131,14 +134,17 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      graph = fixed_objects[[dgp_graph]],
                      beta_sd = beta_sd,
                      kappa_sd = kappa_sd,
+                     sigma_sd = sigma_sd, 
                      n_person = n_id,
                      n_time = n_tp,
                      n_node = n_var,
                      max_try = 10000,
                      listify = TRUE,
+                     sim_pkg = "mlVAR",
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
-                     most_cent_diff_temp_min = 0.1)
+                     most_cent_diff_temp_min = 0.1,
+                     innov_var_fixed_sigma = TRUE)
   if(any(is.na(ml_sim$beta))){
     stop("Generation of Betas failed")
   }
@@ -440,9 +446,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   chains = 4,
   cores = 1,
   warmup = 400,
-  iter = 500,
+  iter = 900,
   init = 0,
-  control = list(adapt_delta = 0.95),
+  control = list(adapt_delta = 0.90),
   verbose = FALSE
   )
   
@@ -473,7 +479,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     regression_intercept = ests_bmlvar$regression_intercept_est, 
     regression_slope = ests_bmlvar$regression_slope_est)
   
-  # save summary 
+  # save summary, but not the c_summary of individual chains
   summary_bmlvar <- rstan::summary(fit_bmlvar,
                                    pars = c("Beta",
                                             "Beta_out_strength",
@@ -493,7 +499,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                                             "mu_regression",
                                             "reg_slope_density_z",
                                             "reg_intercept_z",
-                                            "theta_sd"))
+                                            "theta_sd"))$summary
+  
+  # remove some posterior descriptives
+  summary_bmlvar <- summary_bmlvar[, !(colnames(summary_bmlvar) %in% c("25%", "75%"))]
   
   # convergence diagnostics
   rhat_bmlvar_tmp <- summary_bmlvar$summary %>% as.data.frame() %>% pull(Rhat)
@@ -553,8 +562,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       strength = strength_bmlvar,
       reg_bmlvar = reg_bmlvar,
       ests_bmlvar = ests_bmlvar,
-      # delete the chain summary of individual chains
-      summary_bmlvar = summary_bmlvar$summary,
+      summary_bmlvar = summary_bmlvar,
       rhat_bmlvar_mean = rhat_bmlvar_mean,
       rhat_bmlvar_11 = rhat_bmlvar_11,
       divtrans_bmlvar = divtrans_bmlvar
@@ -565,6 +573,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     kappa = dat$kappa,
     pcor = dat$pcor
   )
+  
+  # try if this saves us memory
+  rm(fit_gvar, fit_mlvar, fit_gimme, fit_bmlvar, summary_bmlvar)
+  
   return(ret_results)
   
 }
