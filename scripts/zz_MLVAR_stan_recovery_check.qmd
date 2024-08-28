@@ -1,9 +1,32 @@
 ---
-title: "Centrality"
-format: 
+title: "Uncertainty is central to reliable inference"
+subtitle: "BMLVAR Recovery Check"
+author: 
+ - name: Björn S. Siepe
+   orcid: 0000-0002-9558-4648
+   affiliations: University of Marburg
+ - name: Matthias Kloft
+   orcid: 0000-0003-1845-6957
+   affiliations: University of Marburg  
+ - name: Daniel W. Heck
+   orcid: 0000-0002-6302-9252
+   affiliations: University of Marburg
+date: "`r Sys.Date()`"
+format:
   html:
-    embed-resources: true
+    toc: true
+    number-sections: true
+    theme: cosmo
     code-fold: true
+    code-tools: true
+    code-summary: "Show the code"
+    fig-width: 7
+    fig-height: 4.5
+    fig-align: "center"
+    embed-resources: true
+execute:
+  message: false
+  warning: false
 ---
 
 # Preparation
@@ -271,7 +294,7 @@ mlvar_model <-
 ```
 
 ## Run Sampler
-```{r sampling, message=FALSE, renv.ignore=TRUE, eval=TRUE}
+```{r sampling, message=FALSE, renv.ignore=TRUE, eval=FALSE}
 fit_bmlvar <- rstan::sampling(
   object = mlvar_model,
   pars = c("Beta_raw", "L_Theta", "Intercepts_raw"),
