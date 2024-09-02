@@ -1113,10 +1113,14 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   ret$bmlvar_diagnostics <- list()
   ret$bmlvar_diagnostics$rhat_bmlvar_mean <- mean(sapply(results, function(x){
      x$bmlvar$rhat_bmlvar_mean}))
-  ret$bmlvar_diagnostics$rhat_bmlvar_mean <- mean(sapply(results, function(x){
+  ret$bmlvar_diagnostics$rhat11_bmlvar_mean <- mean(sapply(results, function(x){
      x$bmlvar$rhat_bmlvar_11}))
-  ret$bmlvar_diagnostics$divtrans_bmlvar <- lapply(results, function(x){
-    x$bmlvar$divtrans_bmlvar})
+  ret$bmlvar_diagnostics$divtrans_bmlvar_mean <- mean(sapply(results, function(x){
+    x$bmlvar$divtrans_bmlvar}))
+  ret$bmlvar_diagnostics$divtrans_bmlvar_sum <- sum(sapply(results, function(x){
+    x$bmlvar$divtrans_bmlvar}))
+  ret$bmlvar_diagnostics$divtrans_bmlvar_sumnonz <- sum(sapply(results, function(x){
+    x$bmlvar$divtrans_bmlvar}) > 0)
   ret_vec <- unlist(ret, use.names = TRUE)
   return(ret_vec)
   
