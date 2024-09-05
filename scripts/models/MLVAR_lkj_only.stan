@@ -129,7 +129,7 @@ transformed parameters{
       Beta_out_strength[i,k] = Beta_out_strength[i,k] / (K);
       Rho_strength[i,k]      = Rho_strength[i,k] / (K*2);
       
-      Rho_centrality[i,k]    = mean(abs(Rho[i, ,k]));
+      //Rho_centrality[i,k]    = mean(abs(Rho[i, ,k]));
     } // end k
     // Density
     Beta_density[i] = mean(abs(Beta[i]));

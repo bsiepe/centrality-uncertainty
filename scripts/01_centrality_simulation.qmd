@@ -205,8 +205,8 @@ sim_generate <- function(condition, fixed_objects = NULL){
   if(sd(outstrength) == 0){
     stop("No variation in outstrength")
   }
-  strength <- unlist(true_cent$strength) |> scale_nonz()
-  if(sd(contdens) == 0){
+  strength <- sapply(true_cent$strength, `[`, 1) |> scale_nonz()
+  if(sd(strength) == 0){
     stop("No variation in strength")
   }
   
@@ -455,8 +455,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       which(.)
   
   reg_data <- cbind(
-    dat$covariate_temp_dens[, 2:4],
-    dat$covariate_cont_dens[, 2:4],
+    dat$covariate_in_strength[, 2:4],
+    dat$covariate_cont_strength[, 2:4],
     dat$covariate_out_strength[, 2:4]
   )
   Y <- df_data %>% 
@@ -486,8 +486,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   seed = 2023,
   chains = 3,
   cores = 1,
-  warmup = 300,
-  iter = 600,
+  warmup = 200,
+  iter = 500,
   init = 0,
   control = list(adapt_delta = 0.90),
   verbose = FALSE
@@ -508,9 +508,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # Obtain centralities
   dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
   dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
-  # Obtain centralities
-  dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
-  dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
+  instrength_bmlvar <- ests_bmlvar$instrength_est$median
   outstrength_bmlvar <- ests_bmlvar$outstrength_est$median
   strength_bmlvar <- ests_bmlvar$pcor_centrality_est$median
   outstrength_bmlvar_first <- sapply(ests_bmlvar$outstrength_est$median, function(x) unname(x[1]))
@@ -547,7 +545,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   summary_bmlvar <- summary_bmlvar[, !(colnames(summary_bmlvar) %in% c("25%", "75%"))]
   
   # convergence diagnostics
-  rhat_bmlvar_tmp <- summary_bmlvar$summary %>% as.data.frame() %>% pull(Rhat)
+  rhat_bmlvar_tmp <- summary_bmlvar %>% as.data.frame() %>% pull(Rhat)
   rhat_bmlvar_tmp <- rhat_bmlvar_tmp[!is.nan(rhat_bmlvar_tmp)]
   rhat_bmlvar_mean <- mean(rhat_bmlvar_tmp, na.rm = TRUE)
   rhat_bmlvar_11 <- sum(rhat_bmlvar_tmp > 1.1)/length(rhat_bmlvar_tmp)
@@ -759,6 +757,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
       else{
         mci <- most_cent_ident(results[[i]][[method]][[measure]], 
                               results[[i]]$true_cent[[measure]])
+        # check if calculation work to prevent error
+        if(!is.vector(mci) |is.null(mci) | is.null(unlist(mci))){
+          return(NA)
+        }
         colSums(matrix(unlist(mci), 
                       nrow = n_id, 
                       byrow = FALSE))/n_id
@@ -880,7 +882,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    method,
                                    "_mean")
           ret[[paste0(result_name_rmse, "_mean")]] <- mean_tmp
-          if(func_name == "rmse"){
+          if(summary == "rmse"){
             # calculate MSE
             mse_tmp <- regression_rmse(
             results, 
@@ -907,7 +909,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_mcse")
             ret[[paste0(result_name_rmse, "_mcse")]] <- mcse_tmp
           }
-          else if(func_name == "mse"){
+          else if(summary == "mse"){
             mcse_tmp <- sqrt(
               apply(calc_list, 1, var, na.rm = TRUE) / n_rep)
             names(mcse_tmp) <- paste0(summary, 
@@ -1151,9 +1153,9 @@ n_id <- 40
 
 
 n_rep <- 2
-# library(future)
-# library(progressr)
-# future::plan(multisession, workers = n_rep)
+library(future)
+library(progressr)
+future::plan(multisession, workers = n_rep)
 # handlers("rstudio")
 # handlers('cli')
 
@@ -1166,8 +1168,8 @@ sim_results <- SimDesign::runSimulation(
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    # parallel = "future",
-                                    parallel = TRUE,
+                                    parallel = "future",
+                                    # parallel = TRUE,
                                     max_errors = 2,
                                     packages = c("tidyverse", 
                                                  "gimme",
@@ -1179,7 +1181,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "Rcpp"),
                                     # save_results = TRUE,
-                                    ncores = n_rep,
+                                    # ncores = n_rep,
                                     debug = "summarise"
                                     # filename = "centrality-simulation-timetest.rds",
                                     # save_seeds = TRUE

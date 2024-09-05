@@ -1,13 +1,41 @@
 #' ---
-#' title: "Centrality Simulation"
-#' format: html
+#' title: "Uncertainty is central for reliable inferences: 
+#'         Using dynamic network features as predictors"
+#' subtitle: "Simulation Code"
+#' author: 
+#'  - name: Björn S. Siepe
+#'    orcid: 0000-0002-9558-4648
+#'    affiliations: University of Marburg
+#'  - name: Matthias Kloft
+#'    orcid: 0000-0003-1845-6957
+#'    affiliations: University of Marburg  
+#'  - name: Daniel W. Heck
+#'    orcid: 0000-0002-6302-9252
+#'    affiliations: University of Marburg
+#' date: "`r Sys.Date()`"
+#' format:
+#'   html:
+#'     toc: true
+#'     number-sections: true
+#'     theme: cosmo
+#'     code-fold: true
+#'     code-tools: true
+#'     code-summary: "Show the code"
+#'     fig-width: 7
+#'     fig-height: 4.5
+#'     fig-align: "center"
+#'     embded-resouces: true
+#' execute:
+#'   message: false
+#'   warning: false
+#'   eval: false # only show code
 #' ---
 #' 
 #' # Background
-#' This script contains the `SimDesign` code for the simulation study. 
+#' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `02_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages-------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -25,7 +53,7 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## -------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth_new.RDS"))
 
@@ -39,7 +67,7 @@ graph_sparse <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----params---------------------------------------------------------------------------------------------------------------------
 # Type of DGP
 dgp <- c("sparse", "dense")
 
@@ -89,7 +117,7 @@ sim_pars <- list(
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----precompile-----------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -104,7 +132,7 @@ sim_pars$mlvar_model <-
 #' 
 #' 
 #' ## Simulating Data
-## ----data-generation-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-generation------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -165,17 +193,21 @@ sim_generate <- function(condition, fixed_objects = NULL){
   }
   
   # Extract and scale network features  
-  tempdens <- unlist(true_cent$dens_temp) |> scale_nonz()
-  if(sd(tempdens) == 0){
-    stop("No variation in tempdens")
+  # tempdens <- unlist(true_cent$dens_temp) |> scale_nonz()
+  # if(sd(tempdens) == 0){
+  #   stop("No variation in tempdens")
+  # }
+  instrength <- sapply(true_cent$instrength, `[`, 1) |> scale_nonz()
+  if(sd(instrength) == 0){
+    stop("No variation in instrength")
   }
   outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale_nonz()
   if(sd(outstrength) == 0){
     stop("No variation in outstrength")
   }
-  contdens <- unlist(true_cent$dens_cont) |> scale_nonz()
-  if(sd(contdens) == 0){
-    stop("No variation in contdens")
+  strength <- sapply(true_cent$strength, `[`, 1) |> scale_nonz()
+  if(sd(strength) == 0){
+    stop("No variation in strength")
   }
   
   
@@ -206,8 +238,8 @@ sim_generate <- function(condition, fixed_objects = NULL){
   }
 
   # Generate covariate matrices
-  covariate_temp_dens <- generate_covariate(tempdens, n_id, L)
-  covariate_cont_dens <- generate_covariate(contdens, n_id, L)
+  covariate_cont_strength <- generate_covariate(strength, n_id, L)
+  covariate_in_strength <- generate_covariate(instrength, n_id, L)
   covariate_out_strength <- generate_covariate(outstrength, n_id, L)
    
   
@@ -217,9 +249,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
     beta = ml_sim$beta_l,
     kappa = ml_sim$kappa_l,
     pcor = ml_sim$pcor_l,
-    covariate_temp_dens = covariate_temp_dens,
+    covariate_cont_strength = covariate_cont_strength,
     covariate_out_strength = covariate_out_strength,
-    covariate_cont_dens = covariate_cont_dens,
+    covariate_in_strength = covariate_in_strength,
     true_cent = true_cent
   )
   
@@ -233,7 +265,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 #' 
 #' # Analysis
 #' 
-## ----data-analysis---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-analysis--------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -269,7 +301,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   dens_temp_gvar <- unlist(cent_gvar$dens_temp)
   dens_cont_gvar <- unlist(cent_gvar$dens_cont)
   outstrength_gvar <- lapply(cent_gvar$outstrength, function(x) unname(x))
+  instrength_gvar <- lapply(cent_gvar$instrength, function(x) unname(x))
   strength_gvar <- lapply(cent_gvar$strength, function(x) unname(x))
+  instrength_gvar_first <- sapply(cent_gvar$instrength, function(x) unname(x[1]))
+  strength_gvar_first <- sapply(cent_gvar$strength, function(x) unname(x[1]))
   outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1]))
   
   # Create list of subject-specific estimates
@@ -281,8 +316,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   })
   
   # Fit regression
-  reg_gvar_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_gvar))
-  reg_gvar_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_gvar))
+  reg_gvar_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_gvar_first))
+  reg_gvar_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_gvar_first))
   reg_gvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gvar_first))
   
   #--- GIMME
@@ -317,8 +352,11 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   dens_temp_gimme <- unlist(cent_gimme$dens_temp)
   dens_cont_gimme <- unlist(cent_gimme$dens_cont)
   outstrength_gimme <- lapply(cent_gimme$outstrength, function(x) unname(x))
+  instrength_gimme <- lapply(cent_gimme$instrength, function(x) unname(x))
   strength_gimme <- lapply(cent_gimme$strength, function(x) unname(x))
   outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
+  instrength_gimme_first <- sapply(cent_gimme$instrength, function(x) unname(x[1]))
+  strength_gimme_first <- sapply(cent_gimme$strength, function(x) unname(x[1]))
   
   # Create list of subject-specific estimates
   beta_gimme <- lapply(fit_gimme$path_est_mats, function(x){
@@ -339,8 +377,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 
 
   # Fit regression
-  reg_gimme_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_gimme))
-  reg_gimme_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_gimme))
+  reg_gimme_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_gimme_first))
+  reg_gimme_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_gimme_first))
   reg_gimme_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gimme_first))
 
   # #--- frequentist mlVAR
@@ -366,7 +404,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   dens_cont_mlvar <- unlist(cent_mlvar$dens_cont)
   outstrength_mlvar <- lapply(cent_mlvar$outstrength, function(x) unname(x))
   strength_mlvar <- lapply(cent_mlvar$strength, function(x) unname(x))
+  instrength_mlvar <- lapply(cent_mlvar$instrength, function(x) unname(x))
   outstrength_mlvar_first <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
+  instrength_mlvar_first <- sapply(cent_mlvar$instrength, function(x) unname(x[1]))
+  strength_mlvar_first <- sapply(cent_mlvar$strength, function(x) unname(x[1]))
   
   # Create list of subject-specific estimates
   beta_mlvar <- lapply(1:n_id, function(i){
@@ -401,8 +442,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   })
 
   # Fit regression
-  reg_mlvar_temp_dens <- lapply(2:4, function(i) lm(dat$covariate_temp_dens[, i] ~ dens_temp_mlvar))
-  reg_mlvar_cont_dens <- lapply(2:4, function(i) lm(dat$covariate_cont_dens[, i] ~ dens_cont_mlvar))
+  reg_mlvar_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_mlvar_first))
+  reg_mlvar_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_mlvar_first))
   reg_mlvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_mlvar_first))
   
   
@@ -414,8 +455,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       which(.)
   
   reg_data <- cbind(
-    dat$covariate_temp_dens[, 2:4],
-    dat$covariate_cont_dens[, 2:4],
+    dat$covariate_in_strength[, 2:4],
+    dat$covariate_cont_strength[, 2:4],
     dat$covariate_out_strength[, 2:4]
   )
   Y <- df_data %>% 
@@ -443,10 +484,10 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   include = FALSE,
   data = stan_data,
   seed = 2023,
-  chains = 4,
+  chains = 3,
   cores = 1,
-  warmup = 400,
-  iter = 900,
+  warmup = 200,
+  iter = 500,
   init = 0,
   control = list(adapt_delta = 0.90),
   verbose = FALSE
@@ -467,12 +508,12 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # Obtain centralities
   dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
   dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
-  # Obtain centralities
-  dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
-  dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
+  instrength_bmlvar <- ests_bmlvar$instrength_est$median
   outstrength_bmlvar <- ests_bmlvar$outstrength_est$median
   strength_bmlvar <- ests_bmlvar$pcor_centrality_est$median
   outstrength_bmlvar_first <- sapply(ests_bmlvar$outstrength_est$median, function(x) unname(x[1]))
+  strength_bmlvar_first <- sapply(ests_bmlvar$pcor_centrality_est$median, function(x) unname(x[1]))
+  instrength_bmlvar_first <- sapply(ests_bmlvar$instrength_est$median, function(x) unname(x[1]))
 
   # Obtain regression coefficients
   reg_bmlvar <- list(
@@ -482,7 +523,6 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # save summary, but not the c_summary of individual chains
   summary_bmlvar <- rstan::summary(fit_bmlvar,
                                    pars = c("Beta",
-                                            "Beta_out_strength",
                                             "mu_Beta",
                                             "sigma_Beta",
                                             "mu_Intercepts",
@@ -495,7 +535,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                                             "Rho_vec",
                                             "Beta_out_strength",
                                             "Beta_in_strength",
-                                            "Rho_centrality",
+                                            "Rho_strength",
                                             "mu_regression",
                                             "reg_slope_density_z",
                                             "reg_intercept_z",
@@ -505,7 +545,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   summary_bmlvar <- summary_bmlvar[, !(colnames(summary_bmlvar) %in% c("25%", "75%"))]
   
   # convergence diagnostics
-  rhat_bmlvar_tmp <- summary_bmlvar$summary %>% as.data.frame() %>% pull(Rhat)
+  rhat_bmlvar_tmp <- summary_bmlvar %>% as.data.frame() %>% pull(Rhat)
   rhat_bmlvar_tmp <- rhat_bmlvar_tmp[!is.nan(rhat_bmlvar_tmp)]
   rhat_bmlvar_mean <- mean(rhat_bmlvar_tmp, na.rm = TRUE)
   rhat_bmlvar_11 <- sum(rhat_bmlvar_tmp > 1.1)/length(rhat_bmlvar_tmp)
@@ -522,8 +562,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       dens_cont = dens_cont_gvar,
       outstrength = outstrength_gvar,
       strength = strength_gvar,
-      reg_tempdens = reg_gvar_temp_dens,
-      reg_contdens = reg_gvar_cont_dens,
+      instrength = instrength_gvar,
+      reg_instrength = reg_gvar_in_strength,
+      reg_strength = reg_gvar_cont_strength,
       reg_outstrength = reg_gvar_out_strength
     ),
     gimme = list(
@@ -535,8 +576,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       dens_cont = dens_cont_gimme,
       outstrength = outstrength_gimme,
       strength = strength_gimme,
-      reg_tempdens = reg_gimme_temp_dens,
-      reg_contdens = reg_gimme_cont_dens,
+      instrength = instrength_gimme,
+      reg_instrength = reg_gimme_in_strength,
+      reg_strength = reg_gimme_cont_strength,
       reg_outstrength = reg_gimme_out_strength
     ),
     mlvar = list(
@@ -547,8 +589,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       dens_cont = dens_cont_mlvar,
       outstrength = outstrength_mlvar,
       strength = strength_mlvar,
-      reg_tempdens = reg_mlvar_temp_dens,
-      reg_contdens = reg_mlvar_cont_dens,
+      instrength = instrength_mlvar,
+      reg_instrength = reg_mlvar_in_strength,
+      reg_strength = reg_mlvar_cont_strength,
       reg_outstrength = reg_mlvar_out_strength
     ),
     bmlvar = list(
@@ -560,6 +603,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       dens_cont = dens_cont_bmlvar,
       outstrength = outstrength_bmlvar,
       strength = strength_bmlvar,
+      instrength = instrength_bmlvar,
       reg_bmlvar = reg_bmlvar,
       ests_bmlvar = ests_bmlvar,
       summary_bmlvar = summary_bmlvar,
@@ -596,7 +640,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----summarize------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -713,6 +757,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
       else{
         mci <- most_cent_ident(results[[i]][[method]][[measure]], 
                               results[[i]]$true_cent[[measure]])
+        # check if calculation work to prevent error
+        if(!is.vector(mci) |is.null(mci) | is.null(unlist(mci))){
+          return(NA)
+        }
         colSums(matrix(unlist(mci), 
                       nrow = n_id, 
                       byrow = FALSE))/n_id
@@ -720,7 +768,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     })
   }
   
-  measures <- c("outstrength", "strength")
+  measures <- c("outstrength", "strength", "instrength")
   
   for(method in methods){
     for(measure in measures){
@@ -808,10 +856,9 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   # exclude bmlvar because of its different data structure
   methods <- c("gvar", "mlvar", "gimme")
-  measures <- c("tempdens", "contdens", "outstrength")
+  measures <- c("instrength", "strength", "outstrength")
   summaries <- c("rmse", "mse")
   
-  # rmse_list <- list()
 
   for (method in methods) {
       for (measure in measures) {
@@ -835,7 +882,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    method,
                                    "_mean")
           ret[[paste0(result_name_rmse, "_mean")]] <- mean_tmp
-          if(func_name == "rmse"){
+          if(summary == "rmse"){
             # calculate MSE
             mse_tmp <- regression_rmse(
             results, 
@@ -862,7 +909,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_mcse")
             ret[[paste0(result_name_rmse, "_mcse")]] <- mcse_tmp
           }
-          else if(func_name == "mse"){
+          else if(summary == "mse"){
             mcse_tmp <- sqrt(
               apply(calc_list, 1, var, na.rm = TRUE) / n_rep)
             names(mcse_tmp) <- paste0(summary, 
@@ -1068,10 +1115,14 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   ret$bmlvar_diagnostics <- list()
   ret$bmlvar_diagnostics$rhat_bmlvar_mean <- mean(sapply(results, function(x){
      x$bmlvar$rhat_bmlvar_mean}))
-  ret$bmlvar_diagnostics$rhat_bmlvar_mean <- mean(sapply(results, function(x){
+  ret$bmlvar_diagnostics$rhat11_bmlvar_mean <- mean(sapply(results, function(x){
      x$bmlvar$rhat_bmlvar_11}))
-  ret$bmlvar_diagnostics$divtrans_bmlvar <- lapply(results, function(x){
-    x$bmlvar$divtrans_bmlvar})
+  ret$bmlvar_diagnostics$divtrans_bmlvar_mean <- mean(sapply(results, function(x){
+    x$bmlvar$divtrans_bmlvar}))
+  ret$bmlvar_diagnostics$divtrans_bmlvar_sum <- sum(sapply(results, function(x){
+    x$bmlvar$divtrans_bmlvar}))
+  ret$bmlvar_diagnostics$divtrans_bmlvar_sumnonz <- sum(sapply(results, function(x){
+    x$bmlvar$divtrans_bmlvar}) > 0)
   ret_vec <- unlist(ret, use.names = TRUE)
   return(ret_vec)
   
@@ -1086,13 +1137,13 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----run-sim--------------------------------------------------------------------------------------------------------------------
 # For testing
 df_design_test <- df_design[3,]
-sim_pars$n_id <- 150
+sim_pars$n_id <- 40
 sim_pars$n_var <- 6
 n_var <- 6
-n_id <- 150
+n_id <- 40
 # sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
 # sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
 # sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
@@ -1118,6 +1169,7 @@ sim_results <- SimDesign::runSimulation(
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
                                     parallel = "future",
+                                    # parallel = TRUE,
                                     max_errors = 2,
                                     packages = c("tidyverse", 
                                                  "gimme",
@@ -1128,10 +1180,10 @@ sim_results <- SimDesign::runSimulation(
                                                  "posterior",
                                                  "rstan",
                                                  "Rcpp"),
-                                    save_results = TRUE,
-                                    # ncores = 1
-                                    # debug = "analyse",
-                                    filename = "centrality-simulation-timetest.rds",
+                                    # save_results = TRUE,
+                                    # ncores = n_rep,
+                                    debug = "summarise"
+                                    # filename = "centrality-simulation-timetest.rds",
                                     # save_seeds = TRUE
                                     )
 
@@ -1144,596 +1196,13 @@ saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
 #' 
 #' 
 #' 
-#' # Check Warnings and Non-Convergence
-#' 
-#' 
-#' Check if any non-convergence occured:
-## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-#' 
-#' 
-#' 
-#' # Visualization
-#' 
-#' 
-#' 
-#' TEMPORARY: Remove all Rhat columns, way too many in the pilot sim_results
-## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-sim_results <- readRDS(here("output/pilot_sim_results_clean_2104.RDS"))
-sim_res_cut <- sim_results %>%
-  select(-contains("rhat")) %>%
-  select(-contains("divtrans"))
-
-# sim_res_cut <- sim_results
-
-
-#' 
-#' 
-#' 
-#' 
-#' Prepare dataframe 
-## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-sr_edit <- sim_res_cut %>% 
-  mutate(dgp = factor(dgp, levels = c("dense", "sparse")),
-         heterogeneity = factor(heterogeneity, levels = c("low", "high"))) %>% 
-  # remove "reg_" from all column names
-  rename_with(~str_remove(., "reg_")) %>% 
-  # remove everything before a "." in the column names
-  rename_with(~str_remove(., ".*\\.")) %>% 
-  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "RAM_USED", "SEED", "COMPLETED", "WARNINGS")) %>% 
-  # pivot longer except conditions cols
-  pivot_longer(cols = -c("dgp", "heterogeneity"), 
-               names_to = "measure", 
-               values_to = "value") %>% 
-  mutate(measure = str_replace(measure, "power_reg", "powerreg"),
-         measure = str_replace(measure, "powertwoside_reg", "powertwosidereg"),
-         measure = str_replace(measure, "poweroneside_reg", "poweronesidereg"),
-         measure = str_replace(measure, "rmse_reg", "rmsereg"),
-         measure = str_replace(measure, "mse_reg", "msereg")) %>%
-  separate_wider_delim(measure, 
-                       delim = "_",
-                       names = c("pm", "outcome", "method", "summary")) %>% 
-  mutate(method = case_when(
-    method == "gvar" ~ "GVAR",
-    method == "gimme" ~ "GIMME",
-    method == "mlvar" ~ "mlVAR",
-    method == "bmlvar" ~ "BmlVAR"
-  )) %>%
-  # treat method as factor and order 
-  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) %>%
-  group_by(dgp, heterogeneity, pm, outcome, method) %>%
-  pivot_wider(names_from = summary, values_from = value) %>% 
-  ungroup()
-
-
-
-
-#' 
-#' 
-#' 
-#' Prepare different colors and settings for visualization: 
-## ----viz-prep--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-meth_colors <- ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)]
-
-
-#' 
-#' 
-#' 
-#' 
-#' 
-#' 
-#' ## Point Estimates
-#' 
-#' Plot point estimate recovery (RMSE), not directly relevant for the manuscript, but maybe helpful to understand the overall performance of the different methods.
-#' 
-## ----viz-point-estimates---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot_mse <- sr_edit %>% 
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
-  mutate(outcome = case_when(
-    outcome == "beta" ~ "Temporal",
-    outcome == "pcor" ~ "Contemporaneous"
-  )) %>%
-  mutate(heterogeneity = case_when(
-    heterogeneity == "low" ~ "Low\nHeterogeneity",
-    heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
-  mutate(dgp = case_when(
-    dgp == "dense" ~ "Non-Sparse",
-    dgp == "sparse" ~ "Sparse"
-  )) %>%
-  filter(pm == "mse") %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method
-             )) +
-  # add horizontal line between methods
-  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                            ymax = mean + 1*mcse),
-                        width = .8,
-                 position = position_dodge(0.7),
-                 show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(-0.15,0.1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none")+
-  labs(title = "",
-       x = "Method",
-       colour = "Method",
-       y = "MSE of Network Estimation")
-
-plot_mse
-
-
-#' 
-#' Plot Bias:
-#' 
-## ----viz-bias--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot_bias <- sr_edit %>% 
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
-  mutate(outcome = case_when(
-    outcome == "beta" ~ "Temporal",
-    outcome == "pcor" ~ "Contemporaneous"
-  )) %>%
-  mutate(heterogeneity = case_when(
-    heterogeneity == "low" ~ "Low\nHeterogeneity",
-    heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
-  mutate(dgp = case_when(
-    dgp == "dense" ~ "Non-Sparse",
-    dgp == "sparse" ~ "Sparse"
-  )) %>%
-  filter(pm == "bias") %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method
-             )) +
-  # add horizontal line between methods
-  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                            ymax = mean + 1*mcse),
-                        width = .8,
-                 position = position_dodge(0.7),
-                 show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none")+
-  labs(title = "",
-       x = "Method",
-       colour = "Method",
-       y = "Bias of Network Estimation")
-
-plot_bias
-
-#' 
-#' 
-#' 
-#' 
-#' ## Centrality
-#' 
-#' ### Plot most central identical 
-#' 
-## ----viz-most-central------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot_mostcentral <- sr_edit %>% 
-  # if mcse is missing, set to 0
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
-  mutate(outcome = case_when(
-    outcome == "beta" ~ "Temporal",
-    outcome == "pcor" ~ "Contemporaneous"
-  )) %>%
-  mutate(heterogeneity = case_when(
-    heterogeneity == "low" ~ "Low\nHeterogeneity",
-    heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
-  mutate(dgp = case_when(
-    dgp == "dense" ~ "Non-Sparse",
-    dgp == "sparse" ~ "Sparse"
-  )) %>%
-  filter(pm == "mostcent") %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method
-             )) +
-  # add horizontal line between methods
-  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                            ymax = mean + 1*mcse),
-                        width = .8,
-                 position = position_dodge(0.7),
-                 show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none")+
-  labs(title = "",
-       x = "Method",
-       colour = "Method",
-       y = "Proportion of Correct Central Nodes")
-
-ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 5, width = 9,
-       path = here::here("figures/"), device = "svg")
-
-plot_mostcentral
-
-
-#' 
-#' 
-#' ### Plot rank correlation of centrality measures
-#' 
-## ----viz-rank-correlation--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot_rankcor <- sr_edit %>% 
-  # if mcse is missing, set to 0
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) %>%
-  # uselessly used temp and cont instead of beta and pcor here
-  mutate(outcome = case_when(
-    outcome == "temp" ~ "Temporal",
-    outcome == "cont" ~ "Contemporaneous"
-  )) %>%
-  mutate(heterogeneity = case_when(
-    heterogeneity == "low" ~ "Low\nHeterogeneity",
-    heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
-  mutate(dgp = case_when(
-    dgp == "dense" ~ "Non-Sparse",
-    dgp == "sparse" ~ "Sparse"
-  )) %>%
-  filter(pm == "rankcor") %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method
-             )) +
-  # add horizontal line between methods
-  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                            ymax = mean + 1*mcse),
-                        width = .8,
-                 position = position_dodge(0.7),
-                 show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none")+
-  labs(title = "",
-       x = "Method",
-       colour = "Method",
-       y = "Centrality Rank Correlation")
-
-
-plot_rankcor
-
-
-
-#' 
-#' Here seems to be something wrong
-#' 
-#' ## Regression
-#' 
-#' Need to find a way to nest the different strengths of regression coefficient
-#' 
-#' ### Plot power of regression
-#' Prep data
-## ----viz-regression-power-prep---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Split data set into three based on true effect
-power_list <- sr_edit %>% 
-  filter(!str_detect(pm, "poweroneside")) %>% 
-  mutate(pm = str_replace(pm, "powertwoside", "power")) %>% 
-  filter(str_detect(pm, "power")) %>% 
-  mutate(outcome = case_when(
-    outcome == "tempdens" ~ "Temporal\nDensity",
-    outcome == "contdens" ~ "Contemporaneous\nDensity",
-    outcome == "outstrength" ~ "Temporal\nOutstrength"
-  )) %>%
-  mutate(heterogeneity = case_when(
-    heterogeneity == "low" ~ "Low\nHeterogeneity",
-    heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
-  mutate(dgp = case_when(
-    dgp == "dense" ~ "Non-Sparse",
-    dgp == "sparse" ~ "Sparse"
-  )) %>%
-  # split pm into two columns, take last number into new column
-  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
-  # split data set into list based on true effect
-  split(.$true_effect)
-
-#' 
-#' 
-#' Create plot under the Null
-## ----viz-regression-power0-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot0 <- power_list[[1]] %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,.3)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
-        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"))+
-  labs(title = "",
-       x = "",
-       colour = "Method",
-       y = "False-Positive Rate")
-plot0
-
-
-#' 
-#' Create plot for .2 
-## ----viz-regression-power2-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot2 <- power_list[[2]] %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_blank())+
-  labs(title = "",
-       x = "",
-       colour = "Method",
-       y = "Power")
-
-
-
-#' 
-#' 
-#' Create plot for .4
-## ----viz-regression-power4-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot4 <- power_list[[3]] %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_blank())+
-  labs(title = "",
-       x = "Method",
-       colour = "Method",
-       y = "Power")
-plot4
-
-#' 
-#' 
-#' Combine them with patchwork
-## ----viz-regression-power-combined-----------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot_power_combined <- cowplot::plot_grid(plot0, plot2, plot4, ncol = 1,
-                                          labels = c("True Effect: 0", 
-                                                     "True Effect: 0.2",
-                                                     "True Effect: 0.4"))
-
-ggsave("plot_power_combined_mock.svg", plot_power_combined, height = 12, width = 16,
-       path = here::here("figures/"), device = "svg")
-
-plot_power_combined
-
-
-#' 
-#' 
-#' ### Plot RMSE of regression
-#' 
-## ----viz-regression-rmse---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-rmse_list <- sr_edit %>% 
-  filter(str_detect(pm, "rmsereg")) %>% 
-  mutate(outcome = case_when(
-    outcome == "tempdens" ~ "Temporal\nDensity",
-    outcome == "contdens" ~ "Contemporaneous\nDensity",
-    outcome == "outstrength" ~ "Temporal\nOutstrength"
-  )) %>%
-  mutate(heterogeneity = case_when(
-    heterogeneity == "low" ~ "Low\nHeterogeneity",
-    heterogeneity == "high" ~ "High\nHeterogeneity"
-  )) %>%
-  mutate(dgp = case_when(
-    dgp == "dense" ~ "Non-Sparse",
-    dgp == "sparse" ~ "Sparse"
-  )) %>%
-  # split pm into two columns, take last number into new column
-  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) %>% 
-  # split data set into list based on true effect
-  split(.$true_effect)
-
-#' 
-#' 
-#' Create plot under the Null
-## ----viz-regression-rmse0--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot0_rmsereg <- rmse_list[[1]] %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
-        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"))+
-  labs(title = "",
-       x = "",
-       colour = "Method",
-       y = "RMSE")
-
-
-
-#' 
-#' Create plot for .2 
-## ----viz-regression-rmse2--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot2_rmsereg <- rmse_list[[2]] %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_blank())+
-  labs(title = "",
-       x = "",
-       colour = "Method",
-       y = "RMSE")
-
-
-
-#' 
-#' 
-#' Create plot for .4
-## ----viz-regression-rmse4--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot4_rmsereg <- rmse_list[[3]] %>% 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_blank())+
-  labs(title = "",
-       x = "Method",
-       colour = "Method",
-       y = "RMSE")
-
-plot4_rmsereg
-
-#' 
-#' Combine Plots:
-#' 
-## ----plot-rmsereg-combined-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-plot_rmse_combined <- cowplot::plot_grid(plot0_rmsereg, 
-                                         plot2_rmsereg, 
-                                         plot4_rmsereg, 
-                                         ncol = 1,
-                                        labels = c("True Effect: 0", 
-                                                   "True Effect: 0.2",
-                                                   "True Effect: 0.4"))
-ggsave("plot_reg_rmse_combined_mock.svg", plot_rmse_combined, height = 12, width = 16,
-       path = here::here("figures/"), device = "svg")
-
-plot_rmse_combined
-
-
-#' 
-#' 
-#' 
-#' 
-#' # Create Overview Table for Supplement
-#' Create one long overview table over all performance measures for the supplement.
-#' Probably will be long and unwieldy. 
-#' 
-## ----overview-table--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
 #' 
 #' 
 #' # Write to standard R script
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## -------------------------------------------------------------------------------------------------------------------------------
 knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
             output = here::here("scripts", "01_centrality_simulation.R"),
             documentation = 2)

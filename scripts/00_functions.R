@@ -1177,7 +1177,7 @@ extract_all_estimates <- function(fit,
       est_vector2vector(x, n_id, (n_var * (n_var - 1)) / 2)
     })
   pcor_centrality_est <-
-    extract_estimates(fit, "Rho_centrality") %>%
+    extract_estimates(fit, "Rho_strength") %>%
     map(function(x) {
       est_vector2vector(x, n_id, n_var)
     })
