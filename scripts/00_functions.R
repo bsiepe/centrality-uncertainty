@@ -1187,6 +1187,10 @@ extract_all_estimates <- function(fit,
     map(function(x) {
       est_vector2vector(x, n_id, n_var)
     })
+  instrength_est <-  extract_estimates(fit, "Beta_in_strength") %>%
+    map(function(x) {
+      est_vector2vector(x, n_id, n_var)
+    })
   regression_slope_est <-
     extract_estimates(fit, "reg_slope_density_z")
   regression_intercept_est <-
@@ -1200,6 +1204,7 @@ extract_all_estimates <- function(fit,
       contdens_est = contdens_est,
       tempdens_est = tempdens_est,
       outstrength_est = outstrength_est,
+      instrength_est = instrength_est,
       regression_slope_est = regression_slope_est,
       regression_intercept_est = regression_intercept_est
     )
