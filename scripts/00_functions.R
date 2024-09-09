@@ -1158,10 +1158,13 @@ extract_estimates <- function(fit, par) {
 # Extract estimates for all parameters
 # if transpose_beta is TRUE, the beta estimates are transposed
 # which means that they then have the lagged variables as columns
+# if pcor_matrix is TRUE, pcor estimates will be returned as a matrix
+# instead of as a vector
 extract_all_estimates <- function(fit, 
                                   n_id, 
                                   n_var, 
-                                  transpose_beta = FALSE) {
+                                  transpose_beta = FALSE,
+                                  pcor_matrix = FALSE) {
   
   # compute estimates
   beta_est <- extract_estimates(fit, "Beta") %>%
@@ -1176,11 +1179,23 @@ extract_all_estimates <- function(fit,
     map(function(x) {
       est_vector2vector(x, n_id, (n_var * (n_var - 1)) / 2)
     })
+  
+  # convert to matrix format
+  if(isTRUE(pcor_matrix)){
+    pcor_est <- lapply(pcor_est, function(x){
+      pcor_mat <- matrix(data = 0, nrow = n_var, ncol = n_var)
+      pcor_mat[upper.tri(pcor_mat)] <- x
+      pcor_mat <- pcor_mat + t(pcor_mat)
+      pcor_mat
+    })
+  }
+  
   pcor_centrality_est <-
     extract_estimates(fit, "Rho_strength") %>%
     map(function(x) {
       est_vector2vector(x, n_id, n_var)
     })
+  
   contdens_est <-  extract_estimates(fit, "Rho_density")
   tempdens_est <-  extract_estimates(fit, "Beta_density")
   outstrength_est <-  extract_estimates(fit, "Beta_out_strength") %>%
