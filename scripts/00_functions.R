@@ -1183,10 +1183,13 @@ extract_all_estimates <- function(fit,
   # convert to matrix format
   if(isTRUE(pcor_matrix)){
     pcor_est <- lapply(pcor_est, function(x){
-      pcor_mat <- matrix(data = 0, nrow = n_var, ncol = n_var)
-      pcor_mat[upper.tri(pcor_mat)] <- x
-      pcor_mat <- pcor_mat + t(pcor_mat)
-      pcor_mat
+      # loop over medians and CIs
+      lapply(x, function(y){
+        pcor_mat <- matrix(data = 0, nrow = n_var, ncol = n_var)
+        pcor_mat[upper.tri(pcor_mat)] <- as.numeric(y)
+        pcor_mat <- pcor_mat + t(pcor_mat)
+        pcor_mat
+      })
     })
   }
   
