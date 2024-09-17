@@ -43,12 +43,13 @@ library(here)
 library(cowplot)
 library(ggh4x)
 library(ggokabeito)
+library(pander)
 source(here::here("scripts", "00_functions.R"))
 ```
 
 Load the simulation results: 
 ```{r}
-sim_results <- readRDS(here("centrality-sim-newsimfn.rds"))
+sim_results <- readRDS(here("sim120924.rds"))
 
 # Create a cut version of the simulation results without MCMC diagnostics
 sim_res_cut <- sim_results |>
@@ -71,9 +72,9 @@ sr_edit <- sim_res_cut |>
   rename_with(~str_remove(., "reg_")) |> 
   # remove everything before a "." in the column names
   rename_with(~str_remove(., ".*\\.")) |> 
-  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS")) |> 
+  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS", "RAM_USED")) |> 
   # pivot longer except conditions cols
-  pivot_longer(cols = -c("dgp", "heterogeneity"), 
+  pivot_longer(cols = -c("dgp", "heterogeneity", "n_tp"), 
                names_to = "measure", 
                values_to = "value") |> 
   mutate(measure = str_replace(measure, "power_reg", "powerreg"),
@@ -113,9 +114,6 @@ meth_colors <- ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)]
 ```
 
 
-
-
-
 # Check Warnings and Non-Convergence
 Check if any non-convergence occured:
 ```{r sim-errors}
@@ -153,14 +151,15 @@ plot_mse <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+  ggh4x::facet_nested(dgp ~ outcome + n_tp,
                       axes = "all",
                       remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(-0.15,0.1)) +
+  scale_x_discrete(guide = guide_axis(angle = 90))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.03)) +
   scale_color_manual(values = meth_colors) +
   theme_centrality() +
-  theme(legend.position = "none")+
+  theme(legend.position = "none",
+        text = element_text(size = 22))+
   labs(title = "",
        x = "Method",
        colour = "Method",
@@ -197,14 +196,15 @@ plot_bias <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+  ggh4x::facet_nested(dgp ~ outcome + n_tp,
                       axes = "all",
                       remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1)) +
+  scale_x_discrete(guide = guide_axis(angle = 90))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.05,0.1)) +
   scale_color_manual(values = meth_colors) +
   theme_centrality() +
-  theme(legend.position = "none")+
+  theme(legend.position = "none",
+        text = element_text(size = 22))+
   labs(title = "",
        x = "Method",
        colour = "Method",
@@ -246,21 +246,22 @@ plot_mostcentral <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+  ggh4x::facet_nested(dgp ~ outcome + n_tp,
                       axes = "all",
                       remove_labels = "y") +
-  scale_x_discrete()+
+  scale_x_discrete(guide = guide_axis(angle = 90))+
   scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
   scale_color_manual(values = meth_colors) +
   theme_centrality() +
-  theme(legend.position = "none")+
+  theme(legend.position = "none",
+        text = element_text(size = 22))+
   labs(title = "",
        x = "Method",
        colour = "Method",
        y = "Proportion of Correct Central Nodes")
 
-ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 5, width = 9,
-       path = here::here("figures/"), device = "svg")
+# ggsave("plot_mostcentral_mock.svg", plot_mostcentral, height = 5, width = 9,
+       # path = here::here("figures/"), device = "svg")
 
 plot_mostcentral
 
@@ -300,14 +301,15 @@ plot_rankcor <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
+  ggh4x::facet_nested(dgp ~ outcome + n_tp,
                       axes = "all",
                       remove_labels = "y") +
-  scale_x_discrete()+
+  scale_x_discrete(guide = guide_axis(angle = 90))+
   scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
   scale_color_manual(values = meth_colors) +
   theme_centrality() +
-  theme(legend.position = "none")+
+  theme(legend.position = "none",
+        text = element_text(size = 22))+
   labs(title = "",
        x = "Method",
        colour = "Method",
@@ -318,8 +320,7 @@ plot_rankcor
 
 
 ``` 
-
-Here seems to be something wrong
+mlVAR seems to be horrible here.
 
 # Regression
 
@@ -329,14 +330,16 @@ Need to find a way to nest the different strengths of regression coefficient
 Prep data
 ```{r viz-regression-power-prep}
 # Split data set into three based on true effect
-power_list <- sr_edit |> 
+power_df <- sr_edit |> 
   filter(!str_detect(pm, "poweroneside")) |> 
   mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
   filter(str_detect(pm, "power")) |> 
   mutate(outcome = case_when(
     outcome == "tempdens" ~ "Temporal\nDensity",
     outcome == "contdens" ~ "Contemporaneous\nDensity",
-    outcome == "outstrength" ~ "Temporal\nOutstrength"
+    outcome == "outstrength" ~ "Temporal\nOutstrength",
+    outcome == "strength" ~ "Contemporaneous\nStrength",
+    outcome == "instrength" ~ "Temporal\nInstrength"
   )) |>
   mutate(heterogeneity = case_when(
     heterogeneity == "low" ~ "Low\nHeterogeneity",
@@ -347,119 +350,58 @@ power_list <- sr_edit |>
     dgp == "sparse" ~ "Sparse"
   )) |>
   # split pm into two columns, take last number into new column
-  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) |> 
-  # split data set into list based on true effect
-  split(.$true_effect)
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect"))
+
+power_list <- split(power_df, power_df$true_effect)
 ```
 
+Function to create the plots: 
 
-Create plot under the Null
-```{r viz-regression-power0}
-plot0 <- power_list[[1]] |> 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,.3)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
-        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"))+
-  labs(title = "",
-       x = "",
-       colour = "Method",
-       y = "False-Positive Rate")
-plot0
-
-```
-
-Create plot for .2 
-```{r viz-regression-power2}
-plot2 <- power_list[[2]] |> 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_blank())+
-  labs(title = "",
-       x = "",
-       colour = "Method",
-       y = "Power")
-
+```{r viz-regression-fn}
+# Function to create the plot for a given dataframe
+power_plot <- function(df) {
+  ggplot(df, aes(x = method, 
+                 y = mean, 
+                 colour = method,
+                 fill = method,
+                 group = method)) +
+    geom_errorbar(aes(ymin = mean - 1 * mcse,
+                      ymax = mean + 1 * mcse),
+                  width = 0.8,
+                  position = position_dodge(0.7),
+                  show.legend = FALSE) +
+    geom_point(position = position_dodge(0.7), 
+               size = 1.2) +
+    ggh4x::facet_nested(dgp ~ outcome + n_tp,
+                        axes = "all",
+                        remove_labels = "y") +
+    scale_x_discrete(guide = guide_axis(angle = 90)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, 0.4)) +
+    scale_color_manual(values = meth_colors) +
+    theme_centrality() +
+    theme(legend.position = "none",
+          strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
+          ggh4x.facet.nestline = element_line(colour = "#6d6d6e")) +
+    labs(title = "",
+         x = "",
+         colour = "Method",
+         y = "Detection Rate")
+}
 
 ```
 
 
-Create plot for .4
-```{r viz-regression-power4}
-plot4 <- power_list[[3]] |> 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_blank())+
-  labs(title = "",
-       x = "Method",
-       colour = "Method",
-       y = "Power")
-plot4
-```
-
-
-Combine them with patchwork
+Create the plots and combine them with patchwork
 ```{r viz-regression-power-combined}
-plot_power_combined <- cowplot::plot_grid(plot0, plot2, plot4, ncol = 1,
+plot_power_list <- lapply(power_list, power_plot)
+
+plot_power_combined <- cowplot::plot_grid(plotlist = plot_power_list, ncol = 1,
                                           labels = c("True Effect: 0", 
                                                      "True Effect: 0.2",
                                                      "True Effect: 0.4"))
 
-ggsave("plot_power_combined_mock.svg", plot_power_combined, height = 12, width = 16,
-       path = here::here("figures/"), device = "svg")
+ggsave("plot_power_combined_prelim.pdf", plot_power_combined, height = 12, width = 16,
+       path = here::here("figures/"))
 
 plot_power_combined
 
@@ -469,12 +411,14 @@ plot_power_combined
 ## RMSE of Regression
 
 ```{r viz-regression-rmse}
-rmse_list <- sr_edit |> 
+rmse_df <- sr_edit |> 
   filter(str_detect(pm, "rmsereg")) |> 
   mutate(outcome = case_when(
     outcome == "tempdens" ~ "Temporal\nDensity",
     outcome == "contdens" ~ "Contemporaneous\nDensity",
-    outcome == "outstrength" ~ "Temporal\nOutstrength"
+    outcome == "outstrength" ~ "Temporal\nOutstrength",
+    outcome == "strength" ~ "Contemporaneous\nStrength",
+    outcome == "instrength" ~ "Temporal\nInstrength"
   )) |>
   mutate(heterogeneity = case_when(
     heterogeneity == "low" ~ "Low\nHeterogeneity",
@@ -485,122 +429,61 @@ rmse_list <- sr_edit |>
     dgp == "sparse" ~ "Sparse"
   )) |>
   # split pm into two columns, take last number into new column
-  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) |> 
-  # split data set into list based on true effect
-  split(.$true_effect)
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect"))
+
+rmse_list <- split(rmse_df, rmse_df$true_effect)
 ```
 
-
-Create plot under the Null
-```{r viz-regression-rmse0}
-plot0_rmsereg <- rmse_list[[1]] |> 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
-        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"))+
-  labs(title = "",
-       x = "",
-       colour = "Method",
-       y = "RMSE")
-
-
+Function to create the plots: 
+```{r viz-rmse-function}
+plot_rmse <- function(df){
+  ggplot(data = df,
+         aes(
+           x = method,
+           y = mean,
+           colour = method,
+           fill = method,
+           group = method
+         )) +
+    geom_errorbar(
+      aes(ymin = mean - 1 * mcse, ymax = mean + 1 * mcse),
+      width = .8,
+      position = position_dodge(0.7),
+      show.legend = FALSE
+    ) +
+    geom_point(position = position_dodge(0.7), size = 1.2) +
+    ggh4x::facet_nested(dgp ~ outcome + n_tp,
+                        axes = "all",
+                        remove_labels = "y") +
+    scale_x_discrete(guide = guide_axis(angle = 90)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
+    scale_color_manual(values = meth_colors) +
+    theme_centrality() +
+    theme(
+      legend.position = "none",
+      strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
+      ggh4x.facet.nestline = element_line(colour = "#6d6d6e")
+    ) +
+    labs(
+      title = "",
+      x = "",
+      colour = "Method",
+      y = "RMSE"
+    )
+}
 ```
 
-Create plot for .2 
-```{r viz-regression-rmse2}
-plot2_rmsereg <- rmse_list[[2]] |> 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_blank())+
-  labs(title = "",
-       x = "",
-       colour = "Method",
-       y = "RMSE")
-
-
-```
-
-
-Create plot for .4
-```{r viz-regression-rmse4}
-plot4_rmsereg <- rmse_list[[3]] |> 
-  ggplot(aes(x = method, 
-             y = mean, 
-             colour = method,
-             fill = method,
-             group = method)) +
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                    ymax = mean + 1*mcse),
-                width = .8,
-                position = position_dodge(0.7),
-                show.legend = FALSE)+
-  geom_point(position = position_dodge(0.7), 
-             size = 1.2) +
-  ggh4x::facet_nested(dgp ~ heterogeneity + outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  scale_x_discrete()+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "none",
-        strip.text.x.top = ggplot2::element_blank())+
-  labs(title = "",
-       x = "Method",
-       colour = "Method",
-       y = "RMSE")
-
-plot4_rmsereg
-```
-
-Combine Plots:
-
+Create and combine Plots:
 ```{r plot-rmsereg-combined}
-plot_rmse_combined <- cowplot::plot_grid(plot0_rmsereg, 
-                                         plot2_rmsereg, 
-                                         plot4_rmsereg, 
+plot_rmse_list <- lapply(rmse_list, plot_rmse)
+
+plot_rmse_combined <- cowplot::plot_grid(plotlist = plot_rmse_list, 
                                          ncol = 1,
                                         labels = c("True Effect: 0", 
                                                    "True Effect: 0.2",
                                                    "True Effect: 0.4"))
-ggsave("plot_reg_rmse_combined_mock.svg", plot_rmse_combined, height = 12, width = 16,
-       path = here::here("figures/"), device = "svg")
+ggsave("plot_reg_rmse_combined_prelim.pdf", plot_rmse_combined, height = 12, width = 16,
+       path = here::here("figures/"))
 
 plot_rmse_combined
 
@@ -614,12 +497,25 @@ We can now look at the Bayesian models in more detail and check if the Rhats are
 
 First, look at Rhats:
 ```{r viz-rhat}
-
+sim_results |> 
+  select(bmlvar_diagnostics.rhat_bmlvar_mean) |> 
+  rename("Mean Rhat" = bmlvar_diagnostics.rhat_bmlvar_mean) |> 
+  knitr::kable()
 ```
 
 Second, were there any divergent transitions:
 ```{r check-divtrans}
-
+sim_results |> 
+  select(contains("divtrans")) |> 
+  rename_with(~ str_remove(., "bmlvar_diagnostics."), everything()) |> 
+  # rename(
+  #   "Mean Number of\nDivTrans" = divtrans_bmlvar_mean,
+  #   "Sum of\nDivTrans" = divtrans_bmlvar_sum,
+  #   "Number of Models\nwith Divtrans" = divtrans_bmlvar_sumnonz
+  # ) |> 
+  knitr::kable(col.names = c("Mean Number of DivTrans",
+                            "Sum of DivTrans",
+                            "Models with Divtrans"))
 ```
 
 
@@ -632,3 +528,13 @@ Probably will be long and unwieldy.
 ```{r overview-table}
 
 ``` 
+
+
+# Session Info
+
+```{r session-info}
+pander::pander(sessionInfo())
+```
+
+
+
