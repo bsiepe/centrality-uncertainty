@@ -8,3 +8,6 @@ scripts/graveyard.qmd
 .RData
 .Ruserdata
 
+scripts/mplus
+*.inp
+*.dat
