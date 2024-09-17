@@ -35,7 +35,7 @@
 #' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `02_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages----------------------------------------------------------------------------------------------------------------------
+## ----packages----------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -53,7 +53,7 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## ----------------------------------------------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth_new.RDS"))
 
@@ -67,29 +67,30 @@ graph_sparse <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params------------------------------------------------------------------------------------------------------------------------
-# Type of DGP
+## ----params------------------------------------------------------------------------------------------------------------------------------------------
 dgp <- c("sparse", "dense")
 
-# Heterogeneity
-heterogeneity <- c("low", "high")
+# Number of timepoints
+n_tp <- c(80, 120)
+
+heterogeneity <- "high"
+
 
 # Design Conditions
 df_design <- SimDesign::createDesign(
   dgp = dgp,
-  heterogeneity = heterogeneity
+  heterogeneity = heterogeneity,
+  n_tp = n_tp
   )
 
 
 # Simulation parameters
 # Number of individuals 
-n_id <- 200
+n_id <- 50
 
 # Number of variables
 n_var <- 6
 
-# Number of timepoints
-n_tp <- 80
 
 # for regression
 reg_error_sd = 1
@@ -106,7 +107,7 @@ gimme_var_only = TRUE
 sim_pars <- list(
   n_id = n_id,
   n_var = n_var,
-  n_tp = n_tp,
+  # n_tp = n_tp,
   reg_error_sd = reg_error_sd,
   # beta_sd = beta_sd,
   # kappa_sd = kappa_sd,
@@ -117,7 +118,7 @@ sim_pars <- list(
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile--------------------------------------------------------------------------------------------------------------------
+## ----precompile--------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -132,7 +133,7 @@ sim_pars$mlvar_model <-
 #' 
 #' 
 #' ## Simulating Data
-## ----data-generation---------------------------------------------------------------------------------------------------------------
+## ----data-generation---------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -164,7 +165,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      kappa_sd = kappa_sd,
                      sigma_sd = sigma_sd, 
                      n_person = n_id,
-                     n_time = n_tp,
+                     n_time = condition$n_tp,
                      n_node = n_var,
                      max_try = 10000,
                      listify = TRUE,
@@ -265,7 +266,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 #' 
 #' # Analysis
 #' 
-## ----data-analysis-----------------------------------------------------------------------------------------------------------------
+## ----data-analysis-----------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -463,6 +464,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     dplyr::select(-"ID") %>% 
     as.matrix()
   
+  n_tp <- condition$n_tp
+  
   # Prepare stan data
   stan_data <- list(
     K = n_var,
@@ -483,11 +486,11 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   pars = vars(contains("raw")),
   include = FALSE,
   data = stan_data,
-  seed = 2023,
-  chains = 3,
+  # seed = 2023,
+  chains = 4,
   cores = 1,
-  warmup = 200,
-  iter = 500,
+  warmup = 500,
+  iter = 1000,
   init = 0,
   control = list(adapt_delta = 0.90),
   verbose = FALSE
@@ -641,7 +644,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize---------------------------------------------------------------------------------------------------------------------
+## ----summarize---------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -1138,13 +1141,13 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim-----------------------------------------------------------------------------------------------------------------------
+## ----run-sim-----------------------------------------------------------------------------------------------------------------------------------------
 # For testing
-df_design_test <- df_design[3,]
-sim_pars$n_id <- 40
-sim_pars$n_var <- 6
-n_var <- 6
-n_id <- 40
+# df_design_test <- df_design[3,]
+# sim_pars$n_id <- 40
+# sim_pars$n_var <- 6
+# n_var <- 6
+# n_id <- 40
 # sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
 # sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
 # sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
@@ -1153,7 +1156,7 @@ n_id <- 40
 # sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
 
 
-n_rep <- 2
+n_rep <- 15
 library(future)
 library(progressr)
 future::plan(multisession, workers = n_rep)
@@ -1163,7 +1166,7 @@ future::plan(multisession, workers = n_rep)
 # started 2024-08-13 ~08:35
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design_test, 
+                                    design = df_design, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
@@ -1180,18 +1183,18 @@ sim_results <- SimDesign::runSimulation(
                                                  "bayestestR",
                                                  "posterior",
                                                  "rstan",
-                                                 "Rcpp")
-                                    # save_results = TRUE,
+                                                 "Rcpp"),
+                                    save_results = TRUE,
                                     # ncores = n_rep,
                                     # debug = "summarise"
-                                    # filename = "centrality-simulation-timetest.rds",
+                                    filename = "sim120924.rds"
                                     # save_seeds = TRUE
                                     )
 
 plan(sequential)
 
 SimClean()
-saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
+saveRDS(sim_results, file = here("output/pilot_sim_1709.RDS"))
 
 
 #' 
@@ -1203,7 +1206,7 @@ saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## ----------------------------------------------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------------------------------------------------------
 knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
             output = here::here("scripts", "01_centrality_simulation.R"),
             documentation = 2)
