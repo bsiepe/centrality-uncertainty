@@ -450,5 +450,20 @@ saveRDS(graph_nonsp_synth_new, here("data/graph_nonsparse_synth_new.RDS"))
 saveRDS(graph_sp_synth_new, here("data/graph_sparse_synth_new.RDS"))
 
 ```
+Write to LaTeX (using a function adapted from https://www.r-bloggers.com/2020/08/matrix-to-latex/):
+```{r}
+arr_to_latex <- function(arr){
+ rows <- apply(arr, MARGIN=1, paste, collapse = " & ")
+ matrix_string <- paste(rows, collapse = " \\\\ ")
+ return(cat(paste("\\begin{bmatrix}", matrix_string, "\\end{bmatrix}")))
+ }
+
+
+arr_to_latex(graph_nonsparse_synth_new$beta)
+arr_to_latex(graph_nonsparse_synth_new$sigma)
+```
+
+
+
 
 
