@@ -35,7 +35,7 @@
 #' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `02_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages----------------------------------------------------------------------------------------------------------------------------------------
+## ----packages----------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -53,7 +53,7 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## ----------------------------------------------------------------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth_new.RDS"))
 
@@ -67,7 +67,7 @@ graph_sparse <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params------------------------------------------------------------------------------------------------------------------------------------------
+## ----params------------------------------------------------------------------------------------------------------------------------------------------------------
 dgp <- c("sparse", "dense")
 
 # Number of timepoints
@@ -86,7 +86,7 @@ df_design <- SimDesign::createDesign(
 
 # Simulation parameters
 # Number of individuals 
-n_id <- 50
+n_id <- 150
 
 # Number of variables
 n_var <- 6
@@ -118,7 +118,7 @@ sim_pars <- list(
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile--------------------------------------------------------------------------------------------------------------------------------------
+## ----precompile--------------------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -133,7 +133,7 @@ sim_pars$mlvar_model <-
 #' 
 #' 
 #' ## Simulating Data
-## ----data-generation---------------------------------------------------------------------------------------------------------------------------------
+## ----data-generation---------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -266,7 +266,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 #' 
 #' # Analysis
 #' 
-## ----data-analysis-----------------------------------------------------------------------------------------------------------------------------------
+## ----data-analysis-----------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -320,6 +320,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   reg_gvar_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_gvar_first))
   reg_gvar_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_gvar_first))
   reg_gvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gvar_first))
+  
+  # remove fit object to save memory
+  rm(fit_gvar)
   
   #--- GIMME
   
@@ -382,10 +385,12 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   reg_gimme_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_gimme_first))
   reg_gimme_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gimme_first))
 
+  rm(fit_gimme)
+  
   # #--- frequentist mlVAR
 
   # Fit model
-  fit_mlvar <- tryCatch({suppressMessages(mlVAR::mlVAR(df_data,
+  fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(df_data,
                             vars = paste0("V", seq(1:n_var)),
                             idvar = "ID",
                             estimator = "lmer",
@@ -447,7 +452,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   reg_mlvar_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_mlvar_first))
   reg_mlvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_mlvar_first))
   
-  
+  rm(fit_mlvar)
   # 
   #--- Bayesian mlVAR
   # indicators for partial correlations
@@ -555,6 +560,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   rhat_bmlvar_11 <- sum(rhat_bmlvar_tmp > 1.1)/length(rhat_bmlvar_tmp)
   divtrans_bmlvar <- rstan::get_num_divergent(fit_bmlvar)
   
+  rm(fit_bmlvar)
+  
   #--- Return Results
   # Also return true centralities for comparison later
   ret_results <- list(
@@ -644,7 +651,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize---------------------------------------------------------------------------------------------------------------------------------------
+## ----summarize---------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -1141,7 +1148,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim-----------------------------------------------------------------------------------------------------------------------------------------
+## ----run-sim-----------------------------------------------------------------------------------------------------------------------------------------------------
 # For testing
 # df_design_test <- df_design[3,]
 # sim_pars$n_id <- 40
@@ -1194,7 +1201,7 @@ sim_results <- SimDesign::runSimulation(
 plan(sequential)
 
 SimClean()
-saveRDS(sim_results, file = here("output/pilot_sim_1709.RDS"))
+saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
 
 
 #' 
@@ -1206,7 +1213,7 @@ saveRDS(sim_results, file = here("output/pilot_sim_1709.RDS"))
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## ----------------------------------------------------------------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
             output = here::here("scripts", "01_centrality_simulation.R"),
             documentation = 2)
