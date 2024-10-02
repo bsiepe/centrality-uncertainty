@@ -1,3 +1,90 @@
+# DGP Functions -----------------------------------------------------------
+
+# Write to LaTeX ----------------------------------------------------------
+# (using a function adapted from https://www.r-bloggers.com/2020/08/matrix-to-latex/):
+arr_to_latex <- function(arr){
+  rows <- apply(arr, MARGIN=1, paste, collapse = " & ")
+  matrix_string <- paste(rows, collapse = " \\\\ ")
+  return(cat(paste("\\begin{bmatrix}", matrix_string, "\\end{bmatrix}")))
+}
+
+
+# Create VAR and Innov Matrix ---------------------------------------------
+create_var_matrix <- function(p, 
+                              diag_val = 0.35, 
+                              off_diag_val = 0.075, 
+                              boost_factor = 1.5, 
+                              sparse = FALSE, 
+                              sparsity_proportion = 0.3) {
+  mat <- matrix(off_diag_val, p, p)
+  diag(mat) <- diag_val
+  
+  if (sparse) {
+    off_diag_indices <- which(row(mat) != col(mat), arr.ind = TRUE)
+    num_to_zero <- round(sparsity_proportion * length(off_diag_indices[,1]))
+    zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
+    
+    for (i in 1:nrow(zero_indices)) {
+      mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+    }
+  }
+  
+  first_col_sum <- sum(mat[, 1])
+  boost_amount <- boost_factor * first_col_sum - first_col_sum
+  
+  mat[1, ] <- mat[1, ] + boost_amount / p
+  mat[, 1] <- mat[, 1] + boost_amount / p
+  
+  mat <- round(mat, digits = 3)
+  
+  ev_b <- eigen(mat)$values
+  if (isFALSE(all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1))) {
+    stop("VAR matrix is not stationary")
+  }
+  
+  
+  return(mat)
+}
+
+
+create_cov_matrix <- function(p, 
+                              diag_val = 1, 
+                              off_diag_val = 0.1, 
+                              boost_factor = 1.5, 
+                              sparse = FALSE, 
+                              sparsity_proportion = 0.3) {
+  mat <- matrix(off_diag_val, p, p)
+  diag(mat) <- diag_val
+  
+  if (sparse) {
+    off_diag_indices <- which(row(mat) != col(mat), arr.ind = TRUE)
+    num_to_zero <- round(sparsity_proportion * length(off_diag_indices[,1]))
+    zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
+    
+    for (i in 1:nrow(zero_indices)) {
+      mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+    }
+  }
+  
+  # Exclude diagonal values from the boost calculation
+  first_col_sum <- sum(mat[-1, 1])
+  boost_amount <- boost_factor * first_col_sum - first_col_sum
+  
+  mat[1, -1] <- mat[1, -1] + boost_amount / (p - 1)
+  mat[-1, 1] <- mat[-1, 1] + boost_amount / (p - 1)
+  
+  mat <- round(mat, digits = 3)
+  
+  ev_b <- eigen(mat)$values
+  if (isFALSE(all(ev_b > 0))) {
+    stop("Covariance matrix is not positive definite")
+  }
+  
+  return(mat)
+}
+
+
+
 # GVAR based ML sim function ----------------------------------------------
 # argument sparse_sim: if TRUE, no random noise/random effects will be added
 # to zero fixed effects

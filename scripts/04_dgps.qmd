@@ -450,20 +450,34 @@ saveRDS(graph_nonsp_synth_new, here("data/graph_nonsparse_synth_new.RDS"))
 saveRDS(graph_sp_synth_new, here("data/graph_sparse_synth_new.RDS"))
 
 ```
-Write to LaTeX (using a function adapted from https://www.r-bloggers.com/2020/08/matrix-to-latex/):
+Write to LaTeX:
 ```{r}
-arr_to_latex <- function(arr){
- rows <- apply(arr, MARGIN=1, paste, collapse = " & ")
- matrix_string <- paste(rows, collapse = " \\\\ ")
- return(cat(paste("\\begin{bmatrix}", matrix_string, "\\end{bmatrix}")))
- }
-
-
 arr_to_latex(graph_nonsparse_synth_new$beta)
 arr_to_latex(graph_nonsparse_synth_new$sigma)
 ```
 
 
+# Synthetic DGP based on previous simulation studies. 
+
+Instead of manually creating it, we base it on previous sim studies (see the preregistration for more information).
+```{r}
+test <- create_var_matrix(6, sparse = FALSE)
+colSums(test)                            
+rowSums(test)
+
+arr_to_latex(test)
+```
+
+
+
+
+Then we can create the corresponding innovation covariance matrix:
+```{r}
+test_cov <- create_cov_matrix(6, sparse = FALSE)
+colSums(test_cov)
+rowSums(test_cov)
+arr_to_latex(test_cov)
+```
 
 
 
