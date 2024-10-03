@@ -35,7 +35,7 @@
 #' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `02_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages----------------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages----------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -53,7 +53,7 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## ----------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth_new.RDS"))
 
@@ -67,7 +67,7 @@ graph_sparse <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----params------------------------------------------------------------------------------------------------------------
 dgp <- c("sparse", "dense")
 
 # Number of timepoints
@@ -118,7 +118,7 @@ sim_pars <- list(
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile--------------------------------------------------------------------------------------------------------------------------------------------------
+## ----precompile--------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -133,7 +133,7 @@ sim_pars$mlvar_model <-
 #' 
 #' 
 #' ## Simulating Data
-## ----data-generation---------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-generation---------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -266,7 +266,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 #' 
 #' # Analysis
 #' 
-## ----data-analysis-----------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-analysis-----------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -488,7 +488,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   fit_bmlvar <- rstan::sampling(
   object = fixed_objects$mlvar_model,
-  pars = vars(contains("raw")),
+  pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
   include = FALSE,
   data = stan_data,
   # seed = 2023,
@@ -651,7 +651,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize---------------------------------------------------------------------------------------------------------------------------------------------------
+## ----summarize---------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -1148,7 +1148,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim-----------------------------------------------------------------------------------------------------------------------------------------------------
+## ----run-sim-----------------------------------------------------------------------------------------------------------
 # For testing
 # df_design_test <- df_design[3,]
 # sim_pars$n_id <- 40
@@ -1213,7 +1213,7 @@ saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## ----------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----------------------------------------------------------------------------------------------------------------------
 knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
             output = here::here("scripts", "01_centrality_simulation.R"),
             documentation = 2)

@@ -488,7 +488,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   fit_bmlvar <- rstan::sampling(
   object = fixed_objects$mlvar_model,
-  pars = vars(contains("raw")),
+  pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
   include = FALSE,
   data = stan_data,
   # seed = 2023,
