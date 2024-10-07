@@ -69,13 +69,24 @@ slopes <- lapply(sim_res_4$results, function(x){
 })
 
 
-slopes %>% 
-  bind_rows() %>% 
+slopes |> 
+  bind_rows() |> 
+  rename(
+    "0.0" = zero,
+    "0.2" = two,
+    "0.4" = four
+  ) |> 
   pivot_longer(cols = everything(), 
-               names_to = "reg_coef") %>% 
-  mutate(reg_coef = as.factor(reg_coef)) %>% 
+               names_to = "reg_coef") |> 
+  mutate(reg_coef = as.factor(reg_coef)) |> 
   ggplot(aes(x = reg_coef, y = value)) + 
-  geom_point()
+  geom_point()+
+  labs(x = "True Regression Slope",
+       y = "Estimated Regression Slope",
+       title = "BmlVAR Estimates of Regresion Slope",
+       caption = "n = 200") +
+  theme_centrality()+
+  theme(text = element_text(size = 21))
 
 ```
 
@@ -97,11 +108,11 @@ for(i in 1:2){
   l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
-l_coefs %>% 
-  dplyr::bind_rows(., .id = "true_coef") %>% 
+l_coefs |> 
+  dplyr::bind_rows(., .id = "true_coef") |> 
     pivot_longer(cols = everything(), 
-               names_to = "reg_coef") %>% 
-  mutate(reg_coef = as.factor(reg_coef)) %>% 
+               names_to = "reg_coef") |> 
+  mutate(reg_coef = as.factor(reg_coef)) |> 
   ggplot(aes(x = reg_coef, y = value)) + 
   geom_point()
 
@@ -186,7 +197,7 @@ df_denstemp <- data.frame(
   true_denstemp =  unlist(sim_res_4$results[[2]]$true_cent$dens_temp)
 )
 
-df_denstemp %>% 
+df_denstemp |> 
   ggplot(aes(x = true_denstemp, y = mlvar_denstemp)) + 
   geom_point() + 
   geom_smooth()
@@ -201,16 +212,16 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:2){
-  l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_tempdens[[1]])$standardized.coefficients[2]
-  l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_tempdens[[2]])$standardized.coefficients[2]
-  l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_tempdens[[3]])$standardized.coefficients[2]
+  l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[1]])$standardized.coefficients[2]
+  l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[2]])$standardized.coefficients[2]
+  l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
-l_coefs %>% 
-  dplyr::bind_rows(., .id = "true_coef") %>% 
+l_coefs |> 
+  dplyr::bind_rows(., .id = "true_coef") |> 
     pivot_longer(cols = everything(), 
-               names_to = "reg_coef") %>% 
-  mutate(reg_coef = as.factor(reg_coef)) %>% 
+               names_to = "reg_coef") |> 
+  mutate(reg_coef = as.factor(reg_coef)) |> 
   ggplot(aes(x = reg_coef, y = value)) + 
   geom_point()
 
@@ -227,16 +238,16 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:2){
-  l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_tempdens[[1]])$standardized.coefficients[2]
-  l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_tempdens[[2]])$standardized.coefficients[2]
-  l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_tempdens[[3]])$standardized.coefficients[2]
+  l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[1]])$standardized.coefficients[2]
+  l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[2]])$standardized.coefficients[2]
+  l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
-l_coefs %>% 
-  dplyr::bind_rows(., .id = "true_coef") %>% 
+l_coefs |> 
+  dplyr::bind_rows(., .id = "true_coef") |> 
     pivot_longer(cols = everything(), 
-               names_to = "reg_coef") %>% 
-  mutate(reg_coef = as.factor(reg_coef)) %>% 
+               names_to = "reg_coef") |> 
+  mutate(reg_coef = as.factor(reg_coef)) |> 
   ggplot(aes(x = reg_coef, y = value)) + 
   geom_point()
 ```
