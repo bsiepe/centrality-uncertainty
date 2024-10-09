@@ -71,22 +71,24 @@ We define the conditions and the fixed parameters for the simulation.
 dgp <- c("sparse", "dense")
 
 # Number of timepoints
-n_tp <- c(80, 120)
+n_tp <- c(60, 120)
 
-heterogeneity <- "high"
+heterogeneity <- "low"
 
+# Simulation parameters
+# Number of individuals 
+n_id <- c(75, 200)
 
 # Design Conditions
 df_design <- SimDesign::createDesign(
   dgp = dgp,
+  n_id = n_id,
   heterogeneity = heterogeneity,
   n_tp = n_tp
   )
 
 
-# Simulation parameters
-# Number of individuals 
-n_id <- 150
+
 
 # Number of variables
 n_var <- 6
@@ -623,14 +625,15 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       divtrans_bmlvar = divtrans_bmlvar
     ),
     true_cent = dat$true_cent,
+    covariate_cont_strength = dat$covariate_cont_strength,
+    covariate_in_strength = dat$covariate_in_strength,
+    covariate_out_strength = dat$covariate_out_strength,
     data = dat$data,
     beta = dat$beta,
     kappa = dat$kappa,
     pcor = dat$pcor
   )
   
-  # try if this saves us memory
-  rm(fit_gvar, fit_mlvar, fit_gimme, fit_bmlvar, summary_bmlvar)
   
   return(ret_results)
   
