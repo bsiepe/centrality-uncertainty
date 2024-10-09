@@ -41,7 +41,7 @@ execute:
 ---
 
 # Background
-This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `02_simulation_viz.qmd` script.
+This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `05_simulation_viz.qmd` script.
 
 We first load all relevant packages: 
 ```{r packages}
