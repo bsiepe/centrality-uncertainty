@@ -41,10 +41,10 @@
 #' ---
 #' 
 #' # Background
-#' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `02_simulation_viz.qmd` script.
+#' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `05_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -62,7 +62,7 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth_new.RDS"))
 
@@ -76,8 +76,8 @@ graph_sparse <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-dgp <- c("sparse", "dense")
+## ----params-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+dgp <- c("dense")
 
 # Number of timepoints
 n_tp <- c(60, 120)
@@ -125,7 +125,7 @@ sim_pars <- list(
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----precompile---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -140,7 +140,7 @@ sim_pars$mlvar_model <-
 #' 
 #' 
 #' ## Simulating Data
-## ----data-generation---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-generation----------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -273,7 +273,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 #' 
 #' # Analysis
 #' 
-## ----data-analysis-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-analysis------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -659,7 +659,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----summarize----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -1036,7 +1036,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   calc_pwr_oneside <- regression_power_bmlvar(
     results = results, 
     method = "bmlvar",
-    oneside = FALSE)
+    oneside = TRUE)
   calc_pwr_twoside <- regression_power_bmlvar(
     results = results, 
     method = "bmlvar",
@@ -1157,7 +1157,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----run-sim------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # For testing
 # df_design_test <- df_design[3,]
 # sim_pars$n_id <- 40
@@ -1173,13 +1173,12 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 
 n_rep <- 10
-# library(future)
-# library(progressr)
-# future::plan(multisession, workers = n_rep)
+library(future)
+library(progressr)
+future::plan(multisession, workers = n_rep)
+df_design_test <- df_design[c(3,4),]
 
 # started 2024-08-13 ~08:35
-
-df_design_test <- df_design[4,]
 
 sim_results <- SimDesign::runSimulation(
                                     design = df_design_test, 
@@ -1188,8 +1187,8 @@ sim_results <- SimDesign::runSimulation(
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    # parallel = "future",
-                                    parallel = TRUE,
+                                    parallel = "future",
+                                    # parallel = TRUE,
                                     max_errors = 2,
                                     packages = c("tidyverse", 
                                                  "gimme",
@@ -1201,9 +1200,9 @@ sim_results <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "Rcpp"),
                                     save_results = TRUE,
-                                    ncores = n_rep,
+                                    # ncores = n_rep,
                                     # debug = "summarise"
-                                    filename = "sim091024.rds"
+                                    filename = "sim101024.rds"
                                     # save_seeds = TRUE
                                     )
 
@@ -1222,7 +1221,7 @@ sim_results <- SimDesign::runSimulation(
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #' knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
 #'             output = here::here("scripts", "01_centrality_simulation.R"),
 #'             documentation = 2)

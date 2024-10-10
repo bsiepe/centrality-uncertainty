@@ -90,6 +90,25 @@ slopes |>
 
 ```
 
+
+## Use two-step with BmlVAR centrality estimates
+
+Try using centrality point estimates obtained with BmlVAR to estimate a normal `lm()`.
+
+```{r}
+out_est <- sapply(sim_res_4$results[[1]]$bmlvar$outstrength, function(x) x[1])
+covar_true <- sim_res_4$results[[1]]$covariate_out_strength[,4]
+
+df_out <- data.frame(
+  outstrength = out_est, 
+  covariate = covar_true
+)
+
+lm.beta(lm(covariate ~ outstrength, data = df_out))
+```
+
+
+
 # Analyze other models
 
 ## graphicalVAR
@@ -103,13 +122,13 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:2){
-  l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
-  l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
-  l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
+  l_coefs$zero[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
+  l_coefs$two[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
+  l_coefs$four[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
 l_coefs |> 
-  dplyr::bind_rows(., .id = "true_coef") |> 
+  dplyr::bind_rows(.id = "true_coef") |> 
     pivot_longer(cols = everything(), 
                names_to = "reg_coef") |> 
   mutate(reg_coef = as.factor(reg_coef)) |> 

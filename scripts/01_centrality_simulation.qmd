@@ -1036,7 +1036,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   calc_pwr_oneside <- regression_power_bmlvar(
     results = results, 
     method = "bmlvar",
-    oneside = FALSE)
+    oneside = TRUE)
   calc_pwr_twoside <- regression_power_bmlvar(
     results = results, 
     method = "bmlvar",
@@ -1173,9 +1173,9 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 
 n_rep <- 15
-# library(future)
-# library(progressr)
-# future::plan(multisession, workers = n_rep)
+library(future)
+library(progressr)
+future::plan(multisession, workers = n_rep)
 
 # started 2024-08-13 ~08:35
 
@@ -1186,8 +1186,8 @@ sim_results <- SimDesign::runSimulation(
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    # parallel = "future",
-                                    parallel = TRUE,
+                                    parallel = "future",
+                                    # parallel = TRUE,
                                     max_errors = 2,
                                     packages = c("tidyverse", 
                                                  "gimme",
@@ -1199,7 +1199,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "Rcpp"),
                                     save_results = TRUE,
-                                    ncores = n_rep,
+                                    # ncores = n_rep,
                                     # debug = "summarise"
                                     filename = "sim091024.rds"
                                     # save_seeds = TRUE
