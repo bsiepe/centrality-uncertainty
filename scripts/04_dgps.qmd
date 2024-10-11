@@ -461,7 +461,7 @@ arr_to_latex(graph_nonsparse_synth_new$sigma)
 
 Instead of manually creating it, we base it on previous sim studies (see the preregistration for more information).
 ```{r}
-test <- create_var_matrix(6, sparse = FALSE)
+test <- create_var_matrix(6, sparse = FALSE, boost_factor = 1.25)
 colSums(test)                            
 rowSums(test)
 
@@ -473,7 +473,7 @@ arr_to_latex(test)
 
 Then we can create the corresponding innovation covariance matrix:
 ```{r}
-test_cov <- create_cov_matrix(6, sparse = FALSE)
+test_cov <- create_cov_matrix(6, sparse = FALSE, boost_factor = 1.25)
 colSums(test_cov)
 rowSums(test_cov)
 arr_to_latex(test_cov)

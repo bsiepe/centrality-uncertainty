@@ -1,31 +1,478 @@
 ---
-title: "Centrality"
-format: html
+title: "Uncertainty is central for reliable inferences: 
+        Using dynamic network features as predictors"
+subtitle: "Empirical Example"
+author: 
+ - name: Björn S. Siepe
+   orcid: 0000-0002-9558-4648
+   affiliations: University of Marburg
+ - name: Matthias Kloft
+   orcid: 0000-0003-1845-6957
+   affiliations: University of Marburg  
+ - name: Fridtjof Petersen
+   orcid: 0000-0002-4913-8532
+   affiliations: University of Groningen
+ - name: Yong Zhang
+   orcid: 0000-0002-6313-2575
+   affiliations: University of Groningen
+ - name: Laura F. Bringmann
+   orcid: 0000-0002-8091-9935
+   affiliations: University of Groningen
+ - name: Daniel W. Heck
+   orcid: 0000-0002-6302-9252
+   affiliations: University of Marburg
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+    code-fold: true
+    code-tools: true
+    code-summary: "Show the code"
+    fig-width: 7
+    fig-height: 4.5
+    fig-align: "center"
+    embded-resouces: true
+execute:
+  message: false
+  warning: false
+  eval: true
+params:
+  rerun: false  # define parameter if all large analyses should be rerun
 ---
 
 # Preparation
+In this document, we will use an empirical data set to demonstrate the results of different network analysis techniques. 
 
-```{r setup, include = FALSE}
+```{r setup}
 # Libraries
 library(tidyverse)
-library(rmarkdown)
 library(graphicalVAR)
 library(mlVAR)
-library(parallel)
 library(here)
-library(broom)
 library(gimme)
 library(rstan)
-library(bayesplot)
-library(posterior)
-library(gridExtra)
-library(psych)
 library(imputeTS)
+library(knitr)
 
-source(here("scripts", "functions.R"))
+source(here("scripts", "00_functions.R"))
 set.seed(35037)
 ```
 
+
+# Data 
+
+Load data:
+```{r load-data}
+data_bringmann <- readRDS(here("data", "data_Bringmann2016.rds"))
+```
+
+
+## Cleaning
+
+Apparently, the neuroticism values are not imported correctly - the 95 values for different IDs are simply shown in the first 95 rows. We need to clean the data first.
+```{r clean-data}
+data_bringmann <- data_bringmann |> 
+  janitor::clean_names()
+
+# split of the neuroticism column, then reattach it to the correct id
+neuroticism_vec <- data_bringmann |> 
+  select(subj_id, neuroticism) |> 
+  slice(1:95) |> 
+  mutate(subj_id = 1:95)
+
+data_bringmann |> 
+  select(!neuroticism) |> 
+  left_join(neuroticism_vec, by = "subj_id")
+
+```
+
+
+## Descriptives & Missing Values 
+
+We first plot the distributions of all variables: 
+```{r descriptives}
+data_bringmann |> 
+  select(-c(subj_id, neuroticism)) |> 
+  gather() |> 
+  ggplot(aes(value)) +
+  geom_histogram(fill = "#0072B2") +
+  facet_wrap(~key, scales = "free") +
+  theme_centrality()+
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0))
+```
+We can see considerable skewness in the "negative" variables. 
+
+
+
+Next, we check for missing values by calculating the missingness proportions for each variable and subject:
+```{r missing-values}
+data_bringmann |> 
+  select(-c(neuroticism)) |> 
+  group_by(subj_id) |> 
+  summarise_all(~sum(is.na(.x))/n()) |>
+  select(-subj_id) |> 
+  gather() |>
+  ggplot(aes(value)) +
+  geom_histogram(fill = "#0072B2") +
+  facet_wrap(~key, scales = "free") +
+  theme_centrality()+
+  scale_x_continuous(expand = c(0, 0), labels = scales::label_percent()) +
+  scale_y_continuous(expand = c(0, 0))
+```
+
+Apparently, the missingness is almost identical for all variables. 
+
+We can now check for zero or very low variances per individual, and then filter them out:
+```{r zero-variance}
+subj_to_exclude <- data_bringmann |> 
+  select(-c(neuroticism)) |> 
+  group_by(subj_id) |> 
+  summarise(across(everything(),
+                   ~var(.x, na.rm = TRUE))) |> 
+  filter(if_any(everything(), ~.x < 1)) |> 
+  pull(subj_id)
+
+data_bringmann <- data_bringmann |> 
+  filter(!subj_id %in% subj_to_exclude)
+
+subj_to_exclude |> 
+  knitr::kable()
+```
+
+As we can see, they all have a very low variance for "depressed"" and, in one case, for "dysphoric" and "anxious" as well.
+
+We then create an overview table that gives the average of person-specific means, standard deviations, and non-missing observations for all variables: 
+
+```{r summary-table}
+data_bringmann |> 
+  select(-c(neuroticism)) |> 
+  group_by(subj_id) |> 
+  summarize(across(everything(),
+                   list(mean = ~round(mean(.x, na.rm = TRUE), 2),
+                          sd = ~round(sd(.x, na.rm = TRUE), 2),
+                          obs = ~sum(!is.na(.x))),
+                   .names = "{.col}_{.fn}")) |> 
+  knitr::kable()
+```
+
+
+
+
+
+## Imputation
+Some of the methods require imputation, so we impute per person and per variable, using a Kalman filter approach.
+```{r impute}
+data_bringmann_imputed <- data_bringmann |> 
+  select(-neuroticism) |> 
+  group_by(subj_id) |> 
+  mutate(across(everything(),
+                ~imputeTS::na_kalman(.x))) |> 
+  ungroup() |> 
+  left_join(neuroticism_vec, by = "subj_id")
+```
+
+TODO check convergence problems here
+
+
+# Estimation
+
+We will now estimate the different network and subsequent regression models on the data set to predict neuroticism with the temporal outstrength.
+
+We first split off the time-invariant outcome from the rest of the data:
+```{r ema-data}
+df_data <- data_bringmann_imputed |> 
+  select(-c(neuroticism))
+```
+
+
+## `graphicalVAR` 
+
+### Network
+
+To estimate idiographic networks, we first split the data and then estimate a graphical VAR model per person.
+
+TODO need to scale data before for every method!
+
+
+```{r fit-gvar}
+#| eval: !expr params$rerun
+# subset data per person
+data_list <- split(df_data, ~ subj_id)
+
+vars <- data_bringmann_imputed |> 
+  select(-c(subj_id, neuroticism)) |> 
+  colnames()
+
+# fit for each individual
+fit_gvar <- lapply(data_list, function(x){
+    tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
+                               nLambda = 50,
+                               vars = vars,
+                               verbose = FALSE,
+                               gamma = 0, 
+                               scale = TRUE))}, error = function(e) NA)
+  })
+
+# save results
+saveRDS(fit_gvar, here("empirical_example", "fit_gvar.rds"))
+
+```
+
+```{r, include = FALSE}
+fit_gvar <- readRDS(here("empirical_example", "fit_gvar.rds"))
+```
+
+
+### Regression
+
+We first need to obtain the outstrength and density values for each individual: 
+```{r centrality-gvar}
+cent_gvar <- purrr::transpose(lapply(fit_gvar, function(x){
+    centrality_gvar(x)
+  }))
+
+dens_temp_gvar <- unlist(cent_gvar$dens_temp)
+outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1]))
+
+# Combine into dataframe with neuroticism
+reg_df_gvar <- data.frame(neuroticism = neuroticism_vec,
+                          dens_temp = dens_temp_gvar,
+                          outstrength = outstrength_gvar_first)
+
+```
+
+Now we can regress neuroticism on outstrength:
+```{r reg-gvar}
+reg_gvar_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gvar)
+```
+
+And we can regress it on the temporal density:
+```{r reg-gvar-dens}
+reg_gvar_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gvar)
+``` 
+
+## `mlVAR`
+
+### Network
+
+We fit an mlVAR model to the data: 
+```{r fit-mlvar}
+#| eval: !expr params$rerun
+
+vars <- data_bringmann_imputed |> 
+  select(-c(subj_id, neuroticism)) |> 
+  colnames()
+
+fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(data_bringmann_imputed,
+                            vars = vars,
+                            idvar = "subj_id",
+                            estimator = "lmer",
+                            contemporaneous = "correlated",
+                            temporal = "correlated",
+                            nCores = 1,
+                            scale = FALSE))}, error = function(e) NA)
+
+
+saveRDS(fit_mlvar, here("empirical_example", "fit_mlvar.rds"))
+```
+
+```{r, include = FALSE}
+fit_mlvar <- readRDS(here("empirical_example", "fit_mlvar.rds"))
+```
+
+
+### Regression
+
+We obtain the network features: 
+```{r centrality-mlvar}
+cent_mlvar <- centrality_mlvar(fit_mlvar)
+
+dens_temp_mlvar <- cent_mlvar$dens_temp
+outstrength_mlvar_first <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
+
+# Combine into dataframe with neuroticism
+reg_df_mlvar <- data.frame(neuroticism = neuroticism_vec,
+                          dens_temp = dens_temp_mlvar,
+                          outstrength = outstrength_mlvar_first)
+```
+
+Now perform both regressions again: 
+```{r reg-mlvar}
+reg_mlvar_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_mlvar)
+```
+
+```{r reg-mlvar-dens}
+reg_mlvar_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar)
+```
+
+## `GIMME`
+
+### Network
+
+```{r fit-gimme}
+#| eval: !expr params$rerun
+fit_gimme <- tryCatch({gimme::gimme(data_list,
+                            ar = TRUE,
+                            subgroup = TRUE,
+                            plot = FALSE,
+                            hybrid = FALSE,
+                            groupcutoff = .75,
+                            subcutoff = .75,
+                            VAR = gimme_var_only)}, error = function(e) NA)
+
+saveRDS(fit_gimme, here("empirical_example", "fit_gimme.rds"))
+```
+
+```{r, include = FALSE}
+fit_gimme <- readRDS(here("empirical_example", "fit_gimme.rds"))
+```
+
+
+### Regression
+
+```{r centrality-gimme}
+cent_gimme <- centrality_gimme(fit_gimme)
+
+dens_temp_gimme <- cent_gimme$dens_temp
+outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
+
+# Combine into dataframe with neuroticism
+reg_df_gimme <- data.frame(neuroticism = neuroticism_vec,
+                          dens_temp = dens_temp_gimme,
+                          outstrength = outstrength_gimme_first)
+```
+
+
+```{r reg-gimme-outstrength}
+reg_gimme_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gimme)
+```
+
+```{r reg-gimmee-dens}
+reg_gimme_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gimme)
+```
+
+
+## `BmlVAR` 
+
+For the Bayesian approach, we perform network estimation and regression in one step. 
+
+### Network & Regression
+
+We first need to compile the model, and then estimate it with similar settings as in the simulation study: 
+```{r fit-bmlvar}
+#| eval: !expr params$rerun
+
+model_name <- "MLVAR_lkj_only"
+
+stan_model <-   rstan::stan_model(
+    file = here::here("scripts", "models", paste0(model_name, ".stan")),
+    model_name = model_name
+  )
+
+
+# indicators for partial correlations
+idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |>  
+      c() |>  
+      which(.)
+  
+reg_data <- cbind(
+    dat$covariate_in_strength[, 2:4],
+    dat$covariate_cont_strength[, 2:4],
+    dat$covariate_out_strength[, 2:4]
+  )
+Y <- df_data |> 
+    dplyr::select(-"ID") |>  
+    as.matrix()
+  
+n_tp <- condition$n_tp
+  
+# Prepare stan data
+# TODO change the regression outcomes!
+stan_data <- list(
+    K = n_var,
+    I = n_id,
+    P = 9,   # number of regression outcomes
+    N_total = n_id * n_tp,
+    n_t = rep(n_tp, n_id),
+    n_pc = n_var * (n_var - 1) / 2,
+    idx_rho = array(idx_rho, dim = length(idx_rho)),
+    Y = Y,
+    reg_covariate = reg_data,
+    sparsity = 2
+  )
+  
+  
+fit_bmlvar <- rstan::sampling(
+  object = stan_model,
+  pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
+  include = FALSE,
+  data = stan_data,
+  # seed = 2023,
+  chains = 4,
+  cores = 4,
+  warmup = 500,
+  iter = 1000,
+  init = 0,
+  control = list(adapt_delta = 0.90),
+  verbose = FALSE
+  )
+
+```
+
+Centrality estimates are sampled automatically:
+```{r centrality-bmlvar}
+# Transpose beta matrices for later summaries
+# in the DGP, cols represent lagged vars
+# but in BmlVAR, rows represent lagged vars
+ests_bmlvar <- extract_all_estimates(fit_bmlvar,
+                                       n_id = n_id, 
+                                       n_var = n_var, 
+                                       transpose_beta = TRUE,
+                                       pcor_matrix = TRUE)
+
+```
+
+Obtain the posterior samples of the regressions: 
+```{r reg-bmlvar}
+
+
+```
+
+
+# Contrast results 
+In this section, we collect and contrast the results of different methods. 
+
+## Temporal Outstrength
+
+```{r temporal-outstrength}
+
+```
+
+
+## Network Density
+
+
+
+
+
+
+
+
+# Addition: Bayesian Model Checks
+
+
+
+
+
+
+
+
+
+
+# Old Code
 ### Load Data
 ```{r}
 df_affect <-
