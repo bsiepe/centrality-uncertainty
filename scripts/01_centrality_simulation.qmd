@@ -82,7 +82,7 @@ dgp <- c("sparse", "dense")
 # Number of timepoints
 n_tp <- c(60, 120)
 
-heterogeneity <- "low"
+heterogeneity <- "high"
 
 # Simulation parameters
 # Number of individuals 
@@ -200,31 +200,40 @@ sim_generate <- function(condition, fixed_objects = NULL){
     return(scale(x))
   }
   
-  # Extract and scale network features  
-  # tempdens <- unlist(true_cent$dens_temp) |> scale_nonz()
-  # if(sd(tempdens) == 0){
-  #   stop("No variation in tempdens")
-  # }
-  instrength <- sapply(true_cent$instrength, `[`, 1) |> scale_nonz()
-  if(sd(instrength) == 0){
-    stop("No variation in instrength")
-  }
-  outstrength <- sapply(true_cent$outstrength, `[`, 1) |> scale_nonz()
-  if(sd(outstrength) == 0){
-    stop("No variation in outstrength")
-  }
-  strength <- sapply(true_cent$strength, `[`, 1) |> scale_nonz()
-  if(sd(strength) == 0){
-    stop("No variation in strength")
-  }
-  
   
   # Simulate covariate with certain error
   eps_sd <- reg_error_sd
+  
+  # signal-to-noise ratio when not standardizing
+  desired_snr <- 1
+  
+  # should true centralities be scaled before generating covariate?
+  scale_centralities <- FALSE
+  
+  instrength <- sapply(true_cent$instrength, `[`, 1)
+  outstrength <- sapply(true_cent$outstrength, `[`, 1)
+  strength <- sapply(true_cent$strength, `[`, 1)
 
-  # Simulate error
-  resid_dens <- rnorm(condition$n_id, mean = 0, sd = eps_sd)
-  resid_cent <- rnorm(condition$n_id, mean = 0, sd = eps_sd)
+  if (scale_centralities) {
+    instrength <- scale_nonz(instrength)
+    outstrength <- scale_nonz(outstrength)
+    strength <- scale_nonz(strength)
+    } else{
+    eps_sd_in <- sqrt(var(instrength) / desired_snr)
+    eps_sd_out <- sqrt(var(outstrength) / desired_snr)
+    eps_sd_strength <- sqrt(var(strength) / desired_snr)
+  }
+
+  if(sd(instrength) == 0){
+    stop("No variation in instrength")
+  }
+  if(sd(outstrength) == 0){
+    stop("No variation in outstrength")
+  }
+  if(sd(strength) == 0){
+    stop("No variation in strength")
+  }
+
 
   # correlation matrix of true effects
   rho <- c(
@@ -237,18 +246,28 @@ sim_generate <- function(condition, fixed_objects = NULL){
   L <- chol(rho)
   
   # Generate covariates with multiple levels of correlation
-  generate_covariate <- function(dens, n_id, L) {
+  generate_covariate <- function(dens, n_id, L, eps) {
     repeat {
-      covariate <- cbind(dens, rnorm(n_id), rnorm(n_id), rnorm(n_id))
+      covariate <- cbind(dens, 
+                         rnorm(n = n_id,
+                               mean = 0, 
+                               sd = eps), 
+                         rnorm(n = n_id,
+                               mean = 0, 
+                               sd = eps), 
+                         rnorm(n = n_id,
+                               mean = 0, 
+                               sd = eps))
       covariate <- covariate %*% L
       if (!any(is.na(covariate))) return(covariate)
     }
   }
 
   # Generate covariate matrices
-  covariate_cont_strength <- generate_covariate(strength, condition$n_id, L)
-  covariate_in_strength <- generate_covariate(instrength, condition$n_id, L)
-  covariate_out_strength <- generate_covariate(outstrength, condition$n_id, L)
+  covariate_cont_strength <- generate_covariate(dens = strength, n_id = condition$n_id, L = L, eps = if (scale_centralities) eps_sd else eps_sd_strength)
+  covariate_in_strength <- generate_covariate(dens = instrength, n_id = condition$n_id, L = L, eps = if (scale_centralities) eps_sd else eps_sd_in)
+  covariate_out_strength <- generate_covariate(dens = outstrength, n_id = condition$n_id, L = L, eps = if (scale_centralities) eps_sd else eps_sd_out)
+
    
   
   # Return data and true centralities
@@ -1172,7 +1191,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
 
 
-n_rep <- 15
+n_rep <- 10
 library(future)
 library(progressr)
 future::plan(multisession, workers = n_rep)
@@ -1198,10 +1217,10 @@ sim_results <- SimDesign::runSimulation(
                                                  "posterior",
                                                  "rstan",
                                                  "Rcpp"),
-                                    save_results = TRUE,
+                                    # save_results = TRUE,
                                     # ncores = n_rep,
-                                    # debug = "summarise"
-                                    filename = "sim091024.rds"
+                                    debug = "generate"
+                                    # filename = "sim141024.rds"
                                     # save_seeds = TRUE
                                     )
 
