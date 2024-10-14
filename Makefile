@@ -1,6 +1,6 @@
 all: docker
 
-FILE=miss-sim
+FILE=centrality-uncertainty
 
 ## build docker image (requires root rights for docker)
 dbuild: Dockerfile

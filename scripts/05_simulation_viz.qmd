@@ -58,7 +58,7 @@ source(here::here("scripts", "00_functions.R"))
 
 Load the simulation results: 
 ```{r}
-sim_results <- readRDS(here("sim071024.rds"))
+sim_results <- readRDS(here("sim101024.rds"))
 
 # Create a cut version of the simulation results without MCMC diagnostics
 sim_res_cut <- sim_results |>
@@ -75,15 +75,20 @@ sim_res_cut <- sim_results |>
 Prepare dataframe for visualization by giving proper names, removing unnecessary columns, and pivoting longer:
 ```{r}
 sr_edit <- sim_res_cut |> 
-  mutate(dgp = factor(dgp, levels = c("dense", "sparse")),
-         heterogeneity = factor(heterogeneity, levels = c("low", "high"))) |>
+  mutate(
+    # dgp = factor(dgp, levels = c("dense", "sparse")),
+    dgp = factor(dgp, levels = "dense"),
+    n_id = factor(n_id, levels = c(75, 200)),
+    # heterogeneity = factor(heterogeneity, levels = c("low", "high"))
+    heterogeneity = factor(heterogeneity, levels = "low")
+    ) |>
   # remove "reg_" from all column names
   rename_with(~str_remove(., "reg_")) |> 
   # remove everything before a "." in the column names
   rename_with(~str_remove(., ".*\\.")) |> 
   dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS", "RAM_USED")) |> 
   # pivot longer except conditions cols
-  pivot_longer(cols = -c("dgp", "heterogeneity", "n_tp"), 
+  pivot_longer(cols = -c("dgp", "heterogeneity", "n_tp", "n_id"), 
                names_to = "measure", 
                values_to = "value") |> 
   mutate(measure = str_replace(measure, "power_reg", "powerreg"),
@@ -107,7 +112,7 @@ sr_edit <- sim_res_cut |>
     outcome == "pcor" ~ "Contemporaneous",
     .default = outcome
   )) |>
-  group_by(dgp, heterogeneity, pm, outcome, method) |>
+  group_by(dgp, heterogeneity, n_id, pm, outcome, method) |>
   pivot_wider(names_from = summary, values_from = value) |> 
   ungroup()
 
@@ -159,7 +164,7 @@ plot_mse <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.2) +
-  ggh4x::facet_nested(dgp ~ outcome + n_tp,
+  ggh4x::facet_nested(n_id ~ outcome + n_tp,
                       axes = "all",
                       remove_labels = "y") +
   scale_x_discrete(guide = guide_axis(angle = 90))+
@@ -204,7 +209,7 @@ plot_bias <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.2) +
-  ggh4x::facet_nested(dgp ~ outcome + n_tp,
+  ggh4x::facet_nested(n_id ~ outcome + n_tp,
                       axes = "all",
                       remove_labels = "y") +
   scale_x_discrete(guide = guide_axis(angle = 90))+
@@ -254,7 +259,7 @@ plot_mostcentral <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.2) +
-  ggh4x::facet_nested(dgp ~ outcome + n_tp,
+  ggh4x::facet_nested(n_id ~ outcome + n_tp,
                       axes = "all",
                       remove_labels = "y") +
   scale_x_discrete(guide = guide_axis(angle = 90))+
@@ -309,7 +314,7 @@ plot_rankcor <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.2) +
-  ggh4x::facet_nested(dgp ~ outcome + n_tp,
+  ggh4x::facet_nested(n_id ~ outcome + n_tp,
                       axes = "all",
                       remove_labels = "y") +
   scale_x_discrete(guide = guide_axis(angle = 90))+
@@ -328,11 +333,9 @@ plot_rankcor
 
 
 ``` 
-mlVAR seems to be horrible here.
 
 # Regression
 
-Need to find a way to nest the different strengths of regression coefficient
 
 ## Power of Regression
 Prep data
@@ -380,7 +383,7 @@ power_plot <- function(df) {
                   show.legend = FALSE) +
     geom_point(position = position_dodge(0.7), 
                size = 1.2) +
-    ggh4x::facet_nested(dgp ~ outcome + n_tp,
+    ggh4x::facet_nested(dgp~ outcome + n_id,
                         axes = "all",
                         remove_labels = "y") +
     scale_x_discrete(guide = guide_axis(angle = 90)) +
@@ -460,7 +463,7 @@ plot_rmse <- function(df){
       show.legend = FALSE
     ) +
     geom_point(position = position_dodge(0.7), size = 1.2) +
-    ggh4x::facet_nested(dgp ~ outcome + n_tp,
+    ggh4x::facet_nested(dgp ~ outcome + n_id,
                         axes = "all",
                         remove_labels = "y") +
     scale_x_discrete(guide = guide_axis(angle = 90)) +
@@ -490,7 +493,7 @@ plot_rmse_combined <- cowplot::plot_grid(plotlist = plot_rmse_list,
                                         labels = c("True Effect: 0", 
                                                    "True Effect: 0.2",
                                                    "True Effect: 0.4"))
-ggsave("plot_reg_rmse_combined_prelim_0710.pdf", plot_rmse_combined, height = 12, width = 16,
+ggsave("plot_reg_rmse_combined_prelim_1010.pdf", plot_rmse_combined, height = 12, width = 16,
        path = here::here("figures/"))
 
 plot_rmse_combined
