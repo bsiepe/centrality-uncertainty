@@ -686,6 +686,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   ret <- list()
   n_id <- condition$n_id
   
+  # Global settings
+  use_lm_beta <- FALSE
+  
+  
   #--- Parameter recovery  
   # IMPORTANT: Keep in mind structure of sim object (rows vs. cols)
   #-- RMSE
@@ -838,7 +842,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                method, 
                                measure,
                                true_coef = c(0,.2,.4),
-                               lm_beta = TRUE) {
+                               lm_beta = use_lm_beta) {
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[paste0("reg_", measure)]])){
       return(NA)
@@ -867,7 +871,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                               method, 
                               measure,
                               true_coef = c(0,.2,.4),
-                              lm_beta = TRUE,
+                              lm_beta = use_lm_beta,
                               rmse = TRUE) {
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[paste0("reg_", measure)]])){
@@ -1217,10 +1221,10 @@ sim_results <- SimDesign::runSimulation(
                                                  "posterior",
                                                  "rstan",
                                                  "Rcpp"),
-                                    # save_results = TRUE,
+                                    save_results = TRUE,
                                     # ncores = n_rep,
-                                    debug = "generate"
-                                    # filename = "sim141024.rds"
+                                    # debug = "generate"
+                                    filename = "sim141024.rds"
                                     # save_seeds = TRUE
                                     )
 
