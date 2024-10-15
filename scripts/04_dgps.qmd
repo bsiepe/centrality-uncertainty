@@ -461,11 +461,14 @@ arr_to_latex(graph_nonsparse_synth_new$sigma)
 
 Instead of manually creating it, we base it on previous sim studies (see the preregistration for more information).
 ```{r}
-test <- create_var_matrix(6, sparse = FALSE, boost_factor = 1.25)
-colSums(test)                            
-rowSums(test)
+var_mat <- create_var_matrix(6, 
+                          sparse = TRUE,
+                          sparsity_proportion = 0.15,
+                          boost_factor = 1.25)
+colSums(var_mat)                            
+rowSums(var_mat)
 
-arr_to_latex(test)
+arr_to_latex(var_mat)
 ```
 
 
@@ -473,11 +476,25 @@ arr_to_latex(test)
 
 Then we can create the corresponding innovation covariance matrix:
 ```{r}
-test_cov <- create_cov_matrix(6, sparse = FALSE, boost_factor = 1.25)
-colSums(test_cov)
-rowSums(test_cov)
-arr_to_latex(test_cov)
+cov_mat <- create_cov_matrix(6, 
+                              sparse = TRUE, 
+                              sparsity_proportion = 0.15,
+                              boost_factor = 1.25)
+colSums(cov_mat)
+rowSums(cov_mat)
+arr_to_latex(cov_mat)
 ```
 
+Create the corresponding pcor matrix:
+```{r}
+pcor_mat <- -stats::cov2cor(solve(cov_mat))
+```
 
+Save the DGP:
+```{r}
+graph_semisparse_synth <- list(beta = var_mat, 
+                    sigma = cov_mat, 
+                    pcor = pcor_mat)
 
+saveRDS(graph_semisparse_synth, here("data/graph_semisparse_synth.RDS"))
+```

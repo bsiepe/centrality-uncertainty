@@ -15,13 +15,22 @@ create_var_matrix <- function(p,
                               off_diag_val = 0.075, 
                               boost_factor = 1.5, 
                               sparse = FALSE, 
-                              sparsity_proportion = 0.3) {
+                              sparsity_proportion = 0.15) {
   mat <- matrix(off_diag_val, p, p)
   diag(mat) <- diag_val
   
   if (sparse) {
+    # Get only off-diagonal indices of the matrix, exclude first row and column
+    # if we include it, the boost factor can remove zeroes
     off_diag_indices <- which(row(mat) != col(mat), arr.ind = TRUE)
-    num_to_zero <- round(sparsity_proportion * length(off_diag_indices[,1]))
+    off_diag_indices <- off_diag_indices[-which(off_diag_indices[, 1] == 1), ]
+    off_diag_indices <- off_diag_indices[-which(off_diag_indices[, 2] == 1), ]
+    
+    
+    # number of effects to be set to zero
+    num_to_zero <- round(sparsity_proportion * p * p)
+    
+    # sample indices
     zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
     
     for (i in 1:nrow(zero_indices)) {
@@ -52,17 +61,23 @@ create_cov_matrix <- function(p,
                               off_diag_val = 0.1, 
                               boost_factor = 1.5, 
                               sparse = FALSE, 
-                              sparsity_proportion = 0.3) {
+                              sparsity_proportion = 0.15) {
   mat <- matrix(off_diag_val, p, p)
   diag(mat) <- diag_val
   
   if (sparse) {
-    off_diag_indices <- which(row(mat) != col(mat), arr.ind = TRUE)
-    num_to_zero <- round(sparsity_proportion * length(off_diag_indices[,1]))
-    zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
+    upper_tri_indices <- which(row(mat) < col(mat), arr.ind = TRUE)
+    # exclude first row (or else the boost factor will remove zeroes)
+    upper_tri_indices <- upper_tri_indices[-which(upper_tri_indices[, 1] == 1), ]
     
+    num_to_zero <- round(sparsity_proportion * length(upper_tri_indices[, 1]))
+    
+    zero_indices <- upper_tri_indices[sample(1:nrow(upper_tri_indices), num_to_zero), ]
+    
+    # set off-diagonal elements and their symmetric counterparts to zero
     for (i in 1:nrow(zero_indices)) {
       mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+      mat[zero_indices[i, 2], zero_indices[i, 1]] <- 0 # ensure symmetry
     }
   }
   
