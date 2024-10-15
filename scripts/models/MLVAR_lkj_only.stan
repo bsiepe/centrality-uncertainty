@@ -8,6 +8,7 @@ data {
   int<lower=0> P; // number of covariates
   int <lower=1, upper= 3> sparsity; // sparsity level affecting the hyper-priors for Beta
   int n_pc; // number of partial correlations
+  int<lower = 0, upper = 1> mean_center; // mean centering for the predictors
   array[n_pc] int idx_rho; // index for partial correlations
   array[I] int<lower=0> n_t; // number of time points per person
   array[N_total] vector[K] Y; // longitudinal responses for all persons
@@ -200,10 +201,19 @@ model {
     array[n_t[i]-1] vector[K] mu_network;
     
     // network predictions: loop over time points
-    for(t in 1:(n_t[i]-1)){
-      mu_network[t] = 
-        to_vector(Intercepts[i, ]) + Beta[i] * (Y_temp[t,] - to_vector(Intercepts[i, ])); // predictions for the network
-      } // end t
+    // depends on setting by user
+    if(mean_center == 1){
+      for(t in 1:(n_t[i]-1)){
+        mu_network[t] = 
+          to_vector(Intercepts[i, ]) + Beta[i] * (Y_temp[t,] - to_vector(Intercepts[i, ])); // predictions for the network
+        } // end t
+    }
+    if(mean_center == 0){
+      for(t in 1:(n_t[i]-1)){
+        mu_network[t] = 
+          to_vector(Intercepts[i, ]) + Beta[i] * Y_temp[t,]; // predictions for the network
+        } // end t
+    }
       
     // Network
     Y_temp[2:n_t[i]] ~ multi_normal_cholesky(mu_network, Sigma_chol);

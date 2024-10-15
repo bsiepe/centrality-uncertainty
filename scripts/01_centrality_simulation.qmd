@@ -508,7 +508,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     idx_rho = array(idx_rho, dim = length(idx_rho)),
     Y = Y,
     reg_covariate = reg_data,
-    sparsity = 2
+    sparsity = 2,
+    # should lagged estimates be mean-centered?
+    mean_center = 0
   )
   
   
