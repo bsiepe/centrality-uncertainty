@@ -55,6 +55,7 @@ library(gimme)
 library(rstan)
 library(imputeTS)
 library(knitr)
+library(gt)
 
 source(here("scripts", "00_functions.R"))
 set.seed(35037)
@@ -76,13 +77,17 @@ Apparently, the neuroticism values are not imported correctly - the 95 values fo
 data_bringmann <- data_bringmann |> 
   janitor::clean_names()
 
+# obtain unique ids
+all_ids <- unique(data_bringmann$subj_id)
+
 # split of the neuroticism column, then reattach it to the correct id
 neuroticism_vec <- data_bringmann |> 
   select(subj_id, neuroticism) |> 
   slice(1:95) |> 
-  mutate(subj_id = 1:95)
+  # attach the correct id
+  mutate(subj_id = all_ids)
 
-data_bringmann |> 
+data_bringmann <- data_bringmann |> 
   select(!neuroticism) |> 
   left_join(neuroticism_vec, by = "subj_id")
 
@@ -138,6 +143,11 @@ subj_to_exclude <- data_bringmann |>
 data_bringmann <- data_bringmann |> 
   filter(!subj_id %in% subj_to_exclude)
 
+neuroticism_vec_clean <- data_bringmann |> 
+  group_by(subj_id) |> 
+  distinct(neuroticism) |>
+  pull(neuroticism)
+
 subj_to_exclude |> 
   knitr::kable()
 ```
@@ -185,6 +195,14 @@ We first split off the time-invariant outcome from the rest of the data:
 ```{r ema-data}
 df_data <- data_bringmann_imputed |> 
   select(-c(neuroticism))
+```
+
+We also scale all variables per person for the LASSO approach: 
+```{r}
+df_data <- df_data |> 
+  group_by(subj_id) |> 
+  mutate(across(everything(), ~scale(.x))) |> 
+  ungroup()
 ```
 
 
@@ -238,7 +256,13 @@ dens_temp_gvar <- unlist(cent_gvar$dens_temp)
 outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1]))
 
 # Combine into dataframe with neuroticism
-reg_df_gvar <- data.frame(neuroticism = neuroticism_vec,
+# get neuroticism scores of filtered data frame
+data_bringmann |> 
+  group_by(subj_id) |> 
+  distinct(neuroticism) |>
+  pull(neuroticisim)
+
+reg_df_gvar <- data.frame(neuroticism = neuroticism_vec_clean,
                           dens_temp = dens_temp_gvar,
                           outstrength = outstrength_gvar_first)
 
@@ -290,11 +314,11 @@ We obtain the network features:
 ```{r centrality-mlvar}
 cent_mlvar <- centrality_mlvar(fit_mlvar)
 
-dens_temp_mlvar <- cent_mlvar$dens_temp
+dens_temp_mlvar <- unlist(cent_mlvar$dens_temp)
 outstrength_mlvar_first <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
 
 # Combine into dataframe with neuroticism
-reg_df_mlvar <- data.frame(neuroticism = neuroticism_vec,
+reg_df_mlvar <- data.frame(neuroticism = neuroticism_vec_clean,
                           dens_temp = dens_temp_mlvar,
                           outstrength = outstrength_mlvar_first)
 ```
@@ -314,14 +338,23 @@ reg_mlvar_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar)
 
 ```{r fit-gimme}
 #| eval: !expr params$rerun
-fit_gimme <- tryCatch({gimme::gimme(data_list,
+data_list <- split(df_data, ~ subj_id)
+
+# remove subject_id from each data set
+data_list <- lapply(data_list, function(x){
+    x |> 
+      select(-c(subj_id))
+  }) 
+
+
+fit_gimme <- gimme::gimme(data_list,
                             ar = TRUE,
                             subgroup = TRUE,
                             plot = FALSE,
                             hybrid = FALSE,
                             groupcutoff = .75,
                             subcutoff = .75,
-                            VAR = gimme_var_only)}, error = function(e) NA)
+                            VAR = TRUE)
 
 saveRDS(fit_gimme, here("empirical_example", "fit_gimme.rds"))
 ```
@@ -340,7 +373,7 @@ dens_temp_gimme <- cent_gimme$dens_temp
 outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
 
 # Combine into dataframe with neuroticism
-reg_df_gimme <- data.frame(neuroticism = neuroticism_vec,
+reg_df_gimme <- data.frame(neuroticism = neuroticism_vec_clean,
                           dens_temp = dens_temp_gimme,
                           outstrength = outstrength_gimme_first)
 ```
@@ -365,56 +398,65 @@ We first need to compile the model, and then estimate it with similar settings a
 ```{r fit-bmlvar}
 #| eval: !expr params$rerun
 
-model_name <- "MLVAR_lkj_only"
+model_name <- "MLVAR_lkj_only_empirical_example"
 
 stan_model <-   rstan::stan_model(
     file = here::here("scripts", "models", paste0(model_name, ".stan")),
     model_name = model_name
   )
 
+n_var <- 6
 
 # indicators for partial correlations
 idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |>  
       c() |>  
-      which(.)
+      which()
   
+# repeat the outcome because we have two single-predictor regressions
 reg_data <- cbind(
-    dat$covariate_in_strength[, 2:4],
-    dat$covariate_cont_strength[, 2:4],
-    dat$covariate_out_strength[, 2:4]
+    neuroticism_vec_clean,
+    neuroticism_vec_clean
   )
-Y <- df_data |> 
-    dplyr::select(-"ID") |>  
+Y <- data_bringmann_imputed |> 
+    dplyr::select(-c("subj_id", "neuroticism")) |>  
     as.matrix()
-  
-n_tp <- condition$n_tp
+
+# obtain number of time points per person 
+n_tp <- data_bringmann_imputed |> 
+  group_by(subj_id) |> 
+  count() |> 
+  pull(n)
+
+n_id <- length(unique(data_bringmann_imputed$subj_id))
   
 # Prepare stan data
 # TODO change the regression outcomes!
 stan_data <- list(
     K = n_var,
     I = n_id,
-    P = 9,   # number of regression outcomes
-    N_total = n_id * n_tp,
-    n_t = rep(n_tp, n_id),
+    P = 2,   # number of regression outcomes
+    N_total = nrow(data_bringmann_imputed),
+    n_t = n_tp,
     n_pc = n_var * (n_var - 1) / 2,
     idx_rho = array(idx_rho, dim = length(idx_rho)),
     Y = Y,
     reg_covariate = reg_data,
-    sparsity = 2
+    sparsity = 2,
+    mean_center = 0
   )
   
   
+# TODO change sampler settings, currently only used for experiments
 fit_bmlvar <- rstan::sampling(
   object = stan_model,
   pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
   include = FALSE,
   data = stan_data,
   # seed = 2023,
-  chains = 4,
-  cores = 4,
-  warmup = 500,
-  iter = 1000,
+  chains = 2,
+  cores = 1,
+  warmup = 200,
+  iter = 300,
   init = 0,
   control = list(adapt_delta = 0.90),
   verbose = FALSE
@@ -455,6 +497,89 @@ In this section, we collect and contrast the results of different methods.
 ## Network Density
 
 
+
+
+## Combined Table 
+
+We combine the results for different network features and network estimation methods in one table: 
+
+Currently, this is based on mock data:
+
+```{r mock-data-table}
+methods <- c("graphicalVAR", "mlVAR", "GIMME", "BmlVAR")
+outcomes <- c("Density", "Outstrength")
+
+# Create mock data with point estimates, lower, and upper confidence intervals for each method and outcome
+mock_data <- data.frame(
+  Method = rep(methods, each = 2),
+  Outcome = rep(outcomes, times = 4),
+  Point_Estimate = runif(8, 0.2, 0.8),
+  Lower_Limit = runif(8, 0.1, 0.5),
+  Upper_Limit = runif(8, 0.6, 1.0)
+)
+
+# Step 2: Reshape Data
+# Spread the data for hierarchical column structure
+mock_table <- mock_data |> 
+  pivot_wider(names_from = Outcome,
+                     values_from = c(Point_Estimate, Lower_Limit, Upper_Limit),
+                     names_glue = "{Outcome}_{.value}")
+
+
+```
+
+
+```{r prepare-table}
+# set color palette 
+color_palette <- c("#cf1322", "#036FE3")
+
+min_val <- min(mock_table$Density_Point_Estimate, mock_table$Outstrength_Point_Estimate)
+max_val <- max(mock_table$Density_Point_Estimate, mock_table$Outstrength_Point_Estimate)
+
+gt_table <- mock_table |> 
+  gt(rowname_col = "Method") |> 
+  # hierarchical cols
+  cols_label(
+    `Density_Point_Estimate` = "Point Est.",
+    `Density_Lower_Limit` = "95% Low",
+    `Density_Upper_Limit` = "95% High",
+    `Outstrength_Point_Estimate` = "Point Est.",
+    `Outstrength_Lower_Limit` = "95% Low",
+    `Outstrength_Upper_Limit` = "95% High"
+  ) |> 
+  tab_spanner(
+    label = "Density",
+    columns = c(Density_Point_Estimate, Density_Lower_Limit, Density_Upper_Limit)
+  ) |> 
+  tab_spanner(
+    label = "Outstrength",
+    columns = c(Outstrength_Point_Estimate, Outstrength_Lower_Limit, Outstrength_Upper_Limit)
+  ) |> 
+  # colorblind palette
+  data_color(
+    columns = c(Density_Point_Estimate, Outstrength_Point_Estimate),
+    domain = c(min_val, max_val),
+    palette = color_palette) |> 
+  # round
+  fmt_number(
+    columns = everything(),
+    decimals = 2
+  ) |> 
+  tab_header(
+    title = "Comparison of Methods Across Two Outcomes",
+  ) |> 
+  cols_align(
+    align = "center",
+    columns = everything()
+  )
+
+gt_table
+
+# save to LaTeX
+gt_table |> 
+  gtsave(here("output", "empirical_example", "mock_table.tex"))
+
+```
 
 
 
