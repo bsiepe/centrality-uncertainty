@@ -93,7 +93,7 @@ final_summary_df |>
   rename(posterior_mean = mean,
          posterior_sd = sd) |> 
   group_by(param_num) |> 
-  reframe(across(c(posterior_mean, posterior_sd),
+  reframe(across(c(posterior_mean, posterior_sd, "2.5%", "97.5%"),
                    mean))
 
 ```
@@ -269,15 +269,32 @@ Somehow, the rank correlation for mlVAR is quite bad. Plot some examples:
 
 ```{r}
 df_denstemp <- data.frame(
-  mlvar_denstemp = sim_res_4$results[[2]]$mlvar$dens_temp,
-  true_denstemp =  unlist(sim_res_4$results[[2]]$true_cent$dens_temp)
+  mlvar_outstrength = sapply(sim_res_4$results[[3]]$mlvar$outstrength, function(x) x[[1]]),
+  mlvar_instrength = sapply(sim_res_4$results[[3]]$mlvar$instrength, function(x) x[[1]]),
+  true_outstrength =  sapply(sim_res_4$results[[3]]$true_cent$outstrength, function(x) x[[1]])
 )
 
 df_denstemp |> 
-  ggplot(aes(x = true_denstemp, y = mlvar_denstemp)) + 
+  ggplot(aes(x = true_outstrength, y = mlvar_instrength)) + 
   geom_point() + 
   geom_smooth()
 ```
+
+Contemporaneous:
+
+```{r}
+df_contemp_mlvar <- data.frame(
+  mlvar_strength = sapply(sim_res_4$results[[3]]$mlvar$strength, function(x) x[[1]]),
+  true_strength =  sapply(sim_res_4$results[[3]]$true_cent$strength, function(x) x[[1]])
+)
+
+df_contemp_mlvar|> 
+  ggplot(aes(x = true_strength, y = mlvar_strength)) + 
+  geom_point() + 
+  geom_smooth()
+```
+
+
 
 ### Regression outcomes
 
