@@ -86,7 +86,8 @@ heterogeneity <- "high"
 
 # Simulation parameters
 # Number of individuals 
-n_id <- c(75, 200)
+# n_id <- c(75, 200)
+n_id <- 200
 
 # Design Conditions
 df_design <- SimDesign::createDesign(
@@ -208,7 +209,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
   desired_snr <- 1
   
   # should true centralities be scaled before generating covariate?
-  scale_centralities <- FALSE
+  scale_centralities <- TRUE
   
   instrength <- sapply(true_cent$instrength, `[`, 1)
   outstrength <- sapply(true_cent$outstrength, `[`, 1)
@@ -290,6 +291,134 @@ sim_generate <- function(condition, fixed_objects = NULL){
 ```
 
 
+We create a new function that simulates correlated data slightly differently: 
+
+```{r generate-new}
+sim_generate_new <- function(condition, fixed_objects = NULL){
+  source(here::here("scripts", "00_functions.R"))
+
+  # obtain fixed params
+  SimDesign::Attach(fixed_objects)
+
+  dgp_graph <- ifelse(condition$dgp == "sparse", 
+                      "graph_sparse", 
+                      "graph_nonsparse")
+  beta_sd <- ifelse(condition$heterogeneity == "low",
+                    0.05,
+                    0.1)
+  sigma_sd <- ifelse(condition$heterogeneity == "low",
+                    0.05,
+                    0.1)
+  
+  # scale kappa random effects w.r.t diagonal elements
+  mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
+  kappa_sd_low <- 0.05 * mean_diag_kappa
+  kappa_sd_high <- 0.1 * mean_diag_kappa
+  
+  kappa_sd <- ifelse(condition$heterogeneity == "low",
+                     kappa_sd_low,
+                     kappa_sd_high)
+  
+  ml_sim <- sim_gvar_loop(
+                     graph = fixed_objects[[dgp_graph]],
+                     beta_sd = beta_sd,
+                     kappa_sd = kappa_sd,
+                     sigma_sd = sigma_sd, 
+                     n_person = condition$n_id,
+                     n_time = condition$n_tp,
+                     n_node = n_var,
+                     max_try = 10000,
+                     listify = TRUE,
+                     sim_pkg = "mlVAR",
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.1,
+                     innov_var_fixed_sigma = TRUE)
+  if(any(is.na(ml_sim$beta))){
+    stop("Generation of Betas failed")
+  }
+  
+  if(any(is.na(ml_sim$pcor))){
+    stop("Generation of PCORs failed")
+  } 
+  
+  # True density standard deviations are just the random effects sds
+  # as they are uncorrelated
+  
+  
+  # Obtain true centralities
+  true_cent <- centrality_mlvar_sim(ml_sim,
+                                    sim_fn = "sim_gvar_loop")
+
+  # Obtain true centralities
+  instrength <- sapply(true_cent$instrength, `[`, 1)
+  outstrength <- sapply(true_cent$outstrength, `[`, 1)
+  strength <- sapply(true_cent$strength, `[`, 1)
+  
+  
+  # Simulate correlated data with true variance of centralities
+  # first column is the density to keep track of the density
+  # and for compatibility with an old sim function
+  sim_correlated <- function(density, 
+                             r_true, 
+                             sd_true){
+  y_matrix <- matrix(NA, nrow = length(density), ncol = length(r_true) + 1)
+  y_matrix[, 1] <- density
+  
+    for (i in seq_along(r_true)) {
+    sd_error <- sd_true * sqrt(1 - r_true[i]^2)
+    y_matrix[, i + 1] <- r_true[i] * density + rnorm(length(density), mean = 0, sd = sd_error)
+  }
+  
+  return(y_matrix)
+  }
+  
+  covariate_cont_strength <- sim_correlated(density = strength, 
+                                            r_true = c(0, 0.2, 0.4), 
+                                            sd_true = sigma_sd)
+  covariate_in_strength <- sim_correlated(density = instrength, 
+                                          r_true = c(0, 0.2, 0.4), 
+                                          sd_true = beta_sd)
+  covariate_out_strength <- sim_correlated(density = outstrength, 
+                                           r_true = c(0, 0.2, 0.4), 
+                                           sd_true = beta_sd)
+  
+
+  if(sd(instrength) == 0){
+    stop("No variation in instrength")
+  }
+  if(sd(outstrength) == 0){
+    stop("No variation in outstrength")
+  }
+  if(sd(strength) == 0){
+    stop("No variation in strength")
+  }
+
+  # Generate correlated data 
+  
+  
+  # Return data and true centralities
+  ret_data <- list(
+    data = ml_sim$data,
+    beta = ml_sim$beta_l,
+    kappa = ml_sim$kappa_l,
+    pcor = ml_sim$pcor_l,
+    covariate_cont_strength = covariate_cont_strength,
+    covariate_out_strength = covariate_out_strength,
+    covariate_in_strength = covariate_in_strength,
+    true_cent = true_cent
+  )
+  
+  return(ret_data)
+  
+  
+}
+```
+
+
+
+
+
 # Analysis
 
 ```{r data-analysis}
@@ -300,7 +429,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   # Concatenate list of data into dataframe with id column
   df_data <- dplyr::bind_rows(purrr::map(dat$data, dplyr::as_tibble)
-                              , .id = "ID") %>% 
+                              , .id = "ID") |> 
     dplyr::mutate(ID = as.factor(ID))
   
   n_id <- condition$n_id
@@ -482,8 +611,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # 
   #--- Bayesian mlVAR
   # indicators for partial correlations
-  idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) %>% 
-      c() %>% 
+  idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |> 
+      c() |> 
       which(.)
   
   reg_data <- cbind(
@@ -491,8 +620,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     dat$covariate_cont_strength[, 2:4],
     dat$covariate_out_strength[, 2:4]
   )
-  Y <- df_data %>% 
-    dplyr::select(-"ID") %>% 
+  Y <- df_data |> 
+    dplyr::select(-"ID") |> 
     as.matrix()
   
   n_tp <- condition$n_tp
@@ -510,7 +639,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     reg_covariate = reg_data,
     sparsity = 2,
     # should lagged estimates be mean-centered?
-    mean_center = 0
+    mean_center = 1
   )
   
   
@@ -582,7 +711,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   summary_bmlvar <- summary_bmlvar[, !(colnames(summary_bmlvar) %in% c("25%", "75%"))]
   
   # convergence diagnostics
-  rhat_bmlvar_tmp <- summary_bmlvar %>% as.data.frame() %>% pull(Rhat)
+  rhat_bmlvar_tmp <- summary_bmlvar |> as.data.frame() |> pull(Rhat)
   rhat_bmlvar_tmp <- rhat_bmlvar_tmp[!is.nan(rhat_bmlvar_tmp)]
   rhat_bmlvar_mean <- mean(rhat_bmlvar_tmp, na.rm = TRUE)
   rhat_bmlvar_11 <- sum(rhat_bmlvar_tmp > 1.1)/length(rhat_bmlvar_tmp)
@@ -1207,7 +1336,7 @@ future::plan(multisession, workers = n_rep)
 sim_results <- SimDesign::runSimulation(
                                     design = df_design, 
                                     replications = n_rep, 
-                                    generate = sim_generate, 
+                                    generate = sim_generate_new, 
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
@@ -1225,7 +1354,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "Rcpp"),
                                     save_results = TRUE,
                                     # ncores = n_rep,
-                                    # debug = "generate"
+                                    debug = "generate",
                                     filename = "sim141024.rds"
                                     # save_seeds = TRUE
                                     )
