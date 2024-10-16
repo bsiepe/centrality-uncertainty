@@ -1313,9 +1313,14 @@ extract_all_estimates <- function(fit,
       est_vector2vector(x, n_id, n_var)
     })
   regression_slope_est <-
-    extract_estimates(fit, "reg_slope_density_z")
+    extract_estimates(fit, "reg_slope_density")
   regression_intercept_est <-
+    extract_estimates(fit, "reg_intercept")
+  regression_slope_est_z <-
+    extract_estimates(fit, "reg_slope_density_z")
+  regression_intercept_est_z <-
     extract_estimates(fit, "reg_intercept_z")
+  
   # return list of lists
   ret_list <-
     list(

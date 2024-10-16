@@ -50,9 +50,56 @@ Reduce("+", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, sim_res_4$re
 
 ## Regression outcomes
 
+Unstandardized regression coefs:
 ```{r}
 sim_res_4$results[[1]]$bmlvar$reg_bmlvar$regression_slope$median
+
+  
 ```
+
+Standardized regression coefs: 
+
+```{r}
+get_filtered_summary <- function(result, iteration) {
+  # Extract and filter the summary data
+  result_df <- result$bmlvar$summary_bmlvar |> 
+    as.data.frame() |> 
+    rownames_to_column(var = "param") |> 
+    filter(param %in% c("reg_slope_density_z[3]", 
+                        "reg_slope_density_z[6]",
+                        "reg_slope_density_z[9]",
+                        "reg_slope_density[3]",
+                        "reg_slope_density[6]",
+                        "reg_slope_density[9]"))
+  
+  result_df$iteration <- iteration
+  
+  return(result_df)
+}
+
+summary_list <- lapply(seq_along(sim_res_4$results), function(i) {
+  get_filtered_summary(sim_res_4$results[[i]], i)
+})
+
+final_summary_df <- bind_rows(summary_list)
+
+final_summary_df
+
+final_summary_df |> 
+  filter(!grepl("_z", param)) |> 
+  separate_wider_delim(param, delim = "[", names = c("param", "param_num")) |> 
+  mutate(param_num = gsub("]", "", param_num)) |> 
+  mutate(param_num = as.factor(param_num)) |> 
+  rename(posterior_mean = mean,
+         posterior_sd = sd) |> 
+  group_by(param_num) |> 
+  reframe(across(c(posterior_mean, posterior_sd),
+                   mean))
+
+```
+
+
+
 
 Plot them all (first need to account for the weird data structure where the results are a vector of length 9)
 
@@ -96,15 +143,25 @@ slopes |>
 Try using centrality point estimates obtained with BmlVAR to estimate a normal `lm()`.
 
 ```{r}
-out_est <- sapply(sim_res_4$results[[1]]$bmlvar$outstrength, function(x) x[1])
-covar_true <- sim_res_4$results[[1]]$covariate_out_strength[,4]
+get_lm_beta_coefficient <- function(result) {
+  out_est <- sapply(result$bmlvar$outstrength, function(x) x[1])
+  
+  covar_true <- result$covariate_out_strength[, 4]
+  
+  df_out <- data.frame(
+    outstrength = out_est, 
+    covariate = covar_true
+  )
+  
+  test <- lm.beta(lm(covariate ~ outstrength, data = df_out))
+  return(test$coefficients[2])
+}
 
-df_out <- data.frame(
-  outstrength = out_est, 
-  covariate = covar_true
-)
+coefficients_list <- lapply(sim_res_4$results, get_lm_beta_coefficient)
+coefficients_vector <- unlist(coefficients_list)
 
-lm.beta(lm(covariate ~ outstrength, data = df_out))
+coefficients_vector
+
 ```
 
 
@@ -121,7 +178,7 @@ l_coefs$zero <- vector()
 l_coefs$two <- vector()
 l_coefs$four <- vector()
 
-for(i in 1:2){
+for(i in 1:10){
   l_coefs$zero[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
   l_coefs$two[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
   l_coefs$four[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
@@ -230,14 +287,14 @@ l_coefs$zero <- vector()
 l_coefs$two <- vector()
 l_coefs$four <- vector()
 
-for(i in 1:2){
+for(i in 1:10){
   l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[1]])$standardized.coefficients[2]
   l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[2]])$standardized.coefficients[2]
   l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
 l_coefs |> 
-  dplyr::bind_rows(., .id = "true_coef") |> 
+  dplyr::bind_rows(.id = "true_coef") |> 
     pivot_longer(cols = everything(), 
                names_to = "reg_coef") |> 
   mutate(reg_coef = as.factor(reg_coef)) |> 
@@ -256,14 +313,14 @@ l_coefs$zero <- vector()
 l_coefs$two <- vector()
 l_coefs$four <- vector()
 
-for(i in 1:2){
+for(i in 1:10){
   l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[1]])$standardized.coefficients[2]
   l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[2]])$standardized.coefficients[2]
   l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
 l_coefs |> 
-  dplyr::bind_rows(., .id = "true_coef") |> 
+  dplyr::bind_rows(.id = "true_coef") |> 
     pivot_longer(cols = everything(), 
                names_to = "reg_coef") |> 
   mutate(reg_coef = as.factor(reg_coef)) |> 
