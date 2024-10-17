@@ -706,7 +706,11 @@ centrality_gvar <- function(fit,
 # GIMME helper functions --------------------------------------------------
 # -------------------------------------------------------------------------
 # Function to extract correlations from GIMME fit object with VAR = TRUE
-gimme_cor_mat <- function(gimme_res, id, n_vars) {
+# also enables partial correlations
+gimme_cor_mat <- function(gimme_res, 
+                          id, 
+                          n_vars,
+                          pcor = FALSE) {
   df_id <- gimme_res %>%
     filter(op == "~~") |>
     filter(pval < 0.05) |>
@@ -736,6 +740,11 @@ gimme_cor_mat <- function(gimme_res, id, n_vars) {
         corr_matrix[i, j] <- df_id[i, j]
         corr_matrix[j, i] <- df_id[i, j]
       }
+    }
+    
+    if(isTRUE(pcor)){
+      corr_matrix <- try(corpcor::cor2pcor(corr_matrix))
+      # if it fails, returns correlation matrix
     }
     
     diag(corr_matrix) <- 0

@@ -52,6 +52,7 @@ library(graphicalVAR)
 library(gimme)
 library(here)
 library(future)
+library(cor2pcor)
 source(here::here("scripts", "00_functions.R"))
 ```
 
@@ -106,6 +107,9 @@ reg_error_sd = 1
 
 # Should GIMME use only nondirected contemporaneous effects?
 gimme_var_only = TRUE
+
+# Should GIMME return partial correlations?
+gimme_pcor = TRUE
 
 # Should data for non-Bayesian methods be person-mean centered?
 mean_center = TRUE
@@ -434,7 +438,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   SimDesign::Attach(fixed_objects)
   
   # Check if mean centering option is true, if so, mean center
-  if(isTRUE(condition$mean_center)){
+  if(isTRUE(fixed_objects$mean_center)){
     dat$data_centered <- lapply(dat$data, function(x){
       x |> 
         dplyr::as_tibble() |> 
@@ -519,7 +523,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # for var_only, we need to first extract the contemporaneous matrices
   if(isTRUE(gimme_var_only)){
     fit_gimme$contemp_mat <- lapply(1:length(fit_gimme$path_est_mats), function(i){
-      gimme_cor_mat(fit_gimme$path_se_est, id = i, n_vars = n_var)
+      gimme_cor_mat(fit_gimme$path_se_est, id = i, n_vars = n_var, pcor = fixed_objects$gimme_pcor)
     }
   )
   }
@@ -1370,6 +1374,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "bayestestR",
                                                  "posterior",
                                                  "rstan",
+                                                 "cor2pcor",
                                                  "Rcpp"),
                                     save_results = TRUE,
                                     # ncores = n_rep,
