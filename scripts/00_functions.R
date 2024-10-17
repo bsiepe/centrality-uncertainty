@@ -747,7 +747,10 @@ gimme_cor_mat <- function(gimme_res,
     
     if(isTRUE(pcor)){
       corr_matrix <- try(corpcor::cor2pcor(corr_matrix))
-      # if it fails, returns correlation matrix
+      # if it fails, returns warning
+      if(inherits(corr_matrix, "try-error")){
+        warning("Partial correlation estimation failed. Returning correlation matrix.")
+      }
     }
     
     diag(corr_matrix) <- 0
