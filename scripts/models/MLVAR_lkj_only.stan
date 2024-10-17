@@ -126,9 +126,10 @@ transformed parameters{
         }
       }
       // Divide by number of predictors to obtain the mean
-      Beta_in_strength[i,k]  = Beta_in_strength[i,k] / (K);
-      Beta_out_strength[i,k] = Beta_out_strength[i,k] / (K);
-      Rho_strength[i,k]      = Rho_strength[i,k] / (K*2);
+      // Subtract 1 because we ignore the diagonal
+      Beta_in_strength[i,k]  = Beta_in_strength[i,k] / (K -1);
+      Beta_out_strength[i,k] = Beta_out_strength[i,k] / (K -1);
+      Rho_strength[i,k]      = Rho_strength[i,k] / (K - 1);
       
       //Rho_centrality[i,k]    = mean(abs(Rho[i, ,k]));
     } // end k

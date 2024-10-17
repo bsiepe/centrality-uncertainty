@@ -196,10 +196,11 @@ sim_gvar_loop <- function(graph,
       
       # if minimum centrality difference is required
       if(isTRUE(most_cent_diff_temp)){
-        # ignore autoregressive effects
+        # ignore autoregressive effects, set diagonal to zero
+        # therefore subtract 1 from number of nodes in density estimation
         beta_tmp <- beta[,,i]
         diag(beta_tmp) <- 0
-        centralities <- colSums(abs(beta_tmp))/n_node
+        centralities <- colSums(abs(beta_tmp))/ (n_node - 1)
         # check if the difference between the most central and the second most central node
         # is large enough
         cent_check <- max(centralities) - sort(centralities, decreasing = TRUE)[2] > most_cent_diff_temp_min * max(centralities)
@@ -660,7 +661,7 @@ centrality_gvar <- function(fit,
   
   #--- Prepare matrices
   n_var <- ncol(fit$kappa)
-  
+  n_var_temp <- n_var
   
   beta <- abs(fit$beta[,-1])
   beta_cent <- beta
@@ -668,6 +669,7 @@ centrality_gvar <- function(fit,
   # if autoregressive effects should be ignored in centrality estimation
   if(isTRUE(ignore_ar)){
     diag(beta_cent) <- 0
+    n_var_temp <- n_var - 1
   }
   
   pcor <- abs(-cov2cor(fit$kappa))
@@ -675,13 +677,14 @@ centrality_gvar <- function(fit,
   # pcor[lower.tri(pcor)] <- 0L
   
   #--- Outstrength 
-  outstrength <- colSums(beta_cent)/n_var
+  outstrength <- colSums(beta_cent)/n_var_temp
   
   #--- Instrength
-  instrength <- rowSums(beta_cent)/n_var
+  instrength <- rowSums(beta_cent)/n_var_temp
   
   #--- Strength
-  strength <- colSums(pcor)/n_var
+  # subtract 1 because diagonal is always zero
+  strength <- colSums(pcor)/ (n_var - 1)
   
   #--- Temporal Density
   dens_temp <- sum(beta)/(n_var^2)
@@ -762,6 +765,7 @@ centrality_gimme <- function(fit,
   
   #--- Prepare 
   n_var <- fit$n_vars_total
+  n_var_temp <- n_var
   n_id <- length(fit$data)
   temp_ind <- 1:(n_var/2)
   cont_ind <- ((n_var/2)+1):n_var
@@ -789,9 +793,7 @@ centrality_gimme <- function(fit,
       }
     })
   }
-  # if var_only = TRUE, first need to extract partial correlations
-  # gimme somehow does not return them 
-  
+
 
   #--- Centrality
   # if autoregressive effects should be ignored in centrality estimation
@@ -804,8 +806,9 @@ centrality_gimme <- function(fit,
       beta_tmp <- x[, temp_ind]
       if(isTRUE(ignore_ar)){
         diag(beta_tmp) <- 0
+        n_var_temp <- n_var - 1
       }
-      colSums(abs(beta_tmp))/n_var
+      colSums(abs(beta_tmp))/n_var_temp
     }
   })
   instrength <- lapply(fit$path_est_mats, function(x){
@@ -816,8 +819,9 @@ centrality_gimme <- function(fit,
       beta_tmp <- x[, temp_ind]
       if(isTRUE(ignore_ar)){
         diag(beta_tmp) <- 0
+        n_var_temp <- n_var - 1
       }
-      rowSums(abs(x[, temp_ind]))/n_var
+      rowSums(abs(x[, temp_ind]))/n_var_temp
     }
   })
   if(isFALSE(var_only)){
@@ -826,7 +830,8 @@ centrality_gimme <- function(fit,
         NA
       }
       else{
-        colSums(abs(x))/n_var
+        # because we ignore the diagonal
+        colSums(abs(x))/(n_var - 1)
       }
     })
   }
@@ -836,7 +841,8 @@ centrality_gimme <- function(fit,
         NA
       }
       else{
-        colSums(abs(x))/n_var
+        # because we ignore the diagonal
+        colSums(abs(x))/(n_var - 1)
       }
     })
   }
@@ -861,6 +867,7 @@ centrality_mlvar <- function(fit,
   #--- Prepare
   n_var <- length(fit$fit$var)
   n_id <- length(fit$IDs)
+  n_var_temp <- n_var
 
   #--- Obtain networks
   l_beta <- lapply(1:n_id, function(i){
@@ -913,17 +920,20 @@ centrality_mlvar <- function(fit,
   outstrength <- lapply(l_beta, function(x){
     if(isTRUE(ignore_ar)){
       diag(x) <- 0
+      n_var_temp <- n_var - 1
     }
-    rowSums(abs(x))/n_var
+    rowSums(abs(x))/n_var_temp
   })
   instrength <- lapply(l_beta, function(x){
     if(isTRUE(ignore_ar)){
       diag(x) <- 0
+      n_var_temp <- n_var - 1
     }
-    colSums(abs(x))/n_var
+    colSums(abs(x))/n_var_temp
   })
   strength <- lapply(l_pcor, function(x){
-    colSums(abs(x))/n_var
+    # because diagonal is always zero, we subtract 1
+    colSums(abs(x))/(n_var - 1)
   })
   
   # return list
@@ -946,6 +956,7 @@ centrality_mlvar_sim <- function(simobj,
     #--- Prepare
     n_id <- length(simobj$model$mu$subject)
     n_var <- length(simobj$vars)
+    n_var_temp <- n_var
     
     #--- Obtain networks
     l_beta <- lapply(1:n_id, function(i){
@@ -995,17 +1006,20 @@ centrality_mlvar_sim <- function(simobj,
   outstrength <- lapply(l_beta, function(x){
     if(isTRUE(ignore_ar)){
       diag(x) <- 0
+      n_var_temp <- n_var - 1
     }
-    colSums(abs(x))/n_var
+    colSums(abs(x))/n_var_temp
   })
   instrength <- lapply(l_beta, function(x){
     if(isTRUE(ignore_ar)){
       diag(x) <- 0
+      n_var_temp <- n_var - 1
     }
-    rowSums(abs(x))/n_var  
+    rowSums(abs(x))/n_var_temp
   })
   strength <- lapply(l_pcor, function(x){
-    colSums(abs(x))/n_var
+    # because the diagonal is zero, we subtract 1
+    colSums(abs(x))/(n_var - 1)
   })
   
   # return list
