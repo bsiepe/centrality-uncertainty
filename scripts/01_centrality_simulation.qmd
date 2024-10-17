@@ -51,6 +51,7 @@ library(mlVAR)
 library(graphicalVAR)
 library(gimme)
 library(here)
+library(future)
 source(here::here("scripts", "00_functions.R"))
 ```
 
@@ -77,7 +78,7 @@ graph_sparse <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
 We define the conditions and the fixed parameters for the simulation.
 
 ```{r params}
-dgp <- c("sparse", "dense")
+dgp <- c("dense", "sparse")
 
 # Number of timepoints
 n_tp <- c(60, 120)
@@ -103,7 +104,11 @@ n_var <- 6
 # for regression
 reg_error_sd = 1
 
+# Should GIMME use only nondirected contemporaneous effects?
 gimme_var_only = TRUE
+
+# Should data for non-Bayesian methods be person-mean centered?
+mean_center = TRUE
 
 # random effects sds
 # beta_sd <- 0.1
@@ -121,7 +126,8 @@ sim_pars <- list(
   # kappa_sd = kappa_sd,
   graph_nonsparse = graph_nonsparse,
   graph_sparse = graph_sparse,
-  gimme_var_only = gimme_var_only
+  gimme_var_only = gimme_var_only,
+  mean_center = mean_center
 )
 ```
 
@@ -342,9 +348,6 @@ sim_generate_new <- function(condition, fixed_objects = NULL){
     stop("Generation of PCORs failed")
   } 
   
-  # True density standard deviations are just the random effects sds
-  # as they are uncorrelated
-  
   
   # Obtain true centralities
   true_cent <- centrality_mlvar_sim(ml_sim,
@@ -373,15 +376,18 @@ sim_generate_new <- function(condition, fixed_objects = NULL){
   return(y_matrix)
   }
   
+  # True density standard deviations are just the random effects sds
+  # divided by the sqrt(n) -> it's just the standard deviation of the average
+  # of multiple independent random variables
   covariate_cont_strength <- sim_correlated(density = strength, 
                                             r_true = c(0, 0.2, 0.4), 
-                                            sd_true = sigma_sd)
+                                            sd_true = sigma_sd/sqrt(n_var))
   covariate_in_strength <- sim_correlated(density = instrength, 
                                           r_true = c(0, 0.2, 0.4), 
-                                          sd_true = beta_sd)
+                                          sd_true = beta_sd/sqrt(n_var))
   covariate_out_strength <- sim_correlated(density = outstrength, 
                                            r_true = c(0, 0.2, 0.4), 
-                                           sd_true = beta_sd)
+                                           sd_true = beta_sd/sqrt(n_var))
   
 
   if(sd(instrength) == 0){
@@ -427,7 +433,21 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- Preparation
   SimDesign::Attach(fixed_objects)
   
+  # Check if mean centering option is true, if so, mean center
+  if(isTRUE(condition$mean_center)){
+    dat$data_centered <- lapply(dat$data, function(x){
+      x |> 
+        dplyr::as_tibble() |> 
+        dplyr::mutate(across(everything(), ~ . - mean(.)))
+      
+    })
+  }
+  
   # Concatenate list of data into dataframe with id column
+  df_data_centered <- dplyr::bind_rows(purrr::map(dat$data_centered, dplyr::as_tibble)
+                              , .id = "ID") |> 
+    dplyr::mutate(ID = as.factor(ID))
+  
   df_data <- dplyr::bind_rows(purrr::map(dat$data, dplyr::as_tibble)
                               , .id = "ID") |> 
     dplyr::mutate(ID = as.factor(ID))
@@ -436,7 +456,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- graphicalVAR
   # Fit models
-  fit_gvar <- lapply(dat$data, function(x){
+  fit_gvar <- lapply(dat$data_centered, function(x){
     tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
                                nLambda = 50,
                                verbose = FALSE,
@@ -482,7 +502,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- GIMME
   
   # Fit model
-  fit_gimme <- tryCatch({gimme::gimme(dat$data,
+  fit_gimme <- tryCatch({gimme::gimme(dat$data_centered,
                             ar = TRUE,
                             subgroup = TRUE,
                             plot = FALSE,
@@ -545,7 +565,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # #--- frequentist mlVAR
 
   # Fit model
-  fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(df_data,
+  fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(df_data_centered,
                             vars = paste0("V", seq(1:n_var)),
                             idvar = "ID",
                             estimator = "lmer",
@@ -1326,9 +1346,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
 
 
-n_rep <- 10
-library(future)
-library(progressr)
+n_rep <- 2
+
 future::plan(multisession, workers = n_rep)
 
 # started 2024-08-13 ~08:35
@@ -1354,12 +1373,12 @@ sim_results <- SimDesign::runSimulation(
                                                  "Rcpp"),
                                     save_results = TRUE,
                                     # ncores = n_rep,
-                                    debug = "generate",
+                                    debug = "analyse",
                                     filename = "sim141024.rds"
                                     # save_seeds = TRUE
                                     )
 
-# plan(sequential)
+plan(sequential)
 
 # SimClean()
 # saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
