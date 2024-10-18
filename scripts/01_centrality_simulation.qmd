@@ -148,6 +148,66 @@ sim_pars$mlvar_model <-
 ```
 
 
+To simulate data with a specific correlation, we need to obtain the true standard deviation of the different centrality measures. For the temporal network, this is easy to compute, as it just follows from the random effects of the VAR matrix. 
+For the partial correlations, this is a bit more complicated, as we simulate from the true covariance matrix, but calculate the centrality based on the partial correlation matrix. Therefore, we just simulate a large number of partial correlation matrices for the data-generating process of each condition and then calculate the implied standard deviation of the centrality measure.
+
+```{r true-strength-sd, eval = FALSE}
+# number of simulations to obtain sd
+n_sim_sd <- 10000
+sd_results <- vector("list", length = nrow(df_design))
+
+for(i in 1:nrow(df_design)){
+  condition <- df_design[i,]
+  
+  dgp_graph <- ifelse(condition$dgp == "sparse", 
+                      "graph_sparse", 
+                      "graph_nonsparse")
+  beta_sd <- ifelse(condition$heterogeneity == "low",
+                    0.05,
+                    0.1)
+  sigma_sd <- ifelse(condition$heterogeneity == "low",
+                    0.05,
+                    0.1)
+  ml_sim <- sim_gvar_loop(
+                     graph = dgp_graph,
+                     beta_sd = beta_sd,
+                     kappa_sd = kappa_sd,
+                     sigma_sd = sigma_sd, 
+                     n_person = n_sim_sd,
+                     n_time = condition$n_tp,
+                     n_node = sim_pars$n_var,
+                     max_try = 10000,
+                     listify = TRUE,
+                     sim_pkg = "mlVAR",
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.1,
+                     innov_var_fixed_sigma = TRUE)
+  
+  # Obtain true centralities
+  true_cent <- centrality_mlvar_sim(ml_sim,
+                                  sim_fn = "sim_gvar_loop")
+
+  strength <- sapply(true_cent$strength, `[`, 1)
+  strength_sd <- sd(strength)
+  sd_results[[i]] <- strength_sd
+  
+}
+
+
+
+
+saveRDS(sd_results, here::here("data", "true_strength_sd.RDS"))
+
+```
+
+As we only need to compute the true SD once, we can simply load it from disk to save time: 
+```{r}
+true_strength_sd <- readRDS(here::here("data", "true_strength_sd.RDS"))
+df_design$strength_sd <- true_strength_sd
+```
+
+
 
 
 ## Simulating Data
@@ -383,15 +443,16 @@ sim_generate_new <- function(condition, fixed_objects = NULL){
   # True density standard deviations are just the random effects sds
   # divided by the sqrt(n) -> it's just the standard deviation of the average
   # of multiple independent random variables
-  covariate_cont_strength <- sim_correlated(density = strength, 
-                                            r_true = c(0, 0.2, 0.4), 
-                                            sd_true = sigma_sd/sqrt(n_var))
+  # -1 because we ignore the diagonal
+  covariate_cont_strength <- sim_correlated(density = strength,
+                                            r_true = c(0, 0.2, 0.4),
+                                            sd_true = condition$strength_sd)
   covariate_in_strength <- sim_correlated(density = instrength, 
                                           r_true = c(0, 0.2, 0.4), 
-                                          sd_true = beta_sd/sqrt(n_var))
+                                          sd_true = beta_sd/sqrt(n_var - 1))
   covariate_out_strength <- sim_correlated(density = outstrength, 
                                            r_true = c(0, 0.2, 0.4), 
-                                           sd_true = beta_sd/sqrt(n_var))
+                                           sd_true = beta_sd/sqrt(n_var - 1))
   
 
   if(sd(instrength) == 0){
@@ -404,7 +465,6 @@ sim_generate_new <- function(condition, fixed_objects = NULL){
     stop("No variation in strength")
   }
 
-  # Generate correlated data 
   
   
   # Return data and true centralities
@@ -1393,7 +1453,6 @@ plan(sequential)
 # saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
 
 ```
-
 
 
 
