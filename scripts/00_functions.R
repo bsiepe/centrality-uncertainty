@@ -402,6 +402,9 @@ sim_gvar_loop <- function(graph,
   ret$beta_l <- lapply(1:n_person, function(i) beta[, , i])
   ret$kappa_l <- lapply(1:n_person, function(i) kappa[, , i])
   ret$pcor_l <- lapply(1:n_person, function(i) pcor[, , i])
+  if(!is.null(graph$sigma)){
+    ret$sigma_l <- lapply(1:n_person, function(i) sigma[, , i])
+  }
   }
   
   # Return the list of simulated data
@@ -410,6 +413,9 @@ sim_gvar_loop <- function(graph,
   ret$beta <- beta
   ret$kappa <- kappa
   ret$pcor <- pcor
+  if(!is.null(graph$sigma)){
+    ret$sigma <- sigma
+  }
   return(ret)
 }
 
