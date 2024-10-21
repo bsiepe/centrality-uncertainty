@@ -153,8 +153,8 @@ For the partial correlations, this is a bit more complicated, as we simulate fro
 
 ```{r true-strength-sd, eval = FALSE}
 # number of simulations to obtain sd
-n_sim_sd <- 10000
-sd_results <- vector("list", length = nrow(df_design))
+n_sim_sd <- 20000
+sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
 
 for(i in 1:nrow(df_design)){
   condition <- df_design[i,]
@@ -169,14 +169,15 @@ for(i in 1:nrow(df_design)){
                     0.05,
                     0.1)
   ml_sim <- sim_gvar_loop(
-                     graph = dgp_graph,
+                     graph = sim_pars[[dgp_graph]],
                      beta_sd = beta_sd,
                      kappa_sd = kappa_sd,
                      sigma_sd = sigma_sd, 
                      n_person = n_sim_sd,
                      n_time = condition$n_tp,
                      n_node = sim_pars$n_var,
-                     max_try = 10000,
+                     max_try = 1000,
+                     verbose = TRUE,
                      listify = TRUE,
                      sim_pkg = "mlVAR",
                      sparse_sim = TRUE,
@@ -189,24 +190,33 @@ for(i in 1:nrow(df_design)){
                                   sim_fn = "sim_gvar_loop")
 
   strength <- sapply(true_cent$strength, `[`, 1)
+  outstrength <- sapply(true_cent$outstrength, `[`, 1)
+  instrength <- sapply(true_cent$instrength, `[`, 1)
   strength_sd <- sd(strength)
-  sd_results[[i]] <- strength_sd
-  
+  outstrength_sd <- sd(outstrength)
+  instrength_sd <- sd(instrength)
+  sd_results_strength[[i]] <- strength_sd
+  sd_results_outstrength[[i]] <- outstrength_sd
+  sd_results_instrength[[i]] <- instrength_sd
 }
 
 
+sd_results <- list(sd_results_strength, sd_results_outstrength, sd_results_instrength)
+names(sd_results) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 
 
-saveRDS(sd_results, here::here("data", "true_strength_sd.RDS"))
+saveRDS(sd_results, here::here("data", "true_sd.RDS"))
 
 ```
 
 As we only need to compute the true SD once, we can simply load it from disk to save time: 
 ```{r}
-true_strength_sd <- readRDS(here::here("data", "true_strength_sd.RDS"))
-df_design$strength_sd <- true_strength_sd
+true_sd <- readRDS(here::here("data", "true_sd.RDS"))
+names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
+df_design$strength_sd <- unlist(true_sd$sd_results_strength)
+df_design$outstrength_sd <- unlist(true_sd$sd_results_outstrength)
+df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
 ```
-
 
 
 
@@ -432,7 +442,7 @@ sim_generate_new <- function(condition, fixed_objects = NULL){
   y_matrix <- matrix(NA, nrow = length(density), ncol = length(r_true) + 1)
   y_matrix[, 1] <- density
   
-    for (i in seq_along(r_true)) {
+  for (i in seq_along(r_true)) {
     sd_error <- sd_true * sqrt(1 - r_true[i]^2)
     y_matrix[, i + 1] <- r_true[i] * density + rnorm(length(density), mean = 0, sd = sd_error)
   }
@@ -440,19 +450,20 @@ sim_generate_new <- function(condition, fixed_objects = NULL){
   return(y_matrix)
   }
   
-  # True density standard deviations are just the random effects sds
+  # True density standard deviations would just be the random effects sds
   # divided by the sqrt(n) -> it's just the standard deviation of the average
-  # of multiple independent random variables
-  # -1 because we ignore the diagonal
+  # of multiple independent random variables. BUT we convert to partial 
+  # correlations, and we take the absolute values, so we just approximate
+  # the true SD with a monte carlo approach
   covariate_cont_strength <- sim_correlated(density = strength,
                                             r_true = c(0, 0.2, 0.4),
                                             sd_true = condition$strength_sd)
   covariate_in_strength <- sim_correlated(density = instrength, 
                                           r_true = c(0, 0.2, 0.4), 
-                                          sd_true = beta_sd/sqrt(n_var - 1))
+                                          sd_true = condition$instrength_sd)
   covariate_out_strength <- sim_correlated(density = outstrength, 
                                            r_true = c(0, 0.2, 0.4), 
-                                           sd_true = beta_sd/sqrt(n_var - 1))
+                                           sd_true = condition$outstrength_sd)
   
 
   if(sd(instrength) == 0){
@@ -465,6 +476,10 @@ sim_generate_new <- function(condition, fixed_objects = NULL){
     stop("No variation in strength")
   }
 
+  # Sanity checks
+  cor_strength <- cor(covariate_cont_strength[,1], covariate_cont_strength)
+  cor_instrength <- cor(covariate_in_strength[,1], covariate_in_strength)
+  cor_outstrength <- cor(covariate_out_strength[,1], covariate_out_strength)
   
   
   # Return data and true centralities
@@ -476,7 +491,11 @@ sim_generate_new <- function(condition, fixed_objects = NULL){
     covariate_cont_strength = covariate_cont_strength,
     covariate_out_strength = covariate_out_strength,
     covariate_in_strength = covariate_in_strength,
-    true_cent = true_cent
+    true_cent = true_cent,
+    # TODO delete these
+    cor_strength = cor_strength,
+    cor_instrength = cor_instrength,
+    cor_outstrength = cor_outstrength
   )
   
   return(ret_data)
@@ -1398,12 +1417,12 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 ```{r run-sim}
 # For testing
 df_design_test <- df_design[3,]
-df_design_test$n_id <- 40
+df_design_test$n_id <- 200
 df_design_test$n_var <- 4
-sim_pars$n_id <- 40
+sim_pars$n_id <- 200
 sim_pars$n_var <- 4
 n_var <- 4
-n_id <- 40
+n_id <- 200
 sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
 sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
 sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
@@ -1414,18 +1433,18 @@ sim_pars$graph_sparse$sigma <- sim_pars$graph_sparse$sigma[1:4,1:4]
 sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
 
 
-n_rep <- 2
+n_rep <- 40
 
 future::plan(multisession, workers = n_rep)
 
 # started 2024-08-13 ~08:35
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design_test, 
+                                    design = df_design, 
                                     replications = n_rep, 
                                     generate = sim_generate_new, 
                                     analyse = sim_analyse, 
-                                    summarise = sim_summarise,
+                                    summarise = NA,
                                     fixed_objects = sim_pars,
                                     parallel = "future",
                                     # parallel = TRUE,
@@ -1440,10 +1459,10 @@ sim_results <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "corpcor",
                                                  "Rcpp"),
-                                    # save_results = TRUE,
+                                    save_results = TRUE,
                                     # ncores = n_rep,
-                                    debug = "analyse",
-                                    # filename = "sim141024.rds"
+                                    # debug = "generate",
+                                    filename = "simcortest.rds"
                                     # save_seeds = TRUE
                                     )
 

@@ -44,13 +44,15 @@
 #' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `05_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
 library(graphicalVAR)
 library(gimme)
 library(here)
+library(future)
+library(corpcor)
 source(here::here("scripts", "00_functions.R"))
 
 #' 
@@ -62,7 +64,7 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_nonsparse_synth_new.RDS"))
 
@@ -76,8 +78,8 @@ graph_sparse <- readRDS(here::here("data/graph_sparse_synth_new.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params--------------------------------------------------------------------------------------------------------------------------------------------------------
-dgp <- c("sparse", "dense")
+## ----params-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+dgp <- c("dense", "sparse")
 
 # Number of timepoints
 n_tp <- c(60, 120)
@@ -86,7 +88,8 @@ heterogeneity <- "high"
 
 # Simulation parameters
 # Number of individuals 
-n_id <- c(75, 200)
+# n_id <- c(75, 200)
+n_id <- 200
 
 # Design Conditions
 df_design <- SimDesign::createDesign(
@@ -102,7 +105,14 @@ n_var <- 6
 # for regression
 reg_error_sd = 1
 
+# Should GIMME use only nondirected contemporaneous effects?
 gimme_var_only = TRUE
+
+# Should GIMME return partial correlations?
+gimme_pcor = TRUE
+
+# Should data for non-Bayesian methods be person-mean centered?
+mean_center = TRUE
 
 # random effects sds
 # beta_sd <- 0.1
@@ -120,12 +130,13 @@ sim_pars <- list(
   # kappa_sd = kappa_sd,
   graph_nonsparse = graph_nonsparse,
   graph_sparse = graph_sparse,
-  gimme_var_only = gimme_var_only
+  gimme_var_only = gimme_var_only,
+  mean_center = mean_center
 )
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile----------------------------------------------------------------------------------------------------------------------------------------------------
+## ----precompile---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -137,10 +148,80 @@ sim_pars$mlvar_model <-
 
 #' 
 #' 
+#' To simulate data with a specific correlation, we need to obtain the true standard deviation of the different centrality measures. For the temporal network, this is easy to compute, as it just follows from the random effects of the VAR matrix. 
+#' For the partial correlations, this is a bit more complicated, as we simulate from the true covariance matrix, but calculate the centrality based on the partial correlation matrix. Therefore, we just simulate a large number of partial correlation matrices for the data-generating process of each condition and then calculate the implied standard deviation of the centrality measure.
+#' 
+## ----true-strength-sd, eval = FALSE-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## # number of simulations to obtain sd
+## n_sim_sd <- 20000
+## sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
+## 
+## for(i in 1:nrow(df_design)){
+##   condition <- df_design[i,]
+## 
+##   dgp_graph <- ifelse(condition$dgp == "sparse",
+##                       "graph_sparse",
+##                       "graph_nonsparse")
+##   beta_sd <- ifelse(condition$heterogeneity == "low",
+##                     0.05,
+##                     0.1)
+##   sigma_sd <- ifelse(condition$heterogeneity == "low",
+##                     0.05,
+##                     0.1)
+##   ml_sim <- sim_gvar_loop(
+##                      graph = sim_pars[[dgp_graph]],
+##                      beta_sd = beta_sd,
+##                      kappa_sd = kappa_sd,
+##                      sigma_sd = sigma_sd,
+##                      n_person = n_sim_sd,
+##                      n_time = condition$n_tp,
+##                      n_node = sim_pars$n_var,
+##                      max_try = 1000,
+##                      verbose = TRUE,
+##                      listify = TRUE,
+##                      sim_pkg = "mlVAR",
+##                      sparse_sim = TRUE,
+##                      most_cent_diff_temp = TRUE,
+##                      most_cent_diff_temp_min = 0.1,
+##                      innov_var_fixed_sigma = TRUE)
+## 
+##   # Obtain true centralities
+##   true_cent <- centrality_mlvar_sim(ml_sim,
+##                                   sim_fn = "sim_gvar_loop")
+## 
+##   strength <- sapply(true_cent$strength, `[`, 1)
+##   outstrength <- sapply(true_cent$outstrength, `[`, 1)
+##   instrength <- sapply(true_cent$instrength, `[`, 1)
+##   strength_sd <- sd(strength)
+##   outstrength_sd <- sd(outstrength)
+##   instrength_sd <- sd(instrength)
+##   sd_results_strength[[i]] <- strength_sd
+##   sd_results_outstrength[[i]] <- outstrength_sd
+##   sd_results_instrength[[i]] <- instrength_sd
+## }
+## 
+## 
+## sd_results <- list(sd_results_strength, sd_results_outstrength, sd_results_instrength)
+## names(sd_results) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
+## 
+## 
+## saveRDS(sd_results, here::here("data", "true_sd.RDS"))
+## 
+
+#' 
+#' As we only need to compute the true SD once, we can simply load it from disk to save time: 
+## -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+true_sd <- readRDS(here::here("data", "true_sd.RDS"))
+names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
+df_design$strength_sd <- unlist(true_sd$sd_results_strength)
+df_design$outstrength_sd <- unlist(true_sd$sd_results_outstrength)
+df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
+
+#' 
 #' 
 #' 
 #' ## Simulating Data
-## ----data-generation-----------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-generation----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -208,7 +289,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
   desired_snr <- 1
   
   # should true centralities be scaled before generating covariate?
-  scale_centralities <- FALSE
+  scale_centralities <- TRUE
   
   instrength <- sapply(true_cent$instrength, `[`, 1)
   outstrength <- sapply(true_cent$outstrength, `[`, 1)
@@ -290,24 +371,175 @@ sim_generate <- function(condition, fixed_objects = NULL){
 
 #' 
 #' 
+#' We create a new function that simulates correlated data slightly differently: 
+#' 
+## ----generate-new-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+sim_generate_new <- function(condition, fixed_objects = NULL){
+  source(here::here("scripts", "00_functions.R"))
+
+  # obtain fixed params
+  SimDesign::Attach(fixed_objects)
+
+  dgp_graph <- ifelse(condition$dgp == "sparse", 
+                      "graph_sparse", 
+                      "graph_nonsparse")
+  beta_sd <- ifelse(condition$heterogeneity == "low",
+                    0.05,
+                    0.1)
+  sigma_sd <- ifelse(condition$heterogeneity == "low",
+                    0.05,
+                    0.1)
+  
+  # scale kappa random effects w.r.t diagonal elements
+  mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
+  kappa_sd_low <- 0.05 * mean_diag_kappa
+  kappa_sd_high <- 0.1 * mean_diag_kappa
+  
+  kappa_sd <- ifelse(condition$heterogeneity == "low",
+                     kappa_sd_low,
+                     kappa_sd_high)
+  
+  ml_sim <- sim_gvar_loop(
+                     graph = fixed_objects[[dgp_graph]],
+                     beta_sd = beta_sd,
+                     kappa_sd = kappa_sd,
+                     sigma_sd = sigma_sd, 
+                     n_person = condition$n_id,
+                     n_time = condition$n_tp,
+                     n_node = n_var,
+                     max_try = 10000,
+                     listify = TRUE,
+                     sim_pkg = "mlVAR",
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = TRUE,
+                     most_cent_diff_temp_min = 0.1,
+                     innov_var_fixed_sigma = TRUE)
+  if(any(is.na(ml_sim$beta))){
+    stop("Generation of Betas failed")
+  }
+  
+  if(any(is.na(ml_sim$pcor))){
+    stop("Generation of PCORs failed")
+  } 
+  
+  
+  # Obtain true centralities
+  true_cent <- centrality_mlvar_sim(ml_sim,
+                                    sim_fn = "sim_gvar_loop")
+
+  # Obtain true centralities
+  instrength <- sapply(true_cent$instrength, `[`, 1)
+  outstrength <- sapply(true_cent$outstrength, `[`, 1)
+  strength <- sapply(true_cent$strength, `[`, 1)
+  
+  
+  # Simulate correlated data with true variance of centralities
+  # first column is the density to keep track of the density
+  # and for compatibility with an old sim function
+  sim_correlated <- function(density, 
+                             r_true, 
+                             sd_true){
+  y_matrix <- matrix(NA, nrow = length(density), ncol = length(r_true) + 1)
+  y_matrix[, 1] <- density
+  
+  for (i in seq_along(r_true)) {
+    sd_error <- sd_true * sqrt(1 - r_true[i]^2)
+    y_matrix[, i + 1] <- r_true[i] * density + rnorm(length(density), mean = 0, sd = sd_error)
+  }
+  
+  return(y_matrix)
+  }
+  
+  # True density standard deviations would just be the random effects sds
+  # divided by the sqrt(n) -> it's just the standard deviation of the average
+  # of multiple independent random variables. BUT we convert to partial 
+  # correlations, and we take the absolute values, so we just approximate
+  # the true SD with a monte carlo approach
+  covariate_cont_strength <- sim_correlated(density = strength,
+                                            r_true = c(0, 0.2, 0.4),
+                                            sd_true = condition$strength_sd)
+  covariate_in_strength <- sim_correlated(density = instrength, 
+                                          r_true = c(0, 0.2, 0.4), 
+                                          sd_true = condition$instrength_sd)
+  covariate_out_strength <- sim_correlated(density = outstrength, 
+                                           r_true = c(0, 0.2, 0.4), 
+                                           sd_true = condition$outstrength_sd)
+  
+
+  if(sd(instrength) == 0){
+    stop("No variation in instrength")
+  }
+  if(sd(outstrength) == 0){
+    stop("No variation in outstrength")
+  }
+  if(sd(strength) == 0){
+    stop("No variation in strength")
+  }
+
+  # Sanity checks
+  cor_strength <- cor(covariate_cont_strength[,1], covariate_cont_strength)
+  cor_instrength <- cor(covariate_in_strength[,1], covariate_in_strength)
+  cor_outstrength <- cor(covariate_out_strength[,1], covariate_out_strength)
+  
+  
+  # Return data and true centralities
+  ret_data <- list(
+    data = ml_sim$data,
+    beta = ml_sim$beta_l,
+    kappa = ml_sim$kappa_l,
+    pcor = ml_sim$pcor_l,
+    covariate_cont_strength = covariate_cont_strength,
+    covariate_out_strength = covariate_out_strength,
+    covariate_in_strength = covariate_in_strength,
+    true_cent = true_cent,
+    # TODO delete these
+    cor_strength = cor_strength,
+    cor_instrength = cor_instrength,
+    cor_outstrength = cor_outstrength
+  )
+  
+  return(ret_data)
+  
+  
+}
+
+#' 
+#' 
+#' 
+#' 
+#' 
 #' # Analysis
 #' 
-## ----data-analysis-------------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-analysis------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
   SimDesign::Attach(fixed_objects)
   
+  # Check if mean centering option is true, if so, mean center
+  if(isTRUE(fixed_objects$mean_center)){
+    dat$data_centered <- lapply(dat$data, function(x){
+      x |> 
+        dplyr::as_tibble() |> 
+        dplyr::mutate(across(everything(), ~ . - mean(.)))
+      
+    })
+  }
+  
   # Concatenate list of data into dataframe with id column
+  df_data_centered <- dplyr::bind_rows(purrr::map(dat$data_centered, dplyr::as_tibble)
+                              , .id = "ID") |> 
+    dplyr::mutate(ID = as.factor(ID))
+  
   df_data <- dplyr::bind_rows(purrr::map(dat$data, dplyr::as_tibble)
-                              , .id = "ID") %>% 
+                              , .id = "ID") |> 
     dplyr::mutate(ID = as.factor(ID))
   
   n_id <- condition$n_id
   
   #--- graphicalVAR
   # Fit models
-  fit_gvar <- lapply(dat$data, function(x){
+  fit_gvar <- lapply(dat$data_centered, function(x){
     tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
                                nLambda = 50,
                                verbose = FALSE,
@@ -353,7 +585,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- GIMME
   
   # Fit model
-  fit_gimme <- tryCatch({gimme::gimme(dat$data,
+  fit_gimme <- tryCatch({gimme::gimme(dat$data_centered,
                             ar = TRUE,
                             subgroup = TRUE,
                             plot = FALSE,
@@ -370,7 +602,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # for var_only, we need to first extract the contemporaneous matrices
   if(isTRUE(gimme_var_only)){
     fit_gimme$contemp_mat <- lapply(1:length(fit_gimme$path_est_mats), function(i){
-      gimme_cor_mat(fit_gimme$path_se_est, id = i, n_vars = n_var)
+      gimme_cor_mat(fit_gimme$path_se_est, id = i, n_vars = n_var, pcor = fixed_objects$gimme_pcor)
     }
   )
   }
@@ -416,7 +648,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # #--- frequentist mlVAR
 
   # Fit model
-  fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(df_data,
+  fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(df_data_centered,
                             vars = paste0("V", seq(1:n_var)),
                             idvar = "ID",
                             estimator = "lmer",
@@ -482,17 +714,17 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   # 
   #--- Bayesian mlVAR
   # indicators for partial correlations
-  idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) %>% 
-      c() %>% 
-      which(.)
+  idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |> 
+      c() |> 
+      which()
   
   reg_data <- cbind(
     dat$covariate_in_strength[, 2:4],
     dat$covariate_cont_strength[, 2:4],
     dat$covariate_out_strength[, 2:4]
   )
-  Y <- df_data %>% 
-    dplyr::select(-"ID") %>% 
+  Y <- df_data |> 
+    dplyr::select(-"ID") |> 
     as.matrix()
   
   n_tp <- condition$n_tp
@@ -508,7 +740,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     idx_rho = array(idx_rho, dim = length(idx_rho)),
     Y = Y,
     reg_covariate = reg_data,
-    sparsity = 2
+    sparsity = 2,
+    # should lagged estimates be mean-centered?
+    mean_center = 1
   )
   
   
@@ -580,7 +814,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   summary_bmlvar <- summary_bmlvar[, !(colnames(summary_bmlvar) %in% c("25%", "75%"))]
   
   # convergence diagnostics
-  rhat_bmlvar_tmp <- summary_bmlvar %>% as.data.frame() %>% pull(Rhat)
+  rhat_bmlvar_tmp <- summary_bmlvar |> as.data.frame() |> pull(Rhat)
   rhat_bmlvar_tmp <- rhat_bmlvar_tmp[!is.nan(rhat_bmlvar_tmp)]
   rhat_bmlvar_mean <- mean(rhat_bmlvar_tmp, na.rm = TRUE)
   rhat_bmlvar_11 <- sum(rhat_bmlvar_tmp > 1.1)/length(rhat_bmlvar_tmp)
@@ -678,7 +912,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize-----------------------------------------------------------------------------------------------------------------------------------------------------
+## ----summarize----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -800,7 +1034,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
       else{
         mci <- most_cent_ident(results[[i]][[method]][[measure]], 
                               results[[i]]$true_cent[[measure]])
-        # check if calculation work to prevent error
+        # check if calculation worked to prevent error
         if(!is.vector(mci) |is.null(mci) | is.null(unlist(mci))){
           return(NA)
         }
@@ -1180,24 +1414,27 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim-------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----run-sim------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # For testing
-# df_design_test <- df_design[3,]
-# sim_pars$n_id <- 40
-# sim_pars$n_var <- 6
-# n_var <- 6
-# n_id <- 40
-# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
-# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
-# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
-# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
-# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
-# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
+df_design_test <- df_design[3,]
+df_design_test$n_id <- 200
+df_design_test$n_var <- 4
+sim_pars$n_id <- 200
+sim_pars$n_var <- 4
+n_var <- 4
+n_id <- 200
+sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
+sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
+sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
+sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
+sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
+sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
+sim_pars$graph_sparse$sigma <- sim_pars$graph_sparse$sigma[1:4,1:4]
+sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
 
 
-n_rep <- 10
-library(future)
-library(progressr)
+n_rep <- 40
+
 future::plan(multisession, workers = n_rep)
 
 # started 2024-08-13 ~08:35
@@ -1205,9 +1442,9 @@ future::plan(multisession, workers = n_rep)
 sim_results <- SimDesign::runSimulation(
                                     design = df_design, 
                                     replications = n_rep, 
-                                    generate = sim_generate, 
+                                    generate = sim_generate_new, 
                                     analyse = sim_analyse, 
-                                    summarise = sim_summarise,
+                                    summarise = NA,
                                     fixed_objects = sim_pars,
                                     parallel = "future",
                                     # parallel = TRUE,
@@ -1220,15 +1457,16 @@ sim_results <- SimDesign::runSimulation(
                                                  "bayestestR",
                                                  "posterior",
                                                  "rstan",
+                                                 "corpcor",
                                                  "Rcpp"),
                                     save_results = TRUE,
                                     # ncores = n_rep,
-                                    # debug = "generate"
-                                    filename = "sim141024.rds"
+                                    # debug = "generate",
+                                    filename = "simcortest.rds"
                                     # save_seeds = TRUE
                                     )
 
-# plan(sequential)
+plan(sequential)
 
 # SimClean()
 # saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
@@ -1238,12 +1476,11 @@ sim_results <- SimDesign::runSimulation(
 #' 
 #' 
 #' 
-#' 
 #' # Write to standard R script
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## ------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
             output = here::here("scripts", "01_centrality_simulation.R"),
             documentation = 2)
