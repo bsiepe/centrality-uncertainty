@@ -115,7 +115,8 @@ slopes <- lapply(sim_res_4$results, function(x){
     # true coefficients
     zero = tmp[c(1,4,7)],
     two = tmp[c(2,5,8)],
-    four = tmp[c(3,6,9)]
+    four = tmp[c(3,6,9)],
+    coef = c("instrength", "outstrength", "strength")
   )
   df_slopes
 })
@@ -128,17 +129,18 @@ slopes |>
     "0.2" = two,
     "0.4" = four
   ) |> 
-  pivot_longer(cols = everything(), 
+  pivot_longer(cols = !coef, 
                names_to = "reg_coef") |> 
   mutate(reg_coef = as.factor(reg_coef)) |> 
-  ggplot(aes(x = reg_coef, y = value)) + 
-  geom_point()+
+  ggplot(aes(x = reg_coef, y = value, col = coef)) + 
+  geom_point(position = position_jitter(width = .1, height = 0))+
   labs(x = "True Regression Slope",
        y = "Estimated Regression Slope",
        title = "BmlVAR Estimates of Regresion Slope",
        caption = "n = 200") +
   theme_centrality()+
-  theme(text = element_text(size = 21))
+  theme(text = element_text(size = 21))+
+  scale_color_manual(values = ggokabeito::palette_okabe_ito(c(5,1,3)))
 
 ```
 
@@ -191,6 +193,44 @@ coefficients_vector <- unlist(coefficients_list)
 
 coefficients_vector
 ```
+
+
+## Visualize centralities
+```{r}
+centrality_list_bmlvar <- list()
+
+for (i in seq_along(sim_res_4$results)) {
+  df_temp <- data.frame(
+    bmlvar_outstrength = sapply(sim_res_4$results[[i]]$bmlvar$outstrength, function(x) x[[1]]),
+    bmlvar_instrength = sapply(sim_res_4$results[[i]]$bmlvar$instrength, function(x) x[[1]]),
+    bmlvar_strength = sapply(sim_res_4$results[[i]]$bmlvar$strength, function(x) x[[1]]),
+    true_outstrength = sapply(sim_res_4$results[[i]]$true_cent$outstrength, function(x) x[[1]]),
+    true_instrength = sapply(sim_res_4$results[[i]]$true_cent$instrength, function(x) x[[1]]),
+    true_strength = sapply(sim_res_4$results[[i]]$true_cent$strength, function(x) x[[1]])
+  )
+  
+  centrality_list_bmlvar[[i]] <- df_temp
+}
+
+df_centrality_bmlvar <- do.call(rbind, centrality_list_bmlvar)
+
+# add an identifier column to track which element each row came from
+df_centrality_bmlvar$sim_rep <- rep(seq_along(sim_res_4$results), sapply(centrality_list_bmlvar, nrow))
+
+
+
+df_centrality_bmlvar |> 
+  pivot_longer(cols = !sim_rep) |> 
+  separate_wider_delim(delim = "_", cols = name, names = c("est", "centrality")) |> 
+  pivot_wider(id_cols = c(sim_rep, centrality), names_from = est) |> 
+  unnest_longer(col = c(bmlvar, true)) |> 
+  ggplot(aes(x = true, y = bmlvar)) + 
+  geom_point() + 
+  geom_smooth() + 
+  theme_centrality() +
+  facet_grid(~centrality)
+```
+
 
 
 # Analyze other models
@@ -246,6 +286,43 @@ l_coefs |>
 
 ```
 
+
+### Visualize centralities
+
+```{r}
+centrality_list_gvar <- list()
+
+for (i in seq_along(sim_res_4$results)) {
+  df_temp <- data.frame(
+    gvar_outstrength = sapply(sim_res_4$results[[i]]$gvar$outstrength, function(x) x[[1]]),
+    gvar_instrength = sapply(sim_res_4$results[[i]]$gvar$instrength, function(x) x[[1]]),
+    gvar_strength = sapply(sim_res_4$results[[i]]$gvar$strength, function(x) x[[1]]),
+    true_outstrength = sapply(sim_res_4$results[[i]]$true_cent$outstrength, function(x) x[[1]]),
+    true_instrength = sapply(sim_res_4$results[[i]]$true_cent$instrength, function(x) x[[1]]),
+    true_strength = sapply(sim_res_4$results[[i]]$true_cent$strength, function(x) x[[1]])
+  )
+  
+  centrality_list_gvar[[i]] <- df_temp
+}
+
+df_centrality_gvar <- do.call(rbind, centrality_list_gvar)
+
+# add an identifier column to track which element each row came from
+df_centrality_gvar$sim_rep <- rep(seq_along(sim_res_4$results), sapply(centrality_list_gvar, nrow))
+
+
+
+df_centrality_gvar |> 
+  pivot_longer(cols = !sim_rep) |> 
+  separate_wider_delim(delim = "_", cols = name, names = c("est", "centrality")) |> 
+  pivot_wider(id_cols = c(sim_rep, centrality), names_from = est) |> 
+  unnest_longer(col = c(gvar, true)) |> 
+  ggplot(aes(x = true, y = gvar)) + 
+  geom_point() + 
+  geom_smooth() + 
+  theme_centrality() +
+  facet_grid(~centrality)
+```
 
 ## mlVAR
 
@@ -321,31 +398,54 @@ generate_heatmaps(sim_res_4$results[[1]]$beta, sim_res_4$results[[1]]$mlvar$fit_
 Somehow, the rank correlation for mlVAR is quite bad. Plot some examples:
 
 ```{r}
-df_denstemp <- data.frame(
-  mlvar_outstrength = sapply(sim_res_4$results[[3]]$mlvar$outstrength, function(x) x[[1]]),
-  mlvar_instrength = sapply(sim_res_4$results[[3]]$mlvar$instrength, function(x) x[[1]]),
-  true_outstrength =  sapply(sim_res_4$results[[3]]$true_cent$outstrength, function(x) x[[1]])
-)
+centrality_list_mlvar <- list()
 
-df_denstemp |> 
+for (i in seq_along(sim_res_4$results)) {
+  df_temp <- data.frame(
+    mlvar_outstrength = sapply(sim_res_4$results[[i]]$mlvar$outstrength, function(x) x[[1]]),
+    mlvar_instrength = sapply(sim_res_4$results[[i]]$mlvar$instrength, function(x) x[[1]]),
+    mlvar_strength = sapply(sim_res_4$results[[i]]$mlvar$strength, function(x) x[[1]]),
+    true_outstrength = sapply(sim_res_4$results[[i]]$true_cent$outstrength, function(x) x[[1]]),
+    true_instrength = sapply(sim_res_4$results[[i]]$true_cent$instrength, function(x) x[[1]]),
+    true_strength = sapply(sim_res_4$results[[i]]$true_cent$strength, function(x) x[[1]])
+  )
+  
+  centrality_list_mlvar[[i]] <- df_temp
+}
+
+df_centrality_mlvar <- do.call(rbind, centrality_list_mlvar)
+
+# add an identifier column to track which element each row came from
+df_centrality_mlvar$sim_rep <- rep(seq_along(sim_res_4$results), sapply(centrality_list_mlvar, nrow))
+
+df_centrality_mlvar
+
+
+df_centrality_mlvar |> 
   ggplot(aes(x = true_outstrength, y = mlvar_outstrength)) + 
   geom_point() + 
-  geom_smooth()
+  geom_smooth() + 
+  theme_centrality()
 ```
+
+
+What is their standard deviation?
+```{r}
+df_centrality_mlvar |> 
+  group_by(sim_rep) |> 
+  summarize(across(everything(),list(mean = mean, sd = sd))) |> 
+  ungroup() |> 
+  pivot_longer(cols = !sim_rep) |> 
+  separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
+  pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value) |> View()
+```
+
+mlVAR severely underestimates the variability of contemporaneous networks.
+
 
 Contemporaneous:
 
-```{r}
-df_contemp_mlvar <- data.frame(
-  mlvar_strength = sapply(sim_res_4$results[[3]]$mlvar$strength, function(x) x[[1]]),
-  true_strength =  sapply(sim_res_4$results[[3]]$true_cent$strength, function(x) x[[1]])
-)
 
-df_contemp_mlvar|> 
-  ggplot(aes(x = true_strength, y = mlvar_strength)) + 
-  geom_point() + 
-  geom_smooth()
-```
 
 
 
@@ -446,6 +546,42 @@ l_coefs |>
   ggplot(aes(x = reg_coef, y = value)) + 
   geom_point()
 ```
+
+
+
+### Visualize centralities
+
+```{r}
+centrality_list_gimme <- list()
+
+for (i in seq_along(sim_res_4$results)) {
+  df_temp <- data.frame(
+    gimme_outstrength = sapply(sim_res_4$results[[i]]$gimme$outstrength, function(x) x[[1]]),
+    gimme_instrength = sapply(sim_res_4$results[[i]]$gimme$instrength, function(x) x[[1]]),
+    gimme_strength = sapply(sim_res_4$results[[i]]$gimme$strength, function(x) x[[1]]),
+    true_outstrength = sapply(sim_res_4$results[[i]]$true_cent$outstrength, function(x) x[[1]]),
+    true_instrength = sapply(sim_res_4$results[[i]]$true_cent$instrength, function(x) x[[1]]),
+    true_strength = sapply(sim_res_4$results[[i]]$true_cent$strength, function(x) x[[1]])
+  )
+  
+  centrality_list_gimme[[i]] <- df_temp
+}
+
+df_centrality_gimme <- do.call(rbind, centrality_list_gimme)
+
+# add an identifier column to track which element each row came from
+df_centrality_gimme$sim_rep <- rep(seq_along(sim_res_4$results), sapply(centrality_list_gimme, nrow))
+
+
+
+df_centrality_gimme |> 
+  pivot_longer(cols = !sim_rep) |> 
+  separate_wider_delim(delim = "_", cols = name, names = c("est", "centrality")) |> 
+  pivot_wider(id_cols = c(sim_rep, centrality), names_from = est) |> 
+  unnest_longer(col = c(gimme, true)) |> 
+  ggplot(aes(x = true, y = gimme)) + 
+  geom_point() + 
+  geom_smooth() + 
+  theme_centrality() +
+  facet_grid(~centrality)
 ```
-
-
