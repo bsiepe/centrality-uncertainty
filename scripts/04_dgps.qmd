@@ -490,10 +490,17 @@ Create the corresponding pcor matrix:
 pcor_mat <- -stats::cov2cor(solve(cov_mat))
 ```
 
+And the corresponding precision matrix: 
+```{r}
+kappa_mat <- solve(cov_mat)
+```
+
+
 Save the DGP:
 ```{r}
 graph_semisparse_synth <- list(beta = var_mat, 
                     sigma = cov_mat, 
+                    kappa = kappa_mat,
                     pcor = pcor_mat)
 
 saveRDS(graph_semisparse_synth, here("data/graph_semisparse_synth.RDS"))
