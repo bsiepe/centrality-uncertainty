@@ -30,6 +30,13 @@ ut <- function(x){
 sim_res_4$results[[1]]$bmlvar$fit_bmlvar$pcor[[2]]
 ut(sim_res_4$results[[1]]$pcor[[2]])
 
+# Look at absolute differences across all individuals
+Reduce("+", Map("abs", Map("-", sim_res_4$results[[3]]$bmlvar$fit_bmlvar$pcor, sim_res_4$results[[1]]$pcor))) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
+
+# Check if there is a wrong negative sign
+reverse_sign_pcor <- lapply(sim_res_4$results[[3]]$bmlvar$fit_bmlvar$pcor, function(x) x*-1)
+
+Reduce("+", Map("abs", Map("-", reverse_sign_pcor, sim_res_4$results[[1]]$pcor))) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
 
 ```
 
@@ -53,8 +60,6 @@ Reduce("+", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, sim_res_4$re
 Unstandardized regression coefs:
 ```{r}
 sim_res_4$results[[1]]$bmlvar$reg_bmlvar$regression_slope$median
-
-  
 ```
 
 Standardized regression coefs: 
@@ -154,7 +159,7 @@ get_lm_beta_coefficient <- function(result) {
   )
   
   test <- lm.beta(lm(covariate ~ outstrength, data = df_out))
-  return(test$coefficients[2])
+  return(test$standardized.coefficients[2])
 }
 
 coefficients_list <- lapply(sim_res_4$results, get_lm_beta_coefficient)
@@ -164,6 +169,28 @@ coefficients_vector
 
 ```
 
+Now without standardization:
+
+```{r}
+get_lm_coefficient <- function(result) {
+  out_est <- sapply(result$bmlvar$outstrength, function(x) x[1])
+  
+  covar_true <- result$covariate_out_strength[, 4]
+  
+  df_out <- data.frame(
+    outstrength = out_est, 
+    covariate = covar_true
+  )
+  
+  test <- summary(lm(covariate ~ outstrength, data = df_out))
+  return(test$coefficients[2])
+}
+
+coefficients_list <- lapply(sim_res_4$results, get_lm_beta_coefficient)
+coefficients_vector <- unlist(coefficients_list)
+
+coefficients_vector
+```
 
 
 # Analyze other models
@@ -193,6 +220,32 @@ l_coefs |>
   geom_point()
 
 ```
+
+
+Unstandardized:
+
+```{r}
+l_coefs <- list()
+l_coefs$zero <- vector()
+l_coefs$two <- vector()
+l_coefs$four <- vector()
+
+for(i in 1:10){
+  l_coefs$zero[i] <- summary(r1$results[[i]]$gvar$reg_outstrength[[1]])$coefficients[2]
+  l_coefs$two[i] <- summary(r1$results[[i]]$gvar$reg_outstrength[[2]])$coefficients[2]
+  l_coefs$four[i] <- summary(r1$results[[i]]$gvar$reg_outstrength[[3]])$coefficients[2]
+}
+
+l_coefs |> 
+  dplyr::bind_rows(.id = "true_coef") |> 
+    pivot_longer(cols = everything(), 
+               names_to = "reg_coef") |> 
+  mutate(reg_coef = as.factor(reg_coef)) |> 
+  ggplot(aes(x = reg_coef, y = value)) + 
+  geom_point()
+
+```
+
 
 ## mlVAR
 
@@ -275,7 +328,7 @@ df_denstemp <- data.frame(
 )
 
 df_denstemp |> 
-  ggplot(aes(x = true_outstrength, y = mlvar_instrength)) + 
+  ggplot(aes(x = true_outstrength, y = mlvar_outstrength)) + 
   geom_point() + 
   geom_smooth()
 ```
@@ -320,10 +373,36 @@ l_coefs |>
 
 ```
 
+Unstandardized:
+
+```{r}
+l_coefs <- list()
+l_coefs$zero <- vector()
+l_coefs$two <- vector()
+l_coefs$four <- vector()
+
+for(i in 1:10){
+  l_coefs$zero[i] <- summary(sim_res_4$results[[i]]$mlvar$reg_outstrength[[1]])$coefficients[2]
+  l_coefs$two[i] <- summary(sim_res_4$results[[i]]$mlvar$reg_outstrength[[2]])$coefficients[2]
+  l_coefs$four[i] <- summary(sim_res_4$results[[i]]$mlvar$reg_outstrength[[3]])$coefficients[2]
+}
+
+l_coefs |> 
+  dplyr::bind_rows(.id = "true_coef") |> 
+    pivot_longer(cols = everything(), 
+               names_to = "reg_coef") |> 
+  mutate(reg_coef = as.factor(reg_coef)) |> 
+  ggplot(aes(x = reg_coef, y = value)) + 
+  geom_point()
+```
+
+
+
 ## GIMME
 
 ### Regression Outcomes
 
+Standardized coefficients:
 ```{r}
 l_coefs <- list()
 l_coefs$zero <- vector()
@@ -344,3 +423,29 @@ l_coefs |>
   ggplot(aes(x = reg_coef, y = value)) + 
   geom_point()
 ```
+
+Unstandardized:
+
+```{r}
+l_coefs <- list()
+l_coefs$zero <- vector()
+l_coefs$two <- vector()
+l_coefs$four <- vector()
+
+for(i in 1:10){
+  l_coefs$zero[i] <- summary(sim_res_4$results[[i]]$gimme$reg_outstrength[[1]])$coefficients[2,1]
+  l_coefs$two[i] <- summary(sim_res_4$results[[i]]$gimme$reg_outstrength[[2]])$coefficients[2,1]
+  l_coefs$four[i] <- summary(sim_res_4$results[[i]]$gimme$reg_outstrength[[3]])$coefficients[2,1]
+}
+
+l_coefs |> 
+  dplyr::bind_rows(.id = "true_coef") |> 
+    pivot_longer(cols = everything(), 
+               names_to = "reg_coef") |> 
+  mutate(reg_coef = as.factor(reg_coef)) |> 
+  ggplot(aes(x = reg_coef, y = value)) + 
+  geom_point()
+```
+```
+
+
