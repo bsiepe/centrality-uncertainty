@@ -11,7 +11,7 @@ library(tidyverse)
 library(lme4)
 library(mlVAR)
 library(lm.beta)
-library(mnet)  # for the Koval data
+# library(mnet)  # for the Koval data
 library(here)
 set.seed(35037)
 ```
@@ -477,6 +477,7 @@ arr_to_latex(var_mat)
 Then we can create the corresponding innovation covariance matrix:
 ```{r}
 cov_mat <- create_cov_matrix(6, 
+                             off_diag_val = .15,
                               sparse = TRUE, 
                               sparsity_proportion = 0.15,
                               boost_factor = 1.25)
@@ -505,3 +506,5 @@ graph_semisparse_synth <- list(beta = var_mat,
 
 saveRDS(graph_semisparse_synth, here("data/graph_semisparse_synth.RDS"))
 ```
+
+
