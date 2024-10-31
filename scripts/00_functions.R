@@ -127,13 +127,17 @@ sim_gvar_loop <- function(graph,
                           # if most_cent_diff_temp is TRUE, this is the minimum difference
                           # as a proportion of the centrality of the most central node
                           most_cent_diff_temp_min = 0.1,
+                          # same for the contemporaneous network
+                          most_cent_diff_cont = FALSE,
+                          most_cent_diff_cont_min = 0.1, 
                           # do we induce differences in the density of the temporal network
                           change_density = FALSE,
                           # if change_density is TRUE, these are the minimum and 
                           # maximum scaling factors
                           change_density_factors = c(0.75, 1.25),
-                          # TODO add option to return where fn failed
                           verbose = FALSE,
+                          # do we fix the innovation variance
+                          # i.e., do we add interindividual differences here?
                           innov_var_fixed_sigma = FALSE
                           ) {
   # browser()
@@ -196,14 +200,9 @@ sim_gvar_loop <- function(graph,
       
       # if minimum centrality difference is required
       if(isTRUE(most_cent_diff_temp)){
-        # ignore autoregressive effects, set diagonal to zero
-        # therefore subtract 1 from number of nodes in density estimation
-        beta_tmp <- beta[,,i]
-        diag(beta_tmp) <- 0
-        centralities <- colSums(abs(beta_tmp))/ (n_node - 1)
-        # check if the difference between the most central and the second most central node
-        # is large enough
-        cent_check <- max(centralities) - sort(centralities, decreasing = TRUE)[2] > most_cent_diff_temp_min * max(centralities)
+        cent_check <- check_centrality_diff(matrix = beta[, , i],
+                                            n_node = n_node,
+                                            min_diff = most_cent_diff_temp_min)
         # if not, try again
         if(!isTRUE(cent_check)){
           if(isTRUE(verbose)){
@@ -308,6 +307,7 @@ sim_gvar_loop <- function(graph,
           sigma[ , , i][zeros_sigma] <- 0
         }
         
+
         # Check if sigma matrix is semi-positive definite
         ev_s <- eigen(sigma[, , i])$values
         
@@ -326,6 +326,22 @@ sim_gvar_loop <- function(graph,
             print("Sigma matrix not semi-positive definite, trying again.")
           }
         }
+      # if minimum centrality difference is required
+        if(isTRUE(most_cent_diff_cont)){
+          cent_check <- check_centrality_diff(matrix = pcor[, , i],
+                                              n_node = n_node,
+                                              min_diff = most_cent_diff_cont_min)
+          # if not, try again
+          if(!isTRUE(cent_check)){
+            if(isTRUE(verbose)){
+              print(paste0("Centrality difference too small, trying again. Difference: ", 
+                           max(centralities) - sort(centralities, decreasing = TRUE)[2],
+                           "Individual:", i))
+            }
+            next
+          }
+          
+        }  
 
       }  # end repeat statement
       
@@ -418,6 +434,21 @@ sim_gvar_loop <- function(graph,
   }
   return(ret)
 }
+
+
+# Helper function that checks for minimum required centrality difference
+# between most central and second most central node
+check_centrality_diff <- function(matrix, n_node, min_diff) {
+  matrix_tmp <- matrix
+  diag(matrix_tmp) <- 0
+  centralities <- colSums(abs(matrix_tmp)) / (n_node - 1)
+  diff_check <- max(centralities) - sort(centralities, decreasing = TRUE)[2] > min_diff * max(centralities)
+  return(diff_check)
+}
+
+
+
+
 
 # -------------------------------------------------------------------------
 # mlVAR simulation function -----------------------------------------------
