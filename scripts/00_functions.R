@@ -156,7 +156,7 @@ sim_gvar_loop <- function(graph,
     }
     zeros_beta <- find_zero_indices(graph$beta)
     zeros_kappa <- find_zero_indices(graph$kappa)
-    if(!is.null(sigma)){
+    if(!is.null(graph$sigma)){
       zeros_sigma <- find_zero_indices(graph$sigma)
     }
   }
@@ -250,8 +250,13 @@ sim_gvar_loop <- function(graph,
       
       # if sparse matrix should be generated, set true zero effects to zero
       if(isTRUE(sparse_sim)){
-        kappa[ , , i][zeros_kappa] <- 0
+        if(is.null(graph$sigma)){
+          kappa[ , , i][zeros_kappa] <- 0
+        } else {
+          kappa[ , , i][zeros_sigma] <- 0
+        }
       }
+    
       
       # Check if kappa matrix is semi-positive definite
       ev_k <- eigen(kappa[, , i])$values
@@ -260,6 +265,15 @@ sim_gvar_loop <- function(graph,
       if (all(ev_k >= 0 - 1e-6)){
         pcor[, , i] <- -stats::cov2cor(kappa[, , i])
         diag(pcor[, , i]) <- 0
+        # same pcor effects are zero as in kappa/sigma
+        if(isTRUE(sparse_sim)){
+          if(is.null(graph$sigma)){
+            pcor[ , , i][zeros_kappa] <- 0
+          } else{
+            pcor[ , , i][zeros_sigma] <- 0
+          }
+          
+        }
         if(!any(is.na(pcor[,,i]))){
           break
         }
@@ -269,7 +283,25 @@ sim_gvar_loop <- function(graph,
         if(isTRUE(verbose)){
           print("Kappa matrix not semi-positive definite, trying again.")
         }
-    }
+      }
+    # if minimum centrality difference is required
+      if(isTRUE(most_cent_diff_cont)){
+        cent_check <- check_centrality_diff(matrix = pcor[, , i],
+                                            n_node = n_node,
+                                            min_diff = most_cent_diff_cont_min)
+        # if not, try again
+        if(!isTRUE(cent_check)){
+          if(isTRUE(verbose)){
+            print(paste0("Centrality difference too small, trying again. Difference: ", 
+                         max(centralities) - sort(centralities, decreasing = TRUE)[2],
+                         "Individual:", i))
+          }
+          next
+        }
+        
+      }
+      
+      
     } # end repeat statement
   } # end if(is.null(graph$sigma))  
     
