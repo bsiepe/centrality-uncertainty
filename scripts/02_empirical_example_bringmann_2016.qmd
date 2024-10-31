@@ -56,6 +56,7 @@ library(rstan)
 library(imputeTS)
 library(knitr)
 library(gt)
+library(bayesplot)
 
 source(here("scripts", "00_functions.R"))
 set.seed(35037)
@@ -175,16 +176,62 @@ data_bringmann |>
 ## Imputation
 Some of the methods require imputation, so we impute per person and per variable, using a Kalman filter approach.
 ```{r impute}
+# Try higher number of iterations
+new_param <- list(maxit = 5000)
+
 data_bringmann_imputed <- data_bringmann |> 
   select(-neuroticism) |> 
   group_by(subj_id) |> 
   mutate(across(everything(),
-                ~imputeTS::na_kalman(.x))) |> 
+                ~imputeTS::na_kalman(.x, optim.control = new_param),
+                .names = "{.col}_imp")) |> 
   ungroup() |> 
   left_join(neuroticism_vec, by = "subj_id")
+
+convergence_warnings<- dplyr::last_dplyr_warnings(n = 15)
 ```
 
-TODO check convergence problems here
+We observe some potential convergence issues here (see [here](https://github.com/SteffenMoritz/imputeTS/issues/60) for more information). In this case, it makes sense to inspect the imputed values for the affected time series. 
+
+```{r impute-convergence-check, eval = FALSE}
+# Obtain IDs with convergence issues
+convergence_ids <- sapply(convergence_warnings, function(x){
+  x$message[[2]] |> 
+    str_extract("(?<=subj_id = )\\d+") |> 
+    as.numeric()
+})
+
+# Check their time series
+columns <- c("angry", "depressed", "dysphoric", "anxious", "relaxed", "happy")
+
+pdf(here("figures", "empirical_example_imputations.pdf"))  # Customize width and height as needed
+for (i in 1:length(convergence_ids)) {
+  for (col in 1:length(columns)) {
+    
+    dat1 <- data_bringmann_imputed |> 
+      filter(subj_id %in% convergence_ids[[i]])
+    
+    print(imputeTS::ggplot_na_imputations(
+      x_with_na = dat1[[columns[col]]], 
+      x_with_imputations = dat1[[paste0(columns[col], "_imp")]]
+    ))
+  }
+}
+
+dev.off()
+```
+They generally all appear reasonable, and it seems like issues often occured in time series with a relatively low variance/floor effects.
+
+
+
+We rename the imputed columns and delete the non-imputed ones:
+```{r impute-finalize}
+data_bringmann_imputed <- data_bringmann_imputed |> 
+  select(subj_id, contains("_imp"), neuroticism) |>
+  rename_with(~str_remove(.x, "_imp"), contains("_imp"))
+
+```
+
 
 
 # Estimation
@@ -198,7 +245,7 @@ df_data <- data_bringmann_imputed |>
 ```
 
 We also scale all variables per person for the LASSO approach: 
-```{r}
+```{r scale}
 df_data <- df_data |> 
   group_by(subj_id) |> 
   mutate(across(everything(), ~scale(.x))) |> 
@@ -211,9 +258,6 @@ df_data <- df_data |>
 ### Network
 
 To estimate idiographic networks, we first split the data and then estimate a graphical VAR model per person.
-
-TODO need to scale data before for every method!
-
 
 ```{r fit-gvar}
 #| eval: !expr params$rerun
@@ -231,16 +275,16 @@ fit_gvar <- lapply(data_list, function(x){
                                vars = vars,
                                verbose = FALSE,
                                gamma = 0, 
-                               scale = TRUE))}, error = function(e) NA)
+                               scale = FALSE))}, error = function(e) NA)
   })
 
 # save results
-saveRDS(fit_gvar, here("empirical_example", "fit_gvar.rds"))
+saveRDS(fit_gvar, here("output", "empirical_example", "fit_gvar.rds"))
 
 ```
 
 ```{r, include = FALSE}
-fit_gvar <- readRDS(here("empirical_example", "fit_gvar.rds"))
+fit_gvar <- readRDS(here("output", "empirical_example", "fit_gvar.rds"))
 ```
 
 
@@ -300,11 +344,11 @@ fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(data_bringmann_imputed,
                             scale = FALSE))}, error = function(e) NA)
 
 
-saveRDS(fit_mlvar, here("empirical_example", "fit_mlvar.rds"))
+saveRDS(fit_mlvar, here("output", "empirical_example", "fit_mlvar.rds"))
 ```
 
 ```{r, include = FALSE}
-fit_mlvar <- readRDS(here("empirical_example", "fit_mlvar.rds"))
+fit_mlvar <- readRDS(here("output", "empirical_example", "fit_mlvar.rds"))
 ```
 
 
@@ -356,11 +400,11 @@ fit_gimme <- gimme::gimme(data_list,
                             subcutoff = .75,
                             VAR = TRUE)
 
-saveRDS(fit_gimme, here("empirical_example", "fit_gimme.rds"))
+saveRDS(fit_gimme, here("output", "empirical_example", "fit_gimme.rds"))
 ```
 
 ```{r, include = FALSE}
-fit_gimme <- readRDS(here("empirical_example", "fit_gimme.rds"))
+fit_gimme <- readRDS(here("output", "empirical_example", "fit_gimme.rds"))
 ```
 
 
@@ -479,7 +523,9 @@ ests_bmlvar <- extract_all_estimates(fit_bmlvar,
 
 Obtain the posterior samples of the regressions: 
 ```{r reg-bmlvar}
-
+tempdens_bmlvar <- ests_bmlvar$tempdens_est
+outstrength_bmlvar <- ests_bmlvar$outstrength_est
+outstrength_bmlvar_first <- sapply(outstrength_bmlvar, function(x) unname(x[1]))
 
 ```
 
@@ -588,10 +634,21 @@ gt_table |>
 
 # Addition: Bayesian Model Checks
 
+We additionally check the convergence of the Bayesian model by examining convergence statistics and posterior predictive checks.
+
+## Convergence Statistics
+
+We check all Rhats and effective sample sizes:
+```{r bmlvar-convergence}
+
+```
 
 
+## Posterior Predictive
 
+```{r bmlvar-postpred}
 
+```
 
 
 
