@@ -783,10 +783,10 @@ gimme_cor_mat <- function(gimme_res,
                           id, 
                           n_vars,
                           pcor = FALSE) {
-  df_id <- gimme_res %>%
+  df_id <- gimme_res |>
     filter(op == "~~") |>
     filter(pval < 0.05) |>
-    mutate(file = str_remove(file, "subj")) %>%
+    mutate(file = str_remove(file, "subj")) |>
     filter(file == id)
   
   corr_matrix <- matrix(0, nrow = n_vars, ncol = n_vars)
@@ -794,12 +794,12 @@ gimme_cor_mat <- function(gimme_res,
   colnames(corr_matrix) <- paste0("V", 1:n_vars)
   
   
-  df_id <- df_id %>%
-    select(lhs, rhs, beta.std) %>%
-    spread(lhs, beta.std) %>%
-    column_to_rownames(var = "rhs") %>%
+  df_id <- df_id |>
+    select(lhs, rhs, beta.std) |>
+    spread(lhs, beta.std) |>
+    column_to_rownames(var = "rhs") |>
     # replace all NAs with zero
-    replace(is.na(.), 0) %>%
+    replace(is.na(.), 0) |>
     as.matrix()
   
   # if there is no correlation
@@ -1331,7 +1331,7 @@ okabe_color_enh <- ggokabeito::palette_okabe_ito(order = c(5,1,3,4,2,6,7,8,9))
 extract_estimates <- function(fit, par) {
   # extract draws
   draws <-
-    rstan::extract(object = fit, pars = par, permute = FALSE) %>%
+    rstan::extract(object = fit, pars = par, permute = FALSE) |>
     posterior::as_draws_matrix()
   # calculate estimates
   median <-
@@ -1365,7 +1365,7 @@ extract_all_estimates <- function(fit,
                                   pcor_matrix = FALSE) {
   
   # compute estimates
-  beta_est <- extract_estimates(fit, "Beta") %>%
+  beta_est <- extract_estimates(fit, "Beta") |>
     map(function(x) {
       est_vector2matrix(x, n_id, n_var)
     })
@@ -1373,7 +1373,7 @@ extract_all_estimates <- function(fit,
     beta_est <- map(beta_est, ~map(.x, t))
   }
   
-  pcor_est <-  extract_estimates(fit, "Rho_vec") %>%
+  pcor_est <-  extract_estimates(fit, "Rho_vec") |>
     map(function(x) {
       est_vector2vector(x, n_id, (n_var * (n_var - 1)) / 2)
     })
@@ -1392,18 +1392,18 @@ extract_all_estimates <- function(fit,
   }
   
   pcor_centrality_est <-
-    extract_estimates(fit, "Rho_strength") %>%
+    extract_estimates(fit, "Rho_strength") |>
     map(function(x) {
       est_vector2vector(x, n_id, n_var)
     })
   
   contdens_est <-  extract_estimates(fit, "Rho_density")
   tempdens_est <-  extract_estimates(fit, "Beta_density")
-  outstrength_est <-  extract_estimates(fit, "Beta_out_strength") %>%
+  outstrength_est <-  extract_estimates(fit, "Beta_out_strength") |>
     map(function(x) {
       est_vector2vector(x, n_id, n_var)
     })
-  instrength_est <-  extract_estimates(fit, "Beta_in_strength") %>%
+  instrength_est <-  extract_estimates(fit, "Beta_in_strength") |>
     map(function(x) {
       est_vector2vector(x, n_id, n_var)
     })
@@ -1445,7 +1445,7 @@ est_vector2matrix <- function(est_vector, n_id, n_var) {
     # create indicator for individual draws
     idx <- seq(i, length(est_vector), by = n_id)
     est_list[[i]] <-
-      est_vector[idx] %>% matrix(n_var, n_var, byrow = FALSE)
+      est_vector[idx] |> matrix(n_var, n_var, byrow = FALSE)
   }
   return(est_list)
 }
