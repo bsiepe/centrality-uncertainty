@@ -132,6 +132,7 @@ slopes |>
   pivot_longer(cols = !coef, 
                names_to = "reg_coef") |> 
   mutate(reg_coef = as.factor(reg_coef)) |> 
+  filter(coef != "strength") |> 
   ggplot(aes(x = reg_coef, y = value, col = coef)) + 
   geom_point(position = position_jitter(width = .1, height = 0))+
   labs(x = "True Regression Slope",
@@ -228,8 +229,33 @@ df_centrality_bmlvar |>
   geom_point() + 
   geom_smooth() + 
   theme_centrality() +
-  facet_grid(~centrality)
+  facet_grid(~centrality)+
+  scale_x_continuous(limits = c(0,.3))+
+  scale_y_continuous(limits = c(0,.3))
 ```
+Check their standard deviations and sd
+```{r}
+df_centrality_bmlvar |> 
+  group_by(sim_rep) |> 
+  summarize(across(everything(),list(mean = mean, sd = sd))) |> 
+  ungroup() |> 
+  pivot_longer(cols = !sim_rep) |> 
+  separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
+  pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value)
+```
+
+
+## Check Convergence
+```{r}
+r1$results[[1]]$bmlvar$summary_bmlvar |> 
+  as.data.frame() |> 
+  mutate(na_rhat = is.na(Rhat)) |> 
+  rownames_to_column("param") |> 
+  filter(grepl("Sigma", param)) |> 
+  View()
+```
+
+
 
 
 
@@ -246,9 +272,9 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:10){
-  l_coefs$zero[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
-  l_coefs$two[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
-  l_coefs$four[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
+  l_coefs$zero[i] <- lm.beta(r1$results[[i]]$gvar$reg_instrength[[1]])$standardized.coefficients[2]
+  l_coefs$two[i] <- lm.beta(r1$results[[i]]$gvar$reg_instrength[[2]])$standardized.coefficients[2]
+  l_coefs$four[i] <- lm.beta(r1$results[[i]]$gvar$reg_instrength[[3]])$standardized.coefficients[2]
 }
 
 l_coefs |> 
@@ -271,9 +297,9 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:10){
-  l_coefs$zero[i] <- summary(r1$results[[i]]$gvar$reg_outstrength[[1]])$coefficients[2]
-  l_coefs$two[i] <- summary(r1$results[[i]]$gvar$reg_outstrength[[2]])$coefficients[2]
-  l_coefs$four[i] <- summary(r1$results[[i]]$gvar$reg_outstrength[[3]])$coefficients[2]
+  l_coefs$zero[i] <- summary(r1$results[[i]]$gvar$reg_strength[[1]])$coefficients[2]
+  l_coefs$two[i] <- summary(r1$results[[i]]$gvar$reg_strength[[2]])$coefficients[2]
+  l_coefs$four[i] <- summary(r1$results[[i]]$gvar$reg_strength[[3]])$coefficients[2]
 }
 
 l_coefs |> 
@@ -322,6 +348,17 @@ df_centrality_gvar |>
   geom_smooth() + 
   theme_centrality() +
   facet_grid(~centrality)
+```
+
+Look at their SDs
+```{r}
+df_centrality_gvar |> 
+  group_by(sim_rep) |> 
+  summarize(across(everything(),list(mean = mean, sd = sd))) |> 
+  ungroup() |> 
+  pivot_longer(cols = !sim_rep) |> 
+  separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
+  pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value)
 ```
 
 ## mlVAR
@@ -437,13 +474,12 @@ df_centrality_mlvar |>
   ungroup() |> 
   pivot_longer(cols = !sim_rep) |> 
   separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
-  pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value) |> View()
+  pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value)
 ```
 
 mlVAR severely underestimates the variability of contemporaneous networks.
 
 
-Contemporaneous:
 
 
 
@@ -585,3 +621,16 @@ df_centrality_gimme |>
   theme_centrality() +
   facet_grid(~centrality)
 ```
+
+Look at their SDs
+```{r}
+df_centrality_gimme |> 
+  group_by(sim_rep) |> 
+  summarize(across(everything(),list(mean = mean, sd = sd))) |> 
+  ungroup() |> 
+  pivot_longer(cols = !sim_rep) |> 
+  separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
+  pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value)
+```
+
+
