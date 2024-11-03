@@ -66,7 +66,7 @@ source(here::here("scripts", "00_functions.R"))
 Load DGP based on estimated network structures:  
 ```{r}
 # non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
+# graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
 # sparse DGP
 graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
@@ -88,8 +88,8 @@ heterogeneity <- "high"
 
 # Simulation parameters
 # Number of individuals 
-# n_id <- c(75, 200)
-n_id <- 200
+n_id <- c(75, 200)
+# n_id <- 200
 
 # Design Conditions
 df_design <- SimDesign::createDesign(
@@ -154,7 +154,7 @@ For the partial correlations, this is a bit more complicated, as we simulate fro
 
 ```{r true-strength-sd, eval = FALSE}
 # number of simulations to obtain sd
-n_sim_sd <- 20000
+n_sim_sd <- 30000
 sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
 
 for(i in 1:nrow(df_design)){
@@ -183,7 +183,9 @@ for(i in 1:nrow(df_design)){
                      sim_pkg = "mlVAR",
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
-                     most_cent_diff_temp_min = 0.1,
+                     most_cent_diff_temp_min = 0.05,
+                     most_cent_diff_cont = TRUE,
+                     most_cent_diff_cont_min = 0.05,
                      innov_var_fixed_sigma = TRUE)
   
   # Obtain true centralities
@@ -263,7 +265,9 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      sim_pkg = "mlVAR",
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
-                     most_cent_diff_temp_min = 0.1,
+                     most_cent_diff_temp_min = 0.05,
+                     most_cent_diff_cont = TRUE,
+                     most_cent_diff_cont_min = 0.05,
                      innov_var_fixed_sigma = TRUE)
   if(any(is.na(ml_sim$beta))){
     stop("Generation of Betas failed")
@@ -741,9 +745,9 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     beta = dat$beta,
     kappa = dat$kappa,
     pcor = dat$pcor,
-    true_cor_strength = data$cor_strength,
-    true_cor_instrength = data$cor_instrength,
-    true_cor_outstrength = data$cor_outstrength
+    true_cor_strength = dat$cor_strength,
+    true_cor_instrength = dat$cor_instrength,
+    true_cor_outstrength = dat$cor_outstrength
   )
   
   
@@ -1334,7 +1338,7 @@ plan(sequential)
 
 To run the simulation on the server, it can be easier to just execute an R script.
 
-```{r}
+```{r, eval = FALSE}
 knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
             output = here::here("scripts", "01_centrality_simulation.R"),
             documentation = 2)
