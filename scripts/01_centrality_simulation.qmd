@@ -66,7 +66,7 @@ source(here::here("scripts", "00_functions.R"))
 Load DGP based on estimated network structures:  
 ```{r}
 # non-sparse Graph to simulate from
-# graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
+graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
 # sparse DGP
 graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))

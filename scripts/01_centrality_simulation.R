@@ -66,7 +66,7 @@ source(here::here("scripts", "00_functions.R"))
 #' Load DGP based on estimated network structures:  
 ## ---------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
-# graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
+graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
 # sparse DGP
 graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
@@ -1291,14 +1291,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
 
 
-n_rep <- 2
+n_rep <- 10
 
 future::plan(multisession, workers = n_rep)
 
 # started 2024-08-13 ~08:35
 
+df_design_test <- df_design[c(1,4),]
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design, 
+                                    design = df_design_test, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
@@ -1319,8 +1320,8 @@ sim_results <- SimDesign::runSimulation(
                                                  "Rcpp"),
                                     save_results = TRUE,
                                     # ncores = n_rep,
-                                    debug = "generate",
-                                    # filename = "sim281024.rds"
+                                    # debug = "generate",
+                                    filename = "sim111124.rds"
                                     # save_seeds = TRUE
                                     )
 
