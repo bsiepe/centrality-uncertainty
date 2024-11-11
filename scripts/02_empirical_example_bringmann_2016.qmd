@@ -57,6 +57,8 @@ library(imputeTS)
 library(knitr)
 library(gt)
 library(bayesplot)
+library(broom)
+library(betaDelta)  # double check
 
 source(here("scripts", "00_functions.R"))
 set.seed(35037)
@@ -67,7 +69,7 @@ set.seed(35037)
 
 Load data:
 ```{r load-data}
-data_bringmann <- readRDS(here("data", "data_Bringmann2016.rds"))
+data_bringmann <- readRDS("~/centrality-uncertainty/data/data_Bringmann2016.RDS")
 ```
 
 
@@ -220,7 +222,7 @@ for (i in 1:length(convergence_ids)) {
 
 dev.off()
 ```
-They generally all appear reasonable, and it seems like issues often occured in time series with a relatively low variance/floor effects.
+They generally all appear reasonable, and it seems like issues often occurred in time series with a relatively low variance/floor effects.
 
 
 
@@ -301,11 +303,6 @@ outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1])
 
 # Combine into dataframe with neuroticism
 # get neuroticism scores of filtered data frame
-data_bringmann |> 
-  group_by(subj_id) |> 
-  distinct(neuroticism) |>
-  pull(neuroticisim)
-
 reg_df_gvar <- data.frame(neuroticism = neuroticism_vec_clean,
                           dens_temp = dens_temp_gvar,
                           outstrength = outstrength_gvar_first)
@@ -411,14 +408,19 @@ fit_gimme <- readRDS(here("output", "empirical_example", "fit_gimme.rds"))
 ### Regression
 
 ```{r centrality-gimme}
-cent_gimme <- centrality_gimme(fit_gimme)
+# obtain partial correlations
+fit_gimme$contemp_mat <- lapply(1:length(fit_gimme$path_est_mats), function(i){
+      gimme_cor_mat(fit_gimme, id = i, n_vars = 6, pcor = TRUE)
+})
+
+cent_gimme <- centrality_gimme(fit_gimme, var_only = TRUE)
 
 dens_temp_gimme <- cent_gimme$dens_temp
 outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
 
 # Combine into dataframe with neuroticism
 reg_df_gimme <- data.frame(neuroticism = neuroticism_vec_clean,
-                          dens_temp = dens_temp_gimme,
+                          dens_temp = unlist(dens_temp_gimme),
                           outstrength = outstrength_gimme_first)
 ```
 
@@ -506,13 +508,22 @@ fit_bmlvar <- rstan::sampling(
   verbose = FALSE
   )
 
+saveRDS(fit_bmlvar, here("output", "empirical_example", "fit_bmlvar_empirical.rds"))
 ```
 
 Centrality estimates are sampled automatically:
 ```{r centrality-bmlvar}
+fit_bmlvar <- readRDS(here("output", "empirical_example", "fit_bmlvar_empirical.rds"))
+
 # Transpose beta matrices for later summaries
 # in the DGP, cols represent lagged vars
 # but in BmlVAR, rows represent lagged vars
+n_id <- data_bringmann_imputed |> 
+  ungroup() |> 
+  distinct(subj_id) |> 
+  nrow()
+
+
 ests_bmlvar <- extract_all_estimates(fit_bmlvar,
                                        n_id = n_id, 
                                        n_var = n_var, 
@@ -523,24 +534,161 @@ ests_bmlvar <- extract_all_estimates(fit_bmlvar,
 
 Obtain the posterior samples of the regressions: 
 ```{r reg-bmlvar}
+# centrality outcomes
 tempdens_bmlvar <- ests_bmlvar$tempdens_est
 outstrength_bmlvar <- ests_bmlvar$outstrength_est
-outstrength_bmlvar_first <- sapply(outstrength_bmlvar, function(x) unname(x[1]))
+outstrength_bmlvar_first <- sapply(outstrength_bmlvar$median, function(x) unname(x[1]))
 
+# regression outcomes
+ests_bmlvar$regression_slope_est
+
+summary_bmlvar <- summary(fit_bmlvar)
+
+bmlvar_reg_standardized <- summary_bmlvar |> 
+  as.data.frame() |> 
+  rownames_to_column(var = "param") |> 
+  filter(grepl("_z", param))
 ```
+
+
+
+## Save all
+
+Save all regression results in one object: 
+
+```{r regression-results}
+df_regression <- list(
+  gvar = list(reg_dens = reg_gvar_dens,
+              reg_outstrength = reg_gvar_outstrength,
+              est_dens = reg_df_gvar$dens_temp,
+              est_outstrength = reg_df_gvar$outstrength),
+  mlvar = list(reg_dens = reg_mlvar_dens,
+              reg_outstrength = reg_mlvar_outstrength,
+              est_dens = reg_df_mlvar$dens_temp,
+              est_outstrength = reg_df_mlvar$outstrength
+              ),
+  gimme = list(reg_dens = reg_gimme_dens,
+              reg_outstrength = reg_gimme_outstrength,
+              est_dens = reg_df_gimme$dens_temp,
+              est_outstrength = reg_df_gimme$outstrength
+              ),
+  bmlvar = list(
+              reg_dens = bmlvar_reg_standardized[2,2],
+              reg_outstrength = bmlvar_reg_standardized[1,2],
+              est_dens = tempdens_bmlvar$median,
+              est_outstrength = outstrength_bmlvar_first
+  )
+)
+
+saveRDS(df_regression, here("output/empirical_example/regression_empirical_example.RDS"))
+```
+
 
 
 # Contrast results 
 In this section, we collect and contrast the results of different methods. 
 
-## Temporal Outstrength
+```{r load-results, include = FALSE}
+df_regression <- readRDS(here("output/empirical_example/regression_empirical_example.RDS"))
+```
 
-```{r temporal-outstrength}
+Prepare plotting: 
+
+```{r plotting-helpers}
+cond_colors <- set_names(ggokabeito::palette_okabe_ito()[c(5, 1, 3, 4)],
+                         c("gVAR", "mlVAR", "GIMME", "BmlVAR"))
 
 ```
 
 
+## Temporal Outstrength
+Create a figure that contrasts all individual estimates of the four different estimation methods: 
+```{r temporal-outstrength}
+df_outstrength <- data.frame(
+  method = rep(c("gVAR", "mlVAR", "GIMME", "BmlVAR"), each = n_id),
+  est_outstrength = c(
+    df_regression$gvar$est_outstrength,
+    df_regression$mlvar$est_outstrength,
+    df_regression$gimme$est_outstrength,
+    df_regression$bmlvar$est_outstrength
+  )
+)
+
+y_limit <- 0.16
+outliers <- df_outstrength |> 
+  filter(est_outstrength > y_limit) |> 
+    mutate(method = factor(method,
+                         levels = c("gVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
+  group_by(method) |> 
+  summarize(outlier_values = paste0(round(est_outstrength, 3), collapse = ", "),
+            max_outlier = max(est_outstrength)) |> 
+  mutate(outlier_values = if_else(method == "gVAR", 
+                                  paste0("Large value (", outlier_values, ") removed"), 
+                                  paste0("Large value (", outlier_values, ") removed")))
+
+outstrength_dist <- df_outstrength |> 
+  mutate(method = factor(method,
+                         levels = c("gVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
+  ggplot(aes(x = method, y = est_outstrength, fill = method, col = method)) +
+  ggdist::geom_dots(scale = 0.9, stackratio = 0.2,  layout = "swarm", linewidth = .3)+
+  ggdist::stat_pointinterval(color = "black", interval_size_range = c(1,2))+
+  # geom_boxplot(width = 0.15, outlier.shape = NA, alpha = 0.3) +
+  # geom_jitter(width = 0.1, alpha = 0.5) +
+  theme_centrality() +
+  labs(
+    # title = "Raincloud Plot of Estimation Densities",
+    x = "Estimation Method",
+    y = "Outstrength",
+    fill = "Method"
+  ) +
+  theme(legend.position = "none") + 
+  scale_y_continuous(limits = c(0, y_limit))+ 
+  scale_fill_manual(values = cond_colors)+ 
+  scale_color_manual(values = rep("#D3D3D3",4))+
+  # label outliers
+  geom_segment(data = outliers,
+               aes(x = as.numeric(method), xend = as.numeric(method),
+                   y = c(y_limit * 0.85, y_limit * 0.85), yend = c(y_limit, y_limit)),
+               arrow = arrow(length = unit(0.2, "cm")),
+               color = "grey40")+
+  geom_text(data = outliers,
+            aes(x = as.numeric(method) + .05, 
+                c(y_limit * 0.925, y_limit * 0.925), label = outlier_values),
+            color = "grey40", size = 4, inherit.aes = FALSE, hjust = 0)
+
+outstrength_dist
+ggsave(here("figures/empirical_example/outstrength_distribution.pdf"), width = 9 * 0.8, height = 6 * 0.8)
+```
+
+
 ## Network Density
+
+```{r network-density}
+df_density <- data.frame(
+  method = rep(c("gVAR", "mlVAR", "GIMME", "BmlVAR"), each = n_id),
+  est_dens = c(
+    df_regression$gvar$est_dens,
+    df_regression$mlvar$est_dens,
+    df_regression$gimme$est_dens,
+    df_regression$bmlvar$est_dens
+  )
+)
+
+df_density |> 
+  ggplot(aes(x = method, y = est_dens, fill = method)) +
+  ggdist::stat_halfeye(adjust = 0.5, width = 0.6, .width = 0, justification = -0.2) +
+  geom_boxplot(width = 0.15, outlier.shape = NA, alpha = 0.3) +
+  geom_jitter(width = 0.1, alpha = 0.5) +
+  theme_centrality() +
+  labs(
+    # title = "Raincloud Plot of Estimation Densities",
+    x = "Estimation Method",
+    y = "Temporal Density",
+    fill = "Method"
+  ) +
+  theme(legend.position = "none") + 
+  scale_fill_manual(values = ggokabeito::palette_okabe_ito(c(5,1,3,4)))
+```
 
 
 
@@ -549,40 +697,104 @@ In this section, we collect and contrast the results of different methods.
 
 We combine the results for different network features and network estimation methods in one table: 
 
-Currently, this is based on mock data:
+<!-- Currently, this is based on mock data: -->
 
-```{r mock-data-table}
-methods <- c("graphicalVAR", "mlVAR", "GIMME", "BmlVAR")
+<!-- ```{r mock-data-table} -->
+<!-- methods <- c("gVAR", "mlVAR", "GIMME", "BmlVAR") -->
+<!-- outcomes <- c("Density", "Outstrength") -->
+
+<!-- # create mock data -->
+<!-- mock_data <- data.frame( -->
+<!--   Method = rep(methods, each = 2), -->
+<!--   Outcome = rep(outcomes, times = 4), -->
+<!--   Point_Estimate = runif(8, 0.2, 0.8), -->
+<!--   Lower_Limit = runif(8, 0.1, 0.5), -->
+<!--   Upper_Limit = runif(8, 0.6, 1.0) -->
+<!-- ) -->
+
+<!-- # reshape data to wider -->
+<!-- mock_table <- mock_data |>  -->
+<!--   pivot_wider(names_from = Outcome, -->
+<!--                      values_from = c(Point_Estimate, Lower_Limit, Upper_Limit), -->
+<!--                      names_glue = "{Outcome}_{.value}") -->
+
+
+<!-- ``` -->
+
+
+
+```{r collect-estimates}
+methods <- c("gVAR", "mlVAR", "GIMME", "BmlVAR")
 outcomes <- c("Density", "Outstrength")
 
-# Create mock data with point estimates, lower, and upper confidence intervals for each method and outcome
-mock_data <- data.frame(
+
+get_standardized_estimate <- function(model_summary, type = c("estimate", "lower_ci", "upper_ci")) {
+  type <- match.arg(type)
+  standardized_summary <- lm.beta::lm.beta(model_summary, complete.standardization = TRUE)
+  tidy_summary <- broom::tidy(standardized_summary, conf.int = TRUE)
+  estimate <- tidy_summary$std_estimate[2]
+  conf_ints <- confint(betaDelta::BetaDelta(model_summary))
+  lower_ci <- conf_ints[1,1]
+  upper_ci <- conf_ints[1,2]
+  
+  
+  switch(type,
+         estimate = estimate,
+         lower_ci = lower_ci,
+         upper_ci = upper_ci)
+}
+
+
+df_estimates <- data.frame(
   Method = rep(methods, each = 2),
   Outcome = rep(outcomes, times = 4),
-  Point_Estimate = runif(8, 0.2, 0.8),
-  Lower_Limit = runif(8, 0.1, 0.5),
-  Upper_Limit = runif(8, 0.6, 1.0)
+  Point_Estimate = c(
+    get_standardized_estimate(reg_gvar_dens, "estimate"),
+    get_standardized_estimate(reg_mlvar_dens, "estimate"),
+    get_standardized_estimate(reg_gimme_dens, "estimate"),
+    bmlvar_reg_standardized[2,]$summary.mean,
+    get_standardized_estimate(reg_gvar_outstrength, "estimate"),
+    get_standardized_estimate(reg_mlvar_outstrength, "estimate"),
+    get_standardized_estimate(reg_gimme_outstrength, "estimate"),
+    bmlvar_reg_standardized[1,]$summary.mean
+  ),
+  Lower_Limit = c(
+    get_standardized_estimate(reg_gvar_dens, "lower_ci"),
+    get_standardized_estimate(reg_mlvar_dens, "lower_ci"),
+    get_standardized_estimate(reg_gimme_dens, "lower_ci"),
+    bmlvar_reg_standardized[2,]$summary.2.5.,
+    get_standardized_estimate(reg_gvar_outstrength, "lower_ci"),
+    get_standardized_estimate(reg_mlvar_outstrength, "lower_ci"),
+    get_standardized_estimate(reg_gimme_outstrength, "lower_ci"),
+    bmlvar_reg_standardized[1,]$summary.2.5.
+  ),
+  Upper_Limit = c(
+    get_standardized_estimate(reg_gvar_dens, "upper_ci"),
+    get_standardized_estimate(reg_mlvar_dens, "upper_ci"),
+    get_standardized_estimate(reg_gimme_dens, "upper_ci"),
+    bmlvar_reg_standardized[2,]$summary.97.5.,
+    get_standardized_estimate(reg_gvar_outstrength, "upper_ci"),
+    get_standardized_estimate(reg_mlvar_outstrength, "upper_ci"),
+    get_standardized_estimate(reg_gimme_outstrength, "upper_ci"),
+    bmlvar_reg_standardized[1,]$summary.97.5.
+  )
 )
-
-# Step 2: Reshape Data
-# Spread the data for hierarchical column structure
-mock_table <- mock_data |> 
+df_estimates <- df_estimates |> 
   pivot_wider(names_from = Outcome,
                      values_from = c(Point_Estimate, Lower_Limit, Upper_Limit),
                      names_glue = "{Outcome}_{.value}")
-
-
 ```
+
 
 
 ```{r prepare-table}
 # set color palette 
 color_palette <- c("#cf1322", "#036FE3")
 
-min_val <- min(mock_table$Density_Point_Estimate, mock_table$Outstrength_Point_Estimate)
-max_val <- max(mock_table$Density_Point_Estimate, mock_table$Outstrength_Point_Estimate)
+min_val <- min(df_estimates$Density_Point_Estimate, df_estimates$Outstrength_Point_Estimate)
+max_val <- max(df_estimates$Density_Point_Estimate, df_estimates$Outstrength_Point_Estimate)
 
-gt_table <- mock_table |> 
+gt_table <- df_estimates |> 
   gt(rowname_col = "Method") |> 
   # hierarchical cols
   cols_label(
