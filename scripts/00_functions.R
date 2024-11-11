@@ -779,10 +779,12 @@ centrality_gvar <- function(fit,
 # -------------------------------------------------------------------------
 # Function to extract correlations from GIMME fit object with VAR = TRUE
 # also enables partial correlations
-gimme_cor_mat <- function(gimme_res, 
+gimme_cor_mat_old <- function(gimme_res, 
                           id, 
                           n_vars,
                           pcor = FALSE) {
+  # browser()
+  
   df_id <- gimme_res |>
     filter(op == "~~") |>
     filter(pval < 0.05) |>
@@ -798,8 +800,7 @@ gimme_cor_mat <- function(gimme_res,
     select(lhs, rhs, beta.std) |>
     spread(lhs, beta.std) |>
     column_to_rownames(var = "rhs") |>
-    # replace all NAs with zero
-    replace(is.na(.), 0) |>
+    mutate(across(everything(), ~ replace_na(., 0))) |>
     as.matrix()
   
   # if there is no correlation
@@ -827,6 +828,69 @@ gimme_cor_mat <- function(gimme_res,
   }
   
 }
+
+gimme_cor_mat <- function(gimme_res, 
+                              id, 
+                              n_vars,
+                              pcor = FALSE) {
+  
+
+  # obtain variable names
+  var_names <- rownames(gimme_res$path_est_mats[[1]])  # Ensure this gets the correct names
+  
+  # filter input dataset
+  df_id <- gimme_res$path_se_est |>
+    filter(op == "~~") |>
+    filter(pval < 0.05) |>
+    mutate(file = str_remove(file, "subj")) |>
+    filter(file == id)
+  
+  # initialize a zero correlation matrix with correct variable names
+  corr_matrix <- matrix(0, nrow = n_vars, ncol = n_vars)
+  rownames(corr_matrix) <- var_names
+  colnames(corr_matrix) <- var_names
+  
+  # early return if no significant correlations exist for this subject
+  if (nrow(df_id) == 0) {
+    return(corr_matrix)
+  }
+  
+  # reshape `df_id` into a wide format matrix with `lhs` and `rhs` as row/column names
+  df_id <- df_id |>
+    select(lhs, rhs, beta.std) |>
+    pivot_wider(names_from = lhs, values_from = beta.std) |>
+    column_to_rownames(var = "rhs") |>
+    mutate(across(everything(), ~ replace_na(., 0))) |>
+    as.matrix()
+  
+  # all variables in `df_id` aligned with `corr_matrix`
+  all_vars <- intersect(var_names, union(rownames(df_id), colnames(df_id)))
+  for (i in all_vars) {
+    for (j in all_vars) {
+      # if a value exists in `df_id`, add it; otherwise leave it as 0
+      if (i %in% rownames(df_id) && j %in% colnames(df_id)) {
+        corr_matrix[i, j] <- df_id[i, j]
+        corr_matrix[j, i] <- df_id[i, j]
+      }
+    }
+  }
+  
+  diag(corr_matrix) <- 0
+  
+  # If partial correlations are requested
+  if (isTRUE(pcor)) {
+    pcor_matrix <- try(corpcor::cor2pcor(corr_matrix), silent = TRUE)
+    if (inherits(corr_matrix, "try-error") | any(is.na(pcor_matrix))) {
+      warning("Partial correlation estimation failed. Returning correlation matrix.")
+      pcor_matrix <- corr_matrix
+    }
+  }
+  
+  
+  
+  return(pcor_matrix)
+}
+
 
 
 
