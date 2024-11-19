@@ -598,6 +598,10 @@ Prepare plotting:
 cond_colors <- set_names(ggokabeito::palette_okabe_ito()[c(5, 1, 3, 4)],
                          c("gVAR", "mlVAR", "GIMME", "BmlVAR"))
 
+cond_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,3,4,5)],
+                         c("gVAR", "mlVAR", "GIMME", "BmlVAR"))
+n_id <- length(neuroticism_vec_clean)
+
 ```
 
 
@@ -630,7 +634,7 @@ outstrength_dist <- df_outstrength |>
   mutate(method = factor(method,
                          levels = c("gVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
   ggplot(aes(x = method, y = est_outstrength, fill = method, col = method)) +
-  ggdist::geom_dots(scale = 0.9, stackratio = 0.2,  layout = "swarm", linewidth = .3)+
+  ggdist::geom_dots(scale = 0.9, stackratio = 0.2,  layout = "swarm", linewidth = .15)+
   ggdist::stat_pointinterval(color = "black", interval_size_range = c(1,2))+
   # geom_boxplot(width = 0.15, outlier.shape = NA, alpha = 0.3) +
   # geom_jitter(width = 0.1, alpha = 0.5) +
@@ -675,6 +679,8 @@ df_density <- data.frame(
 )
 
 df_density |> 
+    mutate(method = factor(method,
+                         levels = c("gVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
   ggplot(aes(x = method, y = est_dens, fill = method)) +
   ggdist::stat_halfeye(adjust = 0.5, width = 0.6, .width = 0, justification = -0.2) +
   geom_boxplot(width = 0.15, outlier.shape = NA, alpha = 0.3) +
@@ -687,7 +693,7 @@ df_density |>
     fill = "Method"
   ) +
   theme(legend.position = "none") + 
-  scale_fill_manual(values = ggokabeito::palette_okabe_ito(c(5,1,3,4)))
+  scale_fill_manual(values = cond_colors)
 ```
 
 
