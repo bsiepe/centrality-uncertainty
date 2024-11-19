@@ -218,8 +218,10 @@ sim_gvar_loop <- function(graph,
       
       
       # Check if beta matrix is stable
+      # choose value slightly below 1 to avoid almost instable estimates
+      # cf. Haslbeck, Epskamp & Waldorp (2023)
       ev_b <- eigen(beta[, , i])$values
-      if (all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1)){
+      if (all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < .95)){
         break
       }
       else {
@@ -876,13 +878,12 @@ gimme_cor_mat <- function(gimme_res,
   }
   
   diag(corr_matrix) <- 0
-  
+  pcor_matrix <- corr_matrix
   # If partial correlations are requested
   if (isTRUE(pcor)) {
     pcor_matrix <- try(corpcor::cor2pcor(corr_matrix), silent = TRUE)
     if (inherits(corr_matrix, "try-error") | any(is.na(pcor_matrix))) {
       warning("Partial correlation estimation failed. Returning correlation matrix.")
-      pcor_matrix <- corr_matrix
     }
   }
   
