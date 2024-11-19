@@ -105,7 +105,6 @@ final_summary_df |>
 
 
 
-
 Plot them all (first need to account for the weird data structure where the results are a vector of length 9)
 
 ```{r}
@@ -132,7 +131,7 @@ slopes |>
   pivot_longer(cols = !coef, 
                names_to = "reg_coef") |> 
   mutate(reg_coef = as.factor(reg_coef)) |> 
-  filter(coef != "strength") |> 
+  # filter(coef != "strength") |> 
   ggplot(aes(x = reg_coef, y = value, col = coef)) + 
   geom_point(position = position_jitter(width = .1, height = 0))+
   labs(x = "True Regression Slope",
@@ -161,7 +160,7 @@ get_lm_beta_coefficient <- function(result) {
     covariate = covar_true
   )
   
-  test <- lm.beta(lm(covariate ~ outstrength, data = df_out))
+  test <- lm.beta::lm.beta(lm(covariate ~ outstrength, data = df_out))
   return(test$standardized.coefficients[2])
 }
 
@@ -241,8 +240,18 @@ df_centrality_bmlvar |>
   ungroup() |> 
   pivot_longer(cols = !sim_rep) |> 
   separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
-  pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value)
+  pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value) |> 
+  group_by(est, centrality) |> 
+  summarize(across(c(mean, sd), 
+                   mean))
 ```
+
+
+
+
+
+
+
 
 
 ## Check Convergence
@@ -272,9 +281,9 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:10){
-  l_coefs$zero[i] <- lm.beta(r1$results[[i]]$gvar$reg_instrength[[1]])$standardized.coefficients[2]
-  l_coefs$two[i] <- lm.beta(r1$results[[i]]$gvar$reg_instrength[[2]])$standardized.coefficients[2]
-  l_coefs$four[i] <- lm.beta(r1$results[[i]]$gvar$reg_instrength[[3]])$standardized.coefficients[2]
+  l_coefs$zero[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
+  l_coefs$two[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
+  l_coefs$four[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
 l_coefs |> 
@@ -632,5 +641,150 @@ df_centrality_gimme |>
   separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
   pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value)
 ```
+
+
+# Overall results
+
+Look at RMSE
+```{r}
+sim_res <- readRDS("~/centrality-uncertainty/sim151124.rds")
+sim_res |> 
+  select(c(dgp, n_id, n_tp, contains("rmse"))) |> 
+  select(!contains("mcse")) |>  
+  pivot_longer(cols = !c(dgp, n_id, n_tp)) |> 
+  mutate(name = gsub("^[^.]*\\.", "", name)) |>  
+  View()
+```
+
+
+Look at power: 
+```{r}
+sim_res |> 
+  select(c(dgp, n_id, n_tp, contains("power"))) |> 
+  select(!contains("mcse")) |>  
+  pivot_longer(cols = !c(dgp, n_id, n_tp)) |> 
+  mutate(name = gsub("^[^.]*\\.", "", name)) |>  
+  separate_wider_delim(cols = name,
+                       delim = "_",
+                       names = c("power", "reg", "feature",
+                                 "method", "stat")) |> 
+  filter(power != "poweroneside") |> 
+  select(!c(power, stat)) |>
+  pivot_wider(id_cols = c(dgp, n_id, n_tp, reg, feature),
+              names_from = method, values_from = value) |> 
+  View()
+```
+
+Plot the power: 
+```{r}
+sim_res |> 
+  select(c(dgp, n_id, n_tp, contains("power"))) |> 
+  select(!contains("mcse")) |>  
+  pivot_longer(cols = !c(dgp, n_id, n_tp)) |> 
+  mutate(name = gsub("^[^.]*\\.", "", name)) |>  
+  separate_wider_delim(cols = name,
+                       delim = "_",
+                       names = c("power", "reg", "feature",
+                                 "method", "stat")) |> 
+  filter(power != "poweroneside") |> 
+  select(!c(power, stat)) |> 
+  ggplot(aes(x = method, y = value, col = method))+
+  geom_point()+
+  ggh4x::facet_nested(n_id + feature ~ reg,
+                      axes = "all",
+                      remove_labels = "y")+
+  theme_centrality()
+```
+
+
+
+
+## Eigenvalues of DGP
+
+To check multicollinearity 
+```{r}
+comp_eigen <- function(data){
+  gram <- t(as.matrix(data)) %*% as.matrix(data)
+  evs <- eigen(gram)$values
+  return(evs)
+}
+
+sapply(sim_res_4$results[[1]]$data, comp_eigen)
+
+```
+
+
+## Within-Iteration Correlation between Centrality Measures
+
+True centrality measures seem to be mostly uncorrelated:
+```{r}
+cor_results <- lapply(sim_res_4[["results"]], function(res) {
+  outstrength <- sapply(res$true_cent$outstrength, function(x) { x[[1]] })
+  instrength <- sapply(res$true_cent$instrength, function(x) { x[[1]] })
+  strength <- sapply(res$true_cent$strength, function(x) { x[[1]] })
+  
+  cent <- data.frame(
+    outstrength = outstrength,
+    instrength = instrength,
+    strength = strength
+  )
+  
+  cor(cent)
+})
+
+
+cor_summary <- do.call(rbind, lapply(seq_along(cor_results), function(i) {
+  cor_matrix <- cor_results[[i]]
+  data.frame(
+    element = i,
+    variable_1 = rownames(cor_matrix)[row(cor_matrix)],
+    variable_2 = colnames(cor_matrix)[col(cor_matrix)],
+    correlation = as.vector(cor_matrix)
+  )
+}))
+
+# Filter out duplicate entries for symmetry in the correlation matrices
+cor_summary <- cor_summary[cor_summary$variable_1 <= cor_summary$variable_2, ]
+
+cor_summary |> 
+  filter(variable_1 != variable_2) |> 
+  View()
+```
+
+Estimated centrality measures for BmlVAR also seem to be mostly uncorrelated or only weakly correlated:
+```{r}
+cor_results <- lapply(sim_res_4[["results"]], function(res) {
+  outstrength <- sapply(res$bmlvar$outstrength, function(x) { x[[1]] })
+  instrength <- sapply(res$bmlvar$instrength, function(x) { x[[1]] })
+  strength <- sapply(res$bmlvar$strength, function(x) { x[[1]] })
+  
+  cent <- data.frame(
+    outstrength = outstrength,
+    instrength = instrength,
+    strength = strength
+  )
+  
+  cor(cent)
+})
+
+cor_summary <- do.call(rbind, lapply(seq_along(cor_results), function(i) {
+  cor_matrix <- cor_results[[i]]
+  data.frame(
+    element = i,
+    variable_1 = rownames(cor_matrix)[row(cor_matrix)],
+    variable_2 = colnames(cor_matrix)[col(cor_matrix)],
+    correlation = as.vector(cor_matrix)
+  )
+}))
+
+# Filter out duplicate entries for symmetry in the correlation matrices
+cor_summary <- cor_summary[cor_summary$variable_1 <= cor_summary$variable_2, ]
+
+cor_summary |> 
+  filter(variable_1 != variable_2) |> 
+  View()
+
+```
+
 
 
