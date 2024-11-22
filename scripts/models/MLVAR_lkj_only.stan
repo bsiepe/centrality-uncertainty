@@ -79,7 +79,7 @@ transformed parameters{
     if(sparsity == 2){
       // medium sparsity level
       // narrow, fat-tailed prior on Beta means
-      Beta[i] = 0.1 * mu_Beta + sigma_Beta .* Beta_raw[i]; 
+      Beta[i] = 0.05 * mu_Beta + sigma_Beta .* Beta_raw[i]; 
     }
     if(sparsity == 3){
       // high sparsity level
