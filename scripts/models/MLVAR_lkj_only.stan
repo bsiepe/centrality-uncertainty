@@ -22,7 +22,7 @@ transformed data{
 ////////////////////////////////////////////////////////////////////////////////
 parameters {
   // Temporal
-  array[I] matrix<lower=-pi()/2, upper=pi()/2>[K,K] Beta_raw; // raw Beta matrix
+  array[I] matrix[K,K] Beta_raw; // raw Beta matrix
   matrix[K,K] mu_Beta; // means of Betas
   matrix<lower=0>[K,K] sigma_Beta; // SDs of Betas
   matrix[I,K] Intercepts_raw; // raw intercepts
@@ -74,20 +74,18 @@ transformed parameters{
     if(sparsity == 1){
       // lowest sparsity level
       // wide normal prior on Beta means
-      // high variance of random effects
-      Beta[i] = mu_Beta + sigma_Beta .* tan(Beta_raw[i]); 
+      Beta[i] = mu_Beta + sigma_Beta .* Beta_raw[i]; 
     }
     if(sparsity == 2){
       // medium sparsity level
       // narrow, fat-tailed prior on Beta means
-      // low variance of random effects      
-      Beta[i] = 0.1*mu_Beta + .5 .* sigma_Beta .* tan(Beta_raw[i]); 
+      Beta[i] = 0.1 * mu_Beta + sigma_Beta .* Beta_raw[i]; 
     }
     if(sparsity == 3){
       // high sparsity level
       // Beta means are fixed to zero
-      // high variance of random effects to compensate fixed means
-      Beta[i] = 0 + 2 .* sigma_Beta .* tan(Beta_raw[i]); 
+      // doubled variance of random effects to compensate fixed means
+      Beta[i] = 0 + 2 .* sigma_Beta .* Beta_raw[i]; 
     }
     
     Intercepts[i,] = mu_Intercepts' + sigma_Intercepts' .* Intercepts_raw[i, ];
@@ -127,7 +125,6 @@ transformed parameters{
           Beta_in_strength[i,k]  += abs(Beta[i,k,j]); // colsums
           Beta_out_strength[i,k] += abs(Beta[i,j,k]); // rowsums
           Rho_strength[i,k]      += abs(Rho[i,j,k]); // sum of partial correlations
-          
         }
       }
       // Divide by number of predictors to obtain the mean
@@ -142,7 +139,7 @@ transformed parameters{
     Beta_density[i] = mean(abs(Beta[i]));
     Rho_density[i]  = mean(abs(Rho[i]));
   } // end i
-   }
+  } // end block
   // Regression ////////////////////////////////////////////////////////
     mu_regression[,1] = reg_intercept[1] + reg_slope_density[1] * Beta_in_strength[,1];
     mu_regression[,2] = reg_intercept[2] + reg_slope_density[2] * Beta_in_strength[,1];
@@ -169,7 +166,7 @@ model {
     Beta_raw_vec[position_Beta:(position_Beta - 1 + K*K)] = to_vector(Beta_raw[i]);
     position_Beta += K*K; // increment position counter  
   } // end i
-  Beta_raw_vec              ~ uniform(-pi()/2, pi()/2); // prior on Beta
+  Beta_raw_vec              ~ std_normal(); // prior on Beta
   if(sparsity == 1){
     to_vector(mu_Beta)      ~ normal(0, 1); // prior on mu_Beta
   }
