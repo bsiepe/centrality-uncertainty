@@ -88,13 +88,13 @@ df_design <- SimDesign::createDesign(
 
 # Simulation parameters
 # Number of individuals 
-n_id <- 200
+n_id <- 50
 
 # Number of variables
 n_var <- 6
 
 # Number of timepoints
-n_tp <- 80
+n_tp <- 100
 
 # for regression
 reg_error_sd = 1
@@ -303,8 +303,8 @@ fit_bmlvar <- rstan::sampling(
   seed = 35032,
   chains = 4,
   cores = 4,
-  warmup = 500,
-  iter = 1500,
+  warmup = 300,
+  iter = 200,
   init = .1,
   control = list(adapt_delta = 0.8),
   verbose = FALSE
