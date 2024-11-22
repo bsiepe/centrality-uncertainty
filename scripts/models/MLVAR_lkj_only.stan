@@ -15,6 +15,11 @@ data {
   matrix[I,P] reg_covariate; // regression outcome
 }
 ////////////////////////////////////////////////////////////////////////////////
+transformed data{
+  array[I*P] real reg_covariate_array=to_array_1d(to_vector(reg_covariate));
+}
+
+////////////////////////////////////////////////////////////////////////////////
 parameters {
   // Temporal
   array[I] matrix<lower=-pi()/2, upper=pi()/2>[K,K] Beta_raw; // raw Beta matrix
@@ -31,7 +36,7 @@ parameters {
   // Regression
   vector[P] reg_intercept;   // Intercept of Regression
   vector[P] reg_slope_density; // Slope of Regression
-  vector[P] reg_residual;  // Residual term of Regression
+  vector<lower=0>[P] sigma_residual;  // Residual term of Regression
   
 } // end parameters
 ////////////////////////////////////////////////////////////////////////////////
@@ -183,13 +188,13 @@ model {
   // Regression
   reg_intercept     ~ student_t(3, 0, 2); // prior on reg_intercept
   reg_slope_density ~ student_t(3, 0, 2); // prior on reg_slope_density
-  reg_residual      ~ student_t(3, 0, 1); // prior on reg_residual
+  sigma_residual    ~ student_t(3, 0, 1); // prior on sigma_residual
   
   
   int position_Y = 1; // position counter for the data
   for (i in 1:I) {
     // Precision Matrix prior
-    L_Theta[i] ~ lkj_corr_cholesky(4); // prior on L_Theta
+    L_Theta[i] ~ lkj_corr_cholesky(3); // prior on L_Theta
     
     //// Likelihood //////////////////////////////////////////////////////////
     
@@ -222,14 +227,15 @@ model {
   
   
   // Regression
-    to_vector(reg_covariate) ~ normal(
-      to_vector(mu_regression), exp(to_vector(rep_matrix(reg_residual', I)))
+    reg_covariate_array ~ normal(
+      to_array_1d(to_vector(mu_regression)), to_array_1d(to_vector(rep_matrix(sigma_residual', I)))
       );
+
     
 } // end model
 ////////////////////////////////////////////////////////////////////////////////
 generated quantities{
-  vector[P]  reg_slope_density_z;
+  vector[P] reg_slope_density_z;
   vector[P] reg_intercept_z;
   
   // Standardize Regression Coefficients
