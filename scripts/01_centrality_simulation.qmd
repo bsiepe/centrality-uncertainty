@@ -165,10 +165,10 @@ for(i in 1:nrow(df_design)){
                       "graph_nonsparse")
   beta_sd <- ifelse(condition$heterogeneity == "low",
                     0.05,
-                    0.1)
+                    0.075)
   sigma_sd <- ifelse(condition$heterogeneity == "low",
                     0.05,
-                    0.1)
+                    0.075)
   ml_sim <- sim_gvar_loop(
                      graph = sim_pars[[dgp_graph]],
                      beta_sd = beta_sd,
@@ -238,15 +238,15 @@ sim_generate <- function(condition, fixed_objects = NULL){
                       "graph_nonsparse")
   beta_sd <- ifelse(condition$heterogeneity == "low",
                     0.05,
-                    0.1)
+                    0.075)
   sigma_sd <- ifelse(condition$heterogeneity == "low",
                     0.05,
-                    0.1)
+                    0.075)
   
   # scale kappa random effects w.r.t diagonal elements
   mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
   kappa_sd_low <- 0.05 * mean_diag_kappa
-  kappa_sd_high <- 0.1 * mean_diag_kappa
+  kappa_sd_high <- 0.075 * mean_diag_kappa
   
   kappa_sd <- ifelse(condition$heterogeneity == "low",
                      kappa_sd_low,
@@ -653,7 +653,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                                             "sigma_Intercepts",
                                             "reg_intercept",
                                             "reg_slope_density",
-                                            "reg_residual",
+                                            "sigma_residual",
                                             "Intercepts",
                                             "Sigma",
                                             "Rho_vec",
@@ -1296,9 +1296,10 @@ n_rep <- 2
 future::plan(multisession, workers = n_rep)
 
 # started 2024-08-13 ~08:35
+df_design_test <- df_design[c(4),]
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design, 
+                                    design = df_design_test, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
@@ -1319,8 +1320,8 @@ sim_results <- SimDesign::runSimulation(
                                                  "Rcpp"),
                                     save_results = TRUE,
                                     # ncores = n_rep,
-                                    debug = "generate",
-                                    # filename = "sim281024.rds"
+                                    # debug = "generate",
+                                    filename = "simresidualarray.rds"
                                     # save_seeds = TRUE
                                     )
 
