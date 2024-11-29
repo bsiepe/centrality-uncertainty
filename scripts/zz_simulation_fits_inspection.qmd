@@ -31,12 +31,14 @@ sim_res_4$results[[1]]$bmlvar$fit_bmlvar$pcor[[2]]
 ut(sim_res_4$results[[1]]$pcor[[2]])
 
 # Look at absolute differences across all individuals
-Reduce("+", Map("abs", Map("-", sim_res_4$results[[3]]$bmlvar$fit_bmlvar$pcor, sim_res_4$results[[1]]$pcor))) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
+Reduce("+", Map("abs", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlvar$pcor, sim_res_4$results[[1]]$pcor))) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
 
 # Check if there is a wrong negative sign
-reverse_sign_pcor <- lapply(sim_res_4$results[[3]]$bmlvar$fit_bmlvar$pcor, function(x) x*-1)
+reverse_sign_pcor <- lapply(sim_res_4$results[[1]]$bmlvar$fit_bmlvar$pcor, function(x) x*-1)
 
 Reduce("+", Map("abs", Map("-", reverse_sign_pcor, sim_res_4$results[[1]]$pcor))) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
+
+
 
 ```
 
@@ -48,9 +50,35 @@ Look at temporal fit:
 Reduce("+", Map("abs", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, sim_res_4$results[[1]]$beta))) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
 
 # Only look at bias, not absolute
-Reduce("+", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, sim_res_4$results[[1]]$beta)) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
+bmlvar_beta_bias <- Reduce("+", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, sim_res_4$results[[1]]$beta)) / length(sim_res_4$results[[1]]$bmlvar$dens_temp)
 
 
+# check if rows and columns were swapped
+transposed_beta <- lapply(sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, t)
+
+bmlvar_beta_bias <- Reduce("+", Map("-", transposed_beta, sim_res_4$results[[1]]$beta)) / length(transposed_beta)
+
+
+as.data.frame(as.table(bmlvar_beta_bias)) |> 
+  rename(Variable1 = Var1, Variable2 = Var2, Correlation = Freq) |> 
+  mutate(Variable1 = factor(Variable1, levels = c("A", "B", "C", "D", "E", "F"))) |> 
+  mutate(Variable2 = factor(Variable2, levels = c("A", "B", "C", "D", "E", "F"))) |> 
+  mutate(Variable1 = fct_rev(Variable1)) |>  # Reverse order of Variable1
+  ggplot(aes(y = Variable1, x = Variable2, fill = Correlation)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = sprintf("%.3f", Correlation)), size = 4, color = "black") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+  labs(
+    title = "Bias of VAR Matrix",
+    y = "Variable 1",
+    x = "Variable 2",
+    fill = "Bias"
+  ) +
+  theme_centrality() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
 ```
 
 
@@ -232,7 +260,7 @@ df_centrality_bmlvar |>
   scale_x_continuous(limits = c(0,.3))+
   scale_y_continuous(limits = c(0,.3))
 ```
-Check their standard deviations and sd
+Check their standard deviations and SD
 ```{r}
 df_centrality_bmlvar |> 
   group_by(sim_rep) |> 
@@ -280,7 +308,7 @@ l_coefs$zero <- vector()
 l_coefs$two <- vector()
 l_coefs$four <- vector()
 
-for(i in 1:10){
+for(i in 1:1){
   l_coefs$zero[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
   l_coefs$two[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
   l_coefs$four[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
@@ -502,7 +530,7 @@ l_coefs$zero <- vector()
 l_coefs$two <- vector()
 l_coefs$four <- vector()
 
-for(i in 1:10){
+for(i in 1:1){
   l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[1]])$standardized.coefficients[2]
   l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[2]])$standardized.coefficients[2]
   l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$mlvar$reg_outstrength[[3]])$standardized.coefficients[2]
@@ -554,7 +582,7 @@ l_coefs$zero <- vector()
 l_coefs$two <- vector()
 l_coefs$four <- vector()
 
-for(i in 1:10){
+for(i in 1:length(sim_res_4$results)){
   l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[1]])$standardized.coefficients[2]
   l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[2]])$standardized.coefficients[2]
   l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gimme$reg_outstrength[[3]])$standardized.coefficients[2]
@@ -785,6 +813,72 @@ cor_summary |>
   View()
 
 ```
+
+
+## BmlVAR posterior correlations
+This only works when returning the full BmlVAR output. 
+
+```{r}
+fit_bmlvar <- sim_res_4[["results"]][[1]][["bmlvar"]][["fit_bmlvar"]][["fit_obj"]]
+
+post_df <- posterior::as_draws_df(fit_bmlvar)
+
+post_df |> 
+  select(starts_with("Beta"))
+
+
+# Extract individual indices from column names
+tidy_draws <- post_df |>
+  select(starts_with("Beta[")) |> 
+  pivot_longer(cols = everything(), 
+               names_to = "parameter", 
+               values_to = "value") |>
+  mutate(
+    individual = as.integer(stringr::str_match(parameter, "\\[([0-9]+),")[,2]),
+    row_index = as.integer(stringr::str_match(parameter, ",([0-9]+),")[,2]),
+    col_index = as.integer(stringr::str_match(parameter, ",([0-9]+)\\]")[,2])
+  ) |> 
+  mutate(parameter = paste0("Beta[", row_index, ",", col_index, "]"))
+
+# create person-specific correlation matrices
+cor_matrices <- tidy_draws |> 
+  group_by(individual, parameter) |> 
+  mutate(iter = row_number()) |> 
+  pivot_wider(id_cols = c(individual, iter), names_from = parameter, values_from = value) |> 
+  select(!iter) |> 
+  group_by(individual) |> 
+  summarise(cor_matrix = list(cor(across(everything()), use = "complete.obs")), .groups = "keep")
+  
+# create heatmaps 
+# Open a PDF device
+pdf(file = "posterior_cor_heatmap.pdf", width = 8, height = 10)
+  
+  # Loop over each pair of matrices
+  for (i in 1:75) {
+
+    cor_mat <- cor_matrices[i, 2][[1]][[1]]
+
+    cor_df <- reshape2::melt(cor_mat)
+    
+    # Generate the heatmap
+    p <- ggplot(cor_df, aes(x = Var1, y = Var2, fill = value)) +
+      geom_tile() +
+      scale_fill_gradient2(low = "darkblue", mid = "white", high = "darkred", midpoint = 0) +
+      # plot the numerical value
+      geom_text(aes(label = round(value, 2)), color = "black", size = 3) +
+      labs(title = paste("Correlation Matrix for Individual", i),
+           x = "",
+           y = "") +
+      theme_centrality()
+    
+    # Print the plot to the PDF
+    print(p)
+  }
+dev.off()
+```
+
+
+
 
 
 

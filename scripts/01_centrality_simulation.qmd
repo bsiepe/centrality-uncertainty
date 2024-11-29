@@ -626,7 +626,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   ests_bmlvar <- extract_all_estimates(fit_bmlvar,
                                        n_id = n_id, 
                                        n_var = n_var, 
-                                       transpose_beta = TRUE,
+                                       transpose_beta = FALSE,
                                        pcor_matrix = TRUE)
   
   # Obtain centralities
