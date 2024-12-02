@@ -575,8 +575,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   reg_data <- cbind(
     dat$covariate_in_strength[, 2:4],
+    dat$covariate_out_strength[, 2:4],
     dat$covariate_cont_strength[, 2:4],
-    dat$covariate_out_strength[, 2:4]
   )
   Y <- df_data |> 
     dplyr::select(-"ID") |> 
@@ -1296,7 +1296,7 @@ n_rep <- 2
 future::plan(multisession, workers = n_rep)
 
 # started 2024-08-13 ~08:35
-df_design_test <- df_design[c(4),]
+df_design_test <- df_design[c(3),]
 
 sim_results <- SimDesign::runSimulation(
                                     design = df_design_test, 
@@ -1321,7 +1321,7 @@ sim_results <- SimDesign::runSimulation(
                                     save_results = TRUE,
                                     # ncores = n_rep,
                                     # debug = "generate",
-                                    filename = "simresidualarray.rds"
+                                    filename = "simdebugregression_no_i.rds"
                                     # save_seeds = TRUE
                                     )
 

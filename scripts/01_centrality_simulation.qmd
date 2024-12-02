@@ -575,8 +575,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   reg_data <- cbind(
     dat$covariate_in_strength[, 2:4],
-    dat$covariate_cont_strength[, 2:4],
-    dat$covariate_out_strength[, 2:4]
+    dat$covariate_out_strength[, 2:4],
+    dat$covariate_cont_strength[, 2:4]
   )
   Y <- df_data |> 
     dplyr::select(-"ID") |> 
