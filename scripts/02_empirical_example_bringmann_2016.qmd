@@ -494,7 +494,6 @@ n_tp <- data_bringmann_imputed |>
 n_id <- length(unique(data_bringmann_imputed$subj_id))
   
 # Prepare stan data
-# TODO change the regression outcomes!
 stan_data <- list(
     K = n_var,
     I = n_id,
@@ -510,17 +509,15 @@ stan_data <- list(
   )
   
   
-# TODO change sampler settings, currently only used for experiments
 fit_bmlvar <- rstan::sampling(
   object = stan_model,
   pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
   include = FALSE,
   data = stan_data,
-  # seed = 2023,
-  chains = 2,
+  chains = 4,
   cores = 1,
-  warmup = 200,
-  iter = 300,
+  warmup =500,
+  iter = 1000,
   init = 0,
   control = list(adapt_delta = 0.90),
   verbose = FALSE
@@ -607,7 +604,7 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 In this section, we collect and contrast the results of different methods. 
 
 ```{r load-results, include = FALSE}
-df_regression <- readRDS(here("output/empirical_example/regression_empirical_example.RDS"))
+df_regression <- readRDS(here::here("output", "empirical_example", "regression_empirical_example.RDS"))
 ```
 
 Prepare plotting: 
