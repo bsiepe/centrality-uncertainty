@@ -431,9 +431,9 @@ fit_bmlvar <- rstan::sampling(
   data = stan_data,
   # seed = 2023,
   chains = 4,
-  cores = 1,
+  cores = 4,
   warmup = 500,
-  iter = 1000,
+  iter = 2000,
   init = 0,
   control = list(adapt_delta = 0.90),
   verbose = FALSE
