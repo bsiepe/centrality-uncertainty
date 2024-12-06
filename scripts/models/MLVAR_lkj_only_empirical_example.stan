@@ -15,9 +15,14 @@ data {
   matrix[I,P] reg_covariate; // regression outcome
 }
 ////////////////////////////////////////////////////////////////////////////////
+transformed data{
+  array[I*P] real reg_covariate_array=to_array_1d(to_vector(reg_covariate));
+}
+
+////////////////////////////////////////////////////////////////////////////////
 parameters {
   // Temporal
-  array[I] matrix<lower=-pi()/2, upper=pi()/2>[K,K] Beta_raw; // raw Beta matrix
+  array[I] matrix[K,K] Beta_raw; // raw Beta matrix
   matrix[K,K] mu_Beta; // means of Betas
   matrix<lower=0>[K,K] sigma_Beta; // SDs of Betas
   matrix[I,K] Intercepts_raw; // raw intercepts
@@ -31,7 +36,7 @@ parameters {
   // Regression
   vector[P] reg_intercept;   // Intercept of Regression
   vector[P] reg_slope_density; // Slope of Regression
-  vector[P] reg_residual;  // Residual term of Regression
+  vector<lower=0>[P] sigma_residual;  // Residual term of Regression
   
 } // end parameters
 ////////////////////////////////////////////////////////////////////////////////
@@ -69,20 +74,18 @@ transformed parameters{
     if(sparsity == 1){
       // lowest sparsity level
       // wide normal prior on Beta means
-      // high variance of random effects
-      Beta[i] = mu_Beta + sigma_Beta .* tan(Beta_raw[i]); 
+      Beta[i] = mu_Beta + sigma_Beta .* Beta_raw[i]; 
     }
     if(sparsity == 2){
       // medium sparsity level
       // narrow, fat-tailed prior on Beta means
-      // low variance of random effects      
-      Beta[i] = 0.1*mu_Beta + .5 .* sigma_Beta .* tan(Beta_raw[i]); 
+      Beta[i] = 0.05 * mu_Beta + sigma_Beta .* Beta_raw[i]; 
     }
     if(sparsity == 3){
       // high sparsity level
       // Beta means are fixed to zero
-      // high variance of random effects to compensate fixed means
-      Beta[i] = 0 + 2 .* sigma_Beta .* tan(Beta_raw[i]); 
+      // doubled variance of random effects to compensate fixed means
+      Beta[i] = 0 + 2 .* sigma_Beta .* Beta_raw[i]; 
     }
     
     Intercepts[i,] = mu_Intercepts' + sigma_Intercepts' .* Intercepts_raw[i, ];
@@ -122,13 +125,13 @@ transformed parameters{
           Beta_in_strength[i,k]  += abs(Beta[i,k,j]); // colsums
           Beta_out_strength[i,k] += abs(Beta[i,j,k]); // rowsums
           Rho_strength[i,k]      += abs(Rho[i,j,k]); // sum of partial correlations
-          
         }
       }
       // Divide by number of predictors to obtain the mean
-      Beta_in_strength[i,k]  = Beta_in_strength[i,k] / (K);
-      Beta_out_strength[i,k] = Beta_out_strength[i,k] / (K);
-      Rho_strength[i,k]      = Rho_strength[i,k] / (K*2);
+      // Subtract 1 because we ignore the diagonal
+      Beta_in_strength[i,k]  = Beta_in_strength[i,k] / (K -1);
+      Beta_out_strength[i,k] = Beta_out_strength[i,k] / (K -1);
+      Rho_strength[i,k]      = Rho_strength[i,k] / (K - 1);
       
       //Rho_centrality[i,k]    = mean(abs(Rho[i, ,k]));
     } // end k
@@ -136,11 +139,10 @@ transformed parameters{
     Beta_density[i] = mean(abs(Beta[i]));
     Rho_density[i]  = mean(abs(Rho[i]));
   } // end i
-   }
+  } // end block
   // Regression ////////////////////////////////////////////////////////
     mu_regression[,1] = reg_intercept[1] + reg_slope_density[1] * Beta_out_strength[,1];
     mu_regression[,2] = reg_intercept[2] + reg_slope_density[2] * Beta_density;
-
 
 } // end transformed parameters
 ////////////////////////////////////////////////////////////////////////////////
@@ -154,7 +156,7 @@ model {
     Beta_raw_vec[position_Beta:(position_Beta - 1 + K*K)] = to_vector(Beta_raw[i]);
     position_Beta += K*K; // increment position counter  
   } // end i
-  Beta_raw_vec              ~ uniform(-pi()/2, pi()/2); // prior on Beta
+  Beta_raw_vec              ~ std_normal(); // prior on Beta
   if(sparsity == 1){
     to_vector(mu_Beta)      ~ normal(0, 1); // prior on mu_Beta
   }
@@ -173,13 +175,13 @@ model {
   // Regression
   reg_intercept     ~ student_t(3, 0, 2); // prior on reg_intercept
   reg_slope_density ~ student_t(3, 0, 2); // prior on reg_slope_density
-  reg_residual      ~ student_t(3, 0, 1); // prior on reg_residual
+  sigma_residual    ~ student_t(3, 0, 1); // prior on sigma_residual
   
   
   int position_Y = 1; // position counter for the data
   for (i in 1:I) {
     // Precision Matrix prior
-    L_Theta[i] ~ lkj_corr_cholesky(4); // prior on L_Theta
+    L_Theta[i] ~ lkj_corr_cholesky(3); // prior on L_Theta
     
     //// Likelihood //////////////////////////////////////////////////////////
     
@@ -212,14 +214,15 @@ model {
   
   
   // Regression
-    to_vector(reg_covariate) ~ normal(
-      to_vector(mu_regression), exp(to_vector(rep_matrix(reg_residual', I)))
+    reg_covariate_array ~ normal(
+      to_array_1d(to_vector(mu_regression)), to_array_1d(to_vector(rep_matrix(sigma_residual', I)))
       );
+
     
 } // end model
 ////////////////////////////////////////////////////////////////////////////////
 generated quantities{
-  vector[P]  reg_slope_density_z;
+  vector[P] reg_slope_density_z;
   vector[P] reg_intercept_z;
   
   // Standardize Regression Coefficients
@@ -232,6 +235,48 @@ generated quantities{
   reg_intercept_z[1] = reg_intercept[1] + (reg_slope_density_z[1] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
   reg_intercept_z[2] = reg_intercept[2] + (reg_slope_density_z[2] * mean(Beta_density)) / sd(Beta_density);
 
+  // Posterior predictive checks
+  // Posterior predictive checks
+  int position_Y = 1; // position counter 
+  array[N_total] vector[K] Y_rep; // posterior predictive time series
+  
+  for (i in 1:I) {
+    // Partition observed data
+    array[n_t[i]] vector[K] Y_temp = segment(Y, position_Y, n_t[i]); // slice array
+    position_Y += n_t[i]; 
+
+    // Cholesky decomposition
+    matrix[K, K] Sigma_chol = diag_pre_multiply(theta_sd[i], L_Theta[i]);
+    array[n_t[i]-1] vector[K] mu_network;
+
+    // Compute network predictions for each time point
+    if (mean_center == 1) {
+      for (t in 1:(n_t[i]-1)) {
+        mu_network[t] = 
+          to_vector(Intercepts[i, ]) + Beta[i] * (Y_temp[t,] - to_vector(Intercepts[i, ]));
+      }
+    }
+    if (mean_center == 0) {
+      for (t in 1:(n_t[i]-1)) {
+        mu_network[t] = 
+          to_vector(Intercepts[i, ]) + Beta[i] * Y_temp[t,];
+      }
+    }
+
+    // Simulate replicated data
+    for (t in 2:n_t[i]) {
+      Y_rep[position_Y - n_t[i] + t - 1] = 
+        multi_normal_cholesky_rng(mu_network[t-1], Sigma_chol);
+    }
+  }
+
+  // Replicated regression outcomes
+  matrix[I,P] reg_covariate_rep;
+  for (i in 1:I) {
+    for (p in 1:P) {
+      reg_covariate_rep[i, p] = normal_rng(mu_regression[i, p], sigma_residual[p]);
+    }
+  }
   
 } // end generated quantities
 
