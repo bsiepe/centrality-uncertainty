@@ -288,6 +288,7 @@ vars <- data_bringmann_imputed |>
   select(-c(subj_id, neuroticism)) |> 
   colnames()
 
+pre_gvar <- Sys.time()
 # fit for each individual
 fit_gvar <- lapply(data_list, function(x){
     tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
@@ -298,6 +299,7 @@ fit_gvar <- lapply(data_list, function(x){
                                scale = FALSE))}, error = function(e) NA)
   })
 
+gvar_fit_time <- Sys.time() - pre_gvar
 # save results
 saveRDS(fit_gvar, here("output", "empirical_example", "fit_gvar.rds"))
 
@@ -349,6 +351,7 @@ vars <- data_bringmann_imputed |>
   select(-c(subj_id, neuroticism)) |> 
   colnames()
 
+pre_mlvar <- Sys.time()
 fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(data_bringmann_imputed,
                             vars = vars,
                             idvar = "subj_id",
@@ -358,7 +361,7 @@ fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(data_bringmann_imputed,
                             nCores = 1,
                             scale = FALSE))}, error = function(e) NA)
 
-
+mlvar_fit_time <- Sys.time() - pre_mlvar
 saveRDS(fit_mlvar, here("output", "empirical_example", "fit_mlvar.rds"))
 ```
 
@@ -405,7 +408,7 @@ data_list <- lapply(data_list, function(x){
       select(-c(subj_id))
   }) 
 
-
+pre_gimme <- Sys.time()
 fit_gimme <- gimme::gimme(data_list,
                             ar = TRUE,
                             subgroup = TRUE,
@@ -414,6 +417,8 @@ fit_gimme <- gimme::gimme(data_list,
                             groupcutoff = .75,
                             subcutoff = .75,
                             VAR = TRUE)
+
+gimme_fit_time <- Sys.time()
 
 saveRDS(fit_gimme, here("output", "empirical_example", "fit_gimme.rds"))
 ```
@@ -508,7 +513,7 @@ stan_data <- list(
     mean_center = 0
   )
   
-  
+pre_bmlvar <- Sys.time()  
 fit_bmlvar <- rstan::sampling(
   object = stan_model,
   pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
@@ -522,6 +527,8 @@ fit_bmlvar <- rstan::sampling(
   control = list(adapt_delta = 0.90),
   verbose = FALSE
   )
+
+bmlvar_fit_time <- Sys.time() - pre_bmlvar
 
 saveRDS(fit_bmlvar, here("output", "empirical_example", "fit_bmlvar_empirical.rds"))
 ```
