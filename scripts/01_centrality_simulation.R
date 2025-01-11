@@ -44,7 +44,7 @@
 #' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `05_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages--------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -64,7 +64,7 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
@@ -78,7 +78,7 @@ graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----params----------------------------------------------------------------------------------------------------------------------------------------------
 dgp <- c("sparse")
 
 # Number of timepoints
@@ -89,7 +89,6 @@ heterogeneity <- "high"
 # Simulation parameters
 # Number of individuals 
 n_id <- c(75, 200)
-# n_id <- 200
 
 # Design Conditions
 df_design <- SimDesign::createDesign(
@@ -137,7 +136,7 @@ sim_pars <- list(
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----precompile------------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -152,7 +151,7 @@ sim_pars$mlvar_model <-
 #' To simulate data with a specific correlation, we need to obtain the true standard deviation of the different centrality measures. For the temporal network, this is easy to compute, as it just follows from the random effects of the VAR matrix. 
 #' For the partial correlations, this is a bit more complicated, as we simulate from the true covariance matrix, but calculate the centrality based on the partial correlation matrix. Therefore, we just simulate a large number of partial correlation matrices for the data-generating process of each condition and then calculate the implied standard deviation of the centrality measure.
 #' 
-## ----true-strength-sd, eval = FALSE---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----true-strength-sd, eval = FALSE----------------------------------------------------------------------------------------------------------------------
 ## # number of simulations to obtain sd
 ## n_sim_sd <- 30000
 ## sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
@@ -213,7 +212,7 @@ sim_pars$mlvar_model <-
 
 #' 
 #' As we only need to compute the true SD once, we can simply load it from disk to save time: 
-## -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------
 true_sd <- readRDS(here::here("data", "true_sd_semisparse.RDS"))
 names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 df_design$strength_sd <- unlist(true_sd$sd_results_strength)
@@ -226,7 +225,7 @@ df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
 #' ## Simulating Data
 #' 
 #' 
-## ----generate-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----generate--------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -365,7 +364,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 #' 
 #' # Analysis
 #' 
-## ----data-analysis--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-analysis---------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -770,7 +769,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----summarize-------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -991,7 +990,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   # exclude bmlvar because of its different data structure
   methods <- c("gvar", "mlvar", "gimme")
-  measures <- c("instrength", "strength", "outstrength")
+  measures <- c("instrength", "outstrength", "strength")
   summaries <- c("rmse", "mse")
   
 
@@ -1272,7 +1271,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----run-sim---------------------------------------------------------------------------------------------------------------------------------------------
 # For testing
 # df_design_test <- df_design[3,]
 # df_design_test$n_id <- 200
@@ -1291,15 +1290,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
 
 
-n_rep <- 5
-
-future::plan(multisession, workers = n_rep)
+n_rep <- 200
+n_workers <- 
+future::plan(multisession, workers = 60)
 
 # started 2024-08-13 ~08:35
-df_design_test <- df_design[c(1,4),]
+# df_design_test <- df_design[c(4),]
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design_test, 
+                                    design = df_design, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
@@ -1319,9 +1318,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "corpcor",
                                                  "Rcpp"),
                                     save_results = TRUE,
-                                    # ncores = n_rep,
-                                    # debug = "generate",
-                                    filename = "sim_prelium_0312.rds"
+                                    filename = "sim_full.rds"
                                     # save_seeds = TRUE
                                     )
 
@@ -1339,7 +1336,7 @@ plan(sequential)
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## ----eval = FALSE---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----eval = FALSE----------------------------------------------------------------------------------------------------------------------------------------
 ## knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"),
 ##             output = here::here("scripts", "01_centrality_simulation.R"),
 ##             documentation = 2)

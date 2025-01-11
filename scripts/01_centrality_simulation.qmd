@@ -89,7 +89,6 @@ heterogeneity <- "high"
 # Simulation parameters
 # Number of individuals 
 n_id <- c(75, 200)
-# n_id <- 200
 
 # Design Conditions
 df_design <- SimDesign::createDesign(
@@ -903,7 +902,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     })
   }
   
-  measures <- c("outstrength", "strength", "instrength")
+  measures <- c("instrength", "outstrength", "strength")
   
   for(method in methods){
     for(measure in measures){
@@ -991,7 +990,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   # exclude bmlvar because of its different data structure
   methods <- c("gvar", "mlvar", "gimme")
-  measures <- c("instrength", "strength", "outstrength")
+  measures <- c("instrength", "outstrength", "strength")
   summaries <- c("rmse", "mse")
   
 
@@ -1291,15 +1290,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
 
 
-n_rep <- 2
-
-future::plan(multisession, workers = n_rep)
+n_rep <- 200
+n_workers <- 
+future::plan(multisession, workers = 60)
 
 # started 2024-08-13 ~08:35
-df_design_test <- df_design[c(4),]
+# df_design_test <- df_design[c(4),]
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design_test, 
+                                    design = df_design, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
@@ -1319,9 +1318,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "corpcor",
                                                  "Rcpp"),
                                     save_results = TRUE,
-                                    # ncores = n_rep,
-                                    # debug = "generate",
-                                    filename = "simresidualarray.rds"
+                                    filename = "sim_full.rds"
                                     # save_seeds = TRUE
                                     )
 
@@ -1343,5 +1340,13 @@ To run the simulation on the server, it can be easier to just execute an R scrip
 knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"), 
             output = here::here("scripts", "01_centrality_simulation.R"),
             documentation = 2)
+```
+
+# Resummarize after fixing details in summary function
+
+```{r resummarize}
+sim_res_resum <- SimDesign::reSummarise(summarise = sim_summarise,
+                                        dir = here("sim_full.rds-results_pc04798"))
+saveRDS(object = sim_res_resum, here::here("output", "sim_results.RDS"))
 ```
 
