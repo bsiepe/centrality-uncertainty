@@ -14,8 +14,7 @@ library(lm.beta)
 ```
 
 ```{r}
-# data from sim run on 2024-04-09
-sim_res_4 <- readRDS("~/centrality-uncertainty/scripts/SimDesign-results_pc04798_2/results-row-4.rds")
+sim_res_4 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-4.rds")
 ```
 
 # Analyze bmlVAR
@@ -54,13 +53,13 @@ bmlvar_beta_bias <- Reduce("+", Map("-", sim_res_4$results[[1]]$bmlvar$fit_bmlva
 
 
 # check if rows and columns were swapped
-transposed_beta <- lapply(sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, t)
+# transposed_beta <- lapply(sim_res_4$results[[1]]$bmlvar$fit_bmlvar$beta, t)
 
-bmlvar_beta_bias <- Reduce("+", Map("-", transposed_beta, sim_res_4$results[[1]]$beta)) / length(transposed_beta)
+# bmlvar_beta_bias <- Reduce("+", Map("-", transposed_beta, sim_res_4$results[[1]]$beta)) / length(transposed_beta)
 
 
 as.data.frame(as.table(bmlvar_beta_bias)) |> 
-  rename(Variable1 = Var1, Variable2 = Var2, Correlation = Freq) |> 
+  rename(Variable1 = Vasim_res_4, Variable2 = Var2, Correlation = Freq) |> 
   mutate(Variable1 = factor(Variable1, levels = c("A", "B", "C", "D", "E", "F"))) |> 
   mutate(Variable2 = factor(Variable2, levels = c("A", "B", "C", "D", "E", "F"))) |> 
   mutate(Variable1 = fct_rev(Variable1)) |>  # Reverse order of Variable1
@@ -171,6 +170,61 @@ slopes |>
   scale_color_manual(values = ggokabeito::palette_okabe_ito(c(5,1,3)))
 
 ```
+
+
+Now plot them with their credible intervals:
+```{r}
+slopes_ci <- lapply(sim_res_4$results, function(x){
+  medians <- x$bmlvar$reg_bmlvar$regression_slope$median
+  ci_l <- x$bmlvar$reg_bmlvar$regression_slope$ci_95_l
+  ci_u <- x$bmlvar$reg_bmlvar$regression_slope$ci_95_u
+  
+  df_slopes <- data.frame(
+    # True coefficients
+    zero = medians[c(1,4,7)],
+    zero_l = ci_l[c(1,4,7)],
+    zero_u = ci_u[c(1,4,7)],
+    two = medians[c(2,5,8)],
+    two_l = ci_l[c(2,5,8)],
+    two_u = ci_u[c(2,5,8)],
+    four = medians[c(3,6,9)],
+    four_l = ci_l[c(3,6,9)],
+    four_u = ci_u[c(3,6,9)],
+    coef = c("instrength", "outstrength", "strength")
+  )
+  df_slopes
+})
+
+
+slopes_df <- do.call(rbind, slopes_ci)
+
+slopes_df_ci <- slopes_df |> 
+  pivot_longer(
+    cols = !coef, 
+    names_to = c("true_effect", ".value"),         # create "true_effect" and keep other parts as is
+    names_sep = "_",                               # separator between "zero", "zero_l", etc.
+    values_drop_na = TRUE                          
+  ) |> 
+  mutate(true_effect = recode(true_effect, zero = 0, two = 2, four = 4))
+```
+
+Plot credible intervals for strongest effect:
+```{r}
+slopes_df |> 
+  select(four, four_l, four_u, coef) |> 
+  filter(coef == "outstrength") |> 
+  mutate(iteration = row_number() * 0.1) |> 
+  ggplot(aes(y = four, x = four))+
+  geom_point(position=position_dodge(width=0.5))+
+  geom_errorbar(
+        aes(xmin = four_l, xmax = four_u),
+        linetype = "dotted",
+        position=position_dodge(width=0.5))
+
+```
+
+
+
 
 
 ## Use two-step with BmlVAR centrality estimates
@@ -284,7 +338,7 @@ df_centrality_bmlvar |>
 
 ## Check Convergence
 ```{r}
-r1$results[[1]]$bmlvar$summary_bmlvar |> 
+sim_res_4$results[[1]]$bmlvar$summary_bmlvar |> 
   as.data.frame() |> 
   mutate(na_rhat = is.na(Rhat)) |> 
   rownames_to_column("param") |> 
@@ -309,9 +363,9 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:1){
-  l_coefs$zero[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
-  l_coefs$two[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
-  l_coefs$four[i] <- lm.beta(r1$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
+  l_coefs$zero[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[1]])$standardized.coefficients[2]
+  l_coefs$two[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[2]])$standardized.coefficients[2]
+  l_coefs$four[i] <- lm.beta(sim_res_4$results[[i]]$gvar$reg_outstrength[[3]])$standardized.coefficients[2]
 }
 
 l_coefs |> 
@@ -334,9 +388,9 @@ l_coefs$two <- vector()
 l_coefs$four <- vector()
 
 for(i in 1:10){
-  l_coefs$zero[i] <- summary(r1$results[[i]]$gvar$reg_strength[[1]])$coefficients[2]
-  l_coefs$two[i] <- summary(r1$results[[i]]$gvar$reg_strength[[2]])$coefficients[2]
-  l_coefs$four[i] <- summary(r1$results[[i]]$gvar$reg_strength[[3]])$coefficients[2]
+  l_coefs$zero[i] <- summary(sim_res_4$results[[i]]$gvar$reg_strength[[1]])$coefficients[2]
+  l_coefs$two[i] <- summary(sim_res_4$results[[i]]$gvar$reg_strength[[2]])$coefficients[2]
+  l_coefs$four[i] <- summary(sim_res_4$results[[i]]$gvar$reg_strength[[3]])$coefficients[2]
 }
 
 l_coefs |> 
@@ -436,7 +490,7 @@ generate_heatmaps <- function(true_matrices, estimated_matrices, output_file, n_
     diff_df <- reshape2::melt(diff_matrix)
     
     # Generate the heatmap
-    p <- ggplot(diff_df, aes(x = Var1, y = Var2, fill = value)) +
+    p <- ggplot(diff_df, aes(x = Vasim_res_4, y = Var2, fill = value)) +
       geom_tile() +
       scale_fill_gradient2(low = "darkblue", mid = "white", high = "darkred", midpoint = 0) +
       # plot the numerical value
@@ -810,7 +864,8 @@ cor_summary <- cor_summary[cor_summary$variable_1 <= cor_summary$variable_2, ]
 
 cor_summary |> 
   filter(variable_1 != variable_2) |> 
-  View()
+  ggplot(aes(x = correlation)) + 
+  geom_density()
 
 ```
 
@@ -861,7 +916,7 @@ pdf(file = "posterior_cor_heatmap.pdf", width = 8, height = 10)
     cor_df <- reshape2::melt(cor_mat)
     
     # Generate the heatmap
-    p <- ggplot(cor_df, aes(x = Var1, y = Var2, fill = value)) +
+    p <- ggplot(cor_df, aes(x = Vasim_res_4, y = Var2, fill = value)) +
       geom_tile() +
       scale_fill_gradient2(low = "darkblue", mid = "white", high = "darkred", midpoint = 0) +
       # plot the numerical value
