@@ -1375,8 +1375,8 @@ theme_centrality <- function(){
       legend.position = "top",
       legend.justification = 1,
       # Panel/Facets
-      panel.spacing.x = ggplot2::unit(1.6, "lines"),
-      panel.spacing.y = ggplot2::unit(1.6, "lines"),
+      panel.spacing.x = ggplot2::unit(1.25, "lines"),
+      panel.spacing.y = ggplot2::unit(1.25, "lines"),
       # Remove vertical grid lines
       panel.grid.major.x = ggplot2::element_blank()
       
