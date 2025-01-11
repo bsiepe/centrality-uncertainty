@@ -98,7 +98,8 @@ sr_edit <- sim_res_cut |>
   rename_with(~str_remove(., "reg_")) |> 
   # remove everything before a "." in the column names
   rename_with(~str_remove(., ".*\\.")) |> 
-  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS", "RAM_USED", "heterogeneity")) |> 
+  # dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS", "RAM_USED", "heterogeneity")) |> 
+  dplyr::select(-c("heterogeneity")) |> 
   # pivot longer except conditions cols
   pivot_longer(cols = -c("dgp", "n_tp", "n_id"), 
                names_to = "measure", 
