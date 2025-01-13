@@ -524,7 +524,7 @@ fit_bmlvar <- rstan::sampling(
   warmup =500,
   iter = 2000,
   init = 0,
-  control = list(adapt_delta = 0.90),
+  control = list(adapt_delta = 0.99),
   verbose = FALSE
   )
 
@@ -609,7 +609,6 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 
 # Contrast results 
 In this section, we collect and contrast the results of different methods. 
-
 ```{r load-results, include = FALSE}
 df_regression <- readRDS(here::here("output", "empirical_example", "regression_empirical_example.RDS"))
 ```
@@ -864,7 +863,7 @@ gt_table
 
 # save to LaTeX
 gt_table |> 
-  gtsave(here("output", "empirical_example", "mock_table.tex"))
+  gtsave(here("output", "empirical_example", "summary_table.tex"))
 
 ```
 
@@ -923,6 +922,15 @@ We observed `r divtrans_bmlvar` divergent transitions.
 
 ```
 
+
+
+# Print to normal R script
+
+```{r, eval = FALSE}
+knitr::purl(here::here("scripts", "02_empirical_example_bringmann_2016.qmd"), 
+            output = here::here("scripts", "02_empirical_example_bringmann_2016.R"),
+            documentation = 2)
+```
 
 
 
