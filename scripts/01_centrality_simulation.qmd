@@ -1063,7 +1063,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_",
                                    method,
                                    "_mcse")
-            ret[[paste0(result_name_summary, "_mcse")]] <- mcse_tmp
+            ret[[paste0(result_name_summary, "_mcse")]] <- mcse_bias
           }
           # Calculate Power
           result_name_power <- paste("power", "reg", measure, method, sep = "_")
