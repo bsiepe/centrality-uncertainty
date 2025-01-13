@@ -1023,7 +1023,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
           ret[[paste0(result_name_summary, "_mean")]] <- mean_tmp
           if(summary == "rmse"){
             # calculate MSE
-            mse_tmp <- regression_rmse(
+            mse_tmp <- regression_summary(
             results, 
             method, 
             measure,
@@ -1053,7 +1053,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
             ret[[paste0(result_name_summary, "_mcse")]] <- mcse_tmp
           } else if(summary == "bias"){
             mcse_bias <- sqrt(
-              apply(calc_list, 1, var, na.rm = TRUE) / n_rep)
+              apply(calc_list, 1, var, na.rm = TRUE) / n_rep
             )
             names(mcse_bias) <- paste0(summary, 
                                    "_reg",
