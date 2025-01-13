@@ -956,14 +956,14 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   }
 
 
-  #-- RMSE
+  #-- Summary
   true_coef <- c(0, .2, .4)
-  regression_rmse <- function(results, 
+  regression_summary <- function(results, 
                               method, 
                               measure,
                               true_coef = c(0,.2,.4),
                               lm_beta = use_lm_beta,
-                              rmse = TRUE) {
+                              summary = "rmse") {
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[paste0("reg_", measure)]])){
       return(NA)
@@ -977,33 +977,38 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                               x$coefficients
                             }})[2,]   # 2nd row -> beta coef
       # Calculate RMSE
-      if(isTRUE(rmse)){
+      if(summary == "rmse"){
         sqrt( (reg_coefs - true_coef )^2 )
-      } else{
+      } else if(summary == "mse"){
         (reg_coefs - true_coef)^2
+      } else if(summary == "bias"){
+        reg_coefs - true_coef
       }
+        
       
       }
   })
   }
   
+
+  
   
   # exclude bmlvar because of its different data structure
   methods <- c("gvar", "mlvar", "gimme")
   measures <- c("instrength", "outstrength", "strength")
-  summaries <- c("rmse", "mse")
+  summaries <- c("rmse", "bias", "mse")
   
 
   for (method in methods) {
       for (measure in measures) {
         for (summary in summaries) {
-          # Calculate RMSE/MSE
-          result_name_rmse <- paste(summary, "reg", measure, method, sep = "_")
-          calc_list <- regression_rmse(
+          # Calculate summary
+          result_name_summary <- paste(summary, "reg", measure, method, sep = "_")
+          calc_list <- regression_summary(
             results = results, 
             method = method, 
             measure = measure,
-            rmse = ifelse(summary == "rmse", TRUE, FALSE))
+            summary = summary)
           mean_tmp <- rowMeans(calc_list, na.rm = TRUE)
           # bit of a hack to add the names for the different correlation
           # levels
@@ -1015,23 +1020,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_",
                                    method,
                                    "_mean")
-          ret[[paste0(result_name_rmse, "_mean")]] <- mean_tmp
+          ret[[paste0(result_name_summary, "_mean")]] <- mean_tmp
           if(summary == "rmse"){
             # calculate MSE
             mse_tmp <- regression_rmse(
             results, 
             method, 
             measure,
-            rmse = FALSE)
+            summary = "mse")
             mse_mean_tmp <- rowMeans(mse_tmp, na.rm = TRUE)
-            # names(mean_tmp) <- paste0(summary, 
-            #                        "_reg",
-            #                        c(0, 2, 4),
-            #                        "_",
-            #                        measure,
-            #                        "_",
-            #                        method,
-            #                        "_mean")
             mcse_tmp <- sqrt (apply(calc_list, 1, var, na.rm = TRUE) / (4*n_rep*mse_mean_tmp))
             names(mcse_tmp) <- paste0(summary, 
                                    "_reg",
@@ -1041,9 +1038,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_",
                                    method,
                                    "_mcse")
-            ret[[paste0(result_name_rmse, "_mcse")]] <- mcse_tmp
-          }
-          else if(summary == "mse"){
+            ret[[paste0(result_name_summary, "_mcse")]] <- mcse_tmp
+          } else if(summary == "mse"){
             mcse_tmp <- sqrt(
               apply(calc_list, 1, var, na.rm = TRUE) / n_rep)
             names(mcse_tmp) <- paste0(summary, 
@@ -1054,7 +1050,20 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_",
                                    method,
                                    "_mcse")
-            ret[[paste0(result_name_rmse, "_mcse")]] <- mcse_tmp
+            ret[[paste0(result_name_summary, "_mcse")]] <- mcse_tmp
+          } else if(summary == "bias"){
+            mcse_bias <- sqrt(
+              apply(calc_list, 1, var, na.rm = TRUE) / n_rep)
+            )
+            names(mcse_bias) <- paste0(summary, 
+                                   "_reg",
+                                   c(0, 2, 4),
+                                   "_",
+                                   measure,
+                                   "_",
+                                   method,
+                                   "_mcse")
+            ret[[paste0(result_name_summary, "_mcse")]] <- mcse_tmp
           }
           # Calculate Power
           result_name_power <- paste("power", "reg", measure, method, sep = "_")
@@ -1116,6 +1125,30 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   })
   }
   
+  regression_bias_bmlvar <- function(
+                              results, 
+                              method = "bmlvar", 
+                              true_coef = c(0,.2,.4)
+                              # lm_beta = TRUE
+                              )
+                              {
+  sapply(seq_along(results), function(i){
+    if(is.null(results[[i]][[method]][["reg_bmlvar"]])){
+      return(NA)
+    } 
+    else{
+      reg_coefs <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["median"]]
+      # Have them all in one vector
+      # thus need to repeat the true_coefs 
+      true_coef_all <- rep(true_coef, 3)
+
+      # Calculate Bias
+      reg_coefs - true_coef
+      
+      }
+  })
+  }
+  
   regression_power_bmlvar <- function(
                               results, 
                               method = "bmlvar", 
@@ -1143,6 +1176,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     results = results, 
     method = "bmlvar", 
     rmse = TRUE)
+  calc_bias <- regression_bias_bmlvar(
+    results = results, 
+    method = "bmlvar"
+  )
   calc_mse <- regression_rmse_bmlvar(
     results = results, 
     method = "bmlvar", 
@@ -1159,6 +1196,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   # Calculate mean
   mean_rmse <- rowMeans(calc_rmse, na.rm = TRUE)
   names(mean_rmse) <- paste0("rmse", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             rep(measures, each = 3),
+                             "_",
+                             "bmlvar",
+                             "_mean")
+  mean_bias <- rowMeans(calc_bias, na.rm = TRUE)
+  names(mean_bias) <- paste0("bias", 
                              "_reg",
                              c(0, 2, 4),
                              "_",
@@ -1194,13 +1240,18 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "bmlvar",
                              "_mean")
   ret[["mean_rmse"]] <- mean_rmse
+  ret[["mean_bias"]] <- mean_bias
   ret[["mean_mse"]] <- mean_mse
   ret[["mean_pwroneside"]] <- mean_pwroneside
   ret[["mean_pwrtwoside"]] <- mean_pwrtwoside
   
   # calculate mcse
+  # mcse_rmse <- sqrt(
+  #   mean_rmse * (1 - mean_rmse) / n_rep)
+  var_rmse <- apply(calc_rmse, 1, stats::var)
   mcse_rmse <- sqrt(
-    mean_rmse * (1 - mean_rmse) / n_rep)
+    var_rmse/(4 * n_rep * mean_mse)
+  )
   names(mcse_rmse) <- paste0("rmse", 
                              "_reg",
                              c(0, 2, 4),
@@ -1209,6 +1260,19 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_",
                              "bmlvar",
                              "_mcse")
+  var_bias <- apply(calc_bias, 1, stats::var)
+  mcse_bias <- sqrt(
+    var_bias/n_rep
+  )
+  names(mcse_rmse) <- paste0("bias", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             rep(measures, each = 3),
+                             "_",
+                             "bmlvar",
+                             "_mcse")
+  
   mcse_mse <- sqrt(
     mean_mse * (1 - mean_mse) / n_rep)
   names(mcse_mse) <- paste0("mse", 
@@ -1240,6 +1304,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "bmlvar",
                              "_mcse")
   ret[["mcse_rmse"]] <- mcse_rmse
+  ret[["mcse_bias"]] <- mcse_bias
   ret[["mcse_mse"]] <- mcse_mse
   ret[["mcse_pwroneside"]] <- mcse_pwroneside
   ret[["mcse_pwrtwoside"]] <- mcse_pwrtwoside
