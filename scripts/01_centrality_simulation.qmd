@@ -1264,7 +1264,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   mcse_bias <- sqrt(
     var_bias/n_rep
   )
-  names(mcse_rmse) <- paste0("bias", 
+  names(mcse_bias) <- paste0("bias", 
                              "_reg",
                              c(0, 2, 4),
                              "_",
