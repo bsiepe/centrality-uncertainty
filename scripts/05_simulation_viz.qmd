@@ -32,7 +32,7 @@ format:
     fig-width: 7
     fig-height: 4.5
     fig-align: "center"
-    embed-resoureces: true
+    embed-resources: true
 execute:
   message: false
   warning: false
@@ -73,7 +73,7 @@ source(here::here("scripts", "00_functions.R"))
 
 Load the simulation results: 
 ```{r}
-sim_results <- readRDS(here("sim_full.rds"))
+sim_results <- readRDS(here("output/", "sim_results.rds"))
 
 # Create a cut version of the simulation results without MCMC diagnostics
 sim_res_cut <- sim_results |>
@@ -82,7 +82,10 @@ sim_res_cut <- sim_results |>
 ```
 
 
-
+Attach the seed information from the previous simulation output (before resummarization):
+#```{r}
+#sim_results <- readRDS(here("output/", "sim_results.rds"))
+# ```
 
 
 ## Data Wrangling
@@ -98,7 +101,7 @@ sr_edit <- sim_res_cut |>
   rename_with(~str_remove(., "reg_")) |> 
   # remove everything before a "." in the column names
   rename_with(~str_remove(., ".*\\.")) |> 
-  # dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS", "RAM_USED", "heterogeneity")) |> 
+  # dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS", "RAM_USED", "heterogeneity")) |>
   dplyr::select(-c("heterogeneity")) |> 
   # pivot longer except conditions cols
   pivot_longer(cols = -c("dgp", "n_tp", "n_id"), 
@@ -108,6 +111,7 @@ sr_edit <- sim_res_cut |>
          measure = str_replace(measure, "powertwoside_reg", "powertwosidereg"),
          measure = str_replace(measure, "poweroneside_reg", "poweronesidereg"),
          measure = str_replace(measure, "rmse_reg", "rmsereg"),
+         measure = str_replace(measure, "bias_reg", "biasreg"),
          measure = str_replace(measure, "mse_reg", "msereg")) |>
   filter(!measure %in% c("strength_sd", "outstrength_sd", "instrength_sd")) |> 
   separate_wider_delim(measure, 
@@ -250,6 +254,10 @@ plot_mostcentral <- sr_edit |>
              group = method,
              colour = method
              )) +
+  # horizontal line at chance level of 1/6
+  geom_hline(yintercept = 1/6, 
+             linetype = 2, 
+             alpha = .7)+
   # add vertical line between methods
   geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
   geom_errorbar(aes(ymin = mean - 1*mcse,
@@ -267,7 +275,7 @@ plot_mostcentral <- sr_edit |>
   scale_color_manual(values = meth_colors) +
   theme_centrality() +
   theme(legend.position = "bottom",
-        text = element_text(size = 22),
+        text = element_text(size = 24),
         
         )+
   labs(title = "",
@@ -335,6 +343,8 @@ ggsave("plot_rankcor.pdf", plot_rankcor, height = 12, width = 16,
 
 
 ## Power of Regression
+
+### In- and Outstrength combined
 Prep data
 ```{r viz-regression-power-prep}
 # Split data set into three based on true effect
@@ -441,46 +451,149 @@ plot_power_combined
 ```
 
 
-## RMSE of Regression
+How large was the difference between instrength and outstrength?
+```{r instrength-outstrength}
+power_df |> 
+  pivot_wider(id_cols = c(dgp, n_id, n_tp, pm, true_effect, method), 
+              names_from = outcome, 
+              values_from = c(mean, mcse)) |> 
+  filter(true_effect != 0) |> 
+  janitor::clean_names() |> 
+  mutate(mean_diff = mean_temporal_instrength - mean_temporal_outstrength) |> 
+  summarize(mean_mean_diff = mean(mean_diff))
 
-```{r viz-regression-rmse}
-rmse_df <- sr_edit |> 
-  filter(str_detect(pm, "rmsereg")) |> 
-  mutate(outcome = case_when(
+```
+
+
+## Power and Bias for Outstrength
+
+```{r outstrength-plot}
+power_bias_reg_combined_df <- sr_edit |> 
+  mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
+  filter(!str_detect(pm, "poweroneside")) |>
+  filter(str_detect(pm, "power") | str_detect(pm, "biasreg")) |> 
+    mutate(outcome = case_when(
     outcome == "outstrength" ~ "Temporal\nOutstrength",
     outcome == "strength" ~ "Contemporaneous\nStrength",
     outcome == "instrength" ~ "Temporal\nInstrength"
   )) |>
-  filter(outcome != "Contemporaneous\nStrength") |> 
+  filter(outcome == "Temporal\nOutstrength") |> 
+  mutate(n_id = paste0("n = ", n_id)) |>
+  mutate(n_id = factor(n_id, levels = c("n = 75", "n = 200"))) |>
+  mutate(n_tp = paste0("t = ", n_tp)) |>
+  mutate(n_tp = factor(n_tp, levels = c("t = 60", "t = 120"))) |>
   # split pm into two columns, take last number into new column
-  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect"))
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) |> 
+  mutate(method = factor(method, levels = c("GVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
+  mutate(true_effect = paste0("True Effect: .", true_effect)) |> 
+  mutate(pm = case_when(
+    str_detect(pm, "power") ~ "Detection Rate",
+    str_detect(pm, "bias") ~ "Bias"
+  ))
 
-rmse_list <- split(rmse_df, rmse_df$true_effect)
+plot_power_bias_outstrength <- power_bias_reg_combined_df |>
+  ggplot(aes(x = n_tp, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method))+
+  geom_errorbar(aes(ymin = mean - 1 * mcse,
+                      ymax = mean + 1 * mcse),
+                  width = 0.5,
+                  position = position_dodge(0.8),
+                  show.legend = FALSE) +
+    # add vertical
+    geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+    geom_point(position = position_dodge(0.8), 
+               size = 1.4) +
+    # add mean as text above errorbar
+    geom_text(aes(label = round(mean, 2)),
+              position = position_dodge(0.8),
+              vjust = -0.6,
+              size = 5,
+              show.legend = FALSE) +
+    ggh4x::facet_nested(true_effect + n_id ~ pm,
+                        axes = "all",
+                        scales = "free_y",
+                        independent = "y") +
+    facetted_pos_scales(
+      y = list(pm == "Bias" ~ scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)),
+               pm == "Detection Rate" ~ scale_y_continuous(expand = c(0, 0), limits = c(-0.1, 1.1)))
+    )+
+    labs(
+      title = "",
+      x = "Timepoints",
+      colour = "",
+      fill = "",
+      group = "",
+      y = ""
+    ) +
+    scale_color_manual(values = meth_colors) +
+    theme_centrality() +
+    theme(legend.position = "bottom",
+          ggh4x.facet.nestline = element_line(colour = "#6d6d6e"),
+          axis.text = element_text(size = 18),
+          # increase all legend element size
+          legend.text = element_text(size = 18),
+          legend.title = element_text(size = 18),
+          legend.key.size = unit(1.5, "lines"),
+          strip.text.x = ggplot2::element_text(size = 26)
+          )
+
+ggsave("plot_power_bias_outstrength.pdf", 
+       plot_power_bias_outstrength, height = 16* 0.95, width = 16* 0.8,
+       path = here::here("figures/"))
+
 ```
 
-Function to create the plots: 
-```{r viz-rmse-function}
-plot_rmse <- function(df){
+
+
+## RMSE and Bias of Regression
+
+Create some utility functions to create plots for different outcomes: 
+```{r bias-rmse-functions}
+process_data <- function(data, summary) {
+  df_clean <- data |> 
+    filter(str_detect(pm, summary)) |> 
+    mutate(outcome = case_when(
+      outcome == "outstrength" ~ "Temporal\nOutstrength",
+      outcome == "strength" ~ "Contemporaneous\nStrength",
+      outcome == "instrength" ~ "Temporal\nInstrength"
+    )) |>
+    filter(outcome != "Contemporaneous\nStrength") |> 
+    mutate(
+      n_id = factor(paste0("n = ", n_id), levels = c("n = 75", "n = 200")),
+      n_tp = factor(paste0("t = ", n_tp), levels = c("t = 60", "t = 120"))
+    ) |>
+    separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect"))
+  
+    split(df_clean, df_clean$true_effect)
+}
+
+## Generic plotting function
+create_regression_plot <- function(df, 
+                                   y_label) {
   ggplot(data = df,
          aes(
-           x = method,
+           x = n_tp,
            y = mean,
            colour = method,
            fill = method,
            group = method
          )) +
+    # add horizontal dashed line at zero for bias
+    geom_hline(yintercept = 0, linetype = 2, alpha = .4)+
     geom_errorbar(
       aes(ymin = mean - 1 * mcse, ymax = mean + 1 * mcse),
-      width = .8,
+      width = .5,
       position = position_dodge(0.7),
       show.legend = FALSE
     ) +
     geom_point(position = position_dodge(0.7), size = 1.2) +
-    ggh4x::facet_nested(dgp ~ outcome + n_id,
+    ggh4x::facet_nested(n_id ~ outcome,
                         axes = "all",
                         remove_labels = "y") +
-    # scale_x_discrete(guide = guide_axis(angle = 90)) +
-    scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)) +
     scale_color_manual(values = meth_colors) +
     theme_centrality() +
     theme(
@@ -495,28 +608,35 @@ plot_rmse <- function(df){
       colour = "",
       group = "",
       fill = "",
-      y = "RMSE"
+      y = y_label
     )
 }
+
+## Generate and save combined plots
+generate_regression_plots <- function(data, summary, y_label, file_name) {
+  processed_list <- process_data(data, summary)
+  plot_list <- lapply(processed_list, create_regression_plot, y_label = y_label)
+  combined_plot <- cowplot::plot_grid(
+    plotlist = plot_list, 
+    ncol = 1,
+    labels = c("True Effect: 0", "True Effect: 0.2", "True Effect: 0.4")
+  )
+  ggsave(file_name, combined_plot, height = 16 * 0.95, width = 16 * 0.8, 
+         path = here::here("figures/"))
+}
+
+
+## RMSE Plot
+generate_regression_plots(sr_edit, "rmsereg", "RMSE", "plot_reg_rmse_combined.pdf")
+
+## Bias Plot
+generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined.pdf")
+
 ```
 
-Create and combine Plots:
-```{r plot-rmsereg-combined}
-plot_rmse_list <- lapply(rmse_list, plot_rmse)
 
-plot_rmse_combined <- cowplot::plot_grid(plotlist = plot_rmse_list, 
-                                         ncol = 1,
-                                        labels = c("True Effect: 0", 
-                                                   "True Effect: 0.2",
-                                                   "True Effect: 0.4"))
-ggsave("plot_reg_rmse_combined.pdf", plot_rmse_combined, height = 12, width = 16,
-       path = here::here("figures/"))
 
-# plot_rmse_combined
 
-```
-
-![](figures/plot_reg_rmse_combined.pdf)
 
 
 # MCMC Diagnostics
@@ -535,11 +655,6 @@ Second, we tabulate divergent transitions:
 sim_results |> 
   select(contains("divtrans")) |> 
   rename_with(~ str_remove(., "bmlvar_diagnostics."), everything()) |> 
-  # rename(
-  #   "Mean Number of\nDivTrans" = divtrans_bmlvar_mean,
-  #   "Sum of\nDivTrans" = divtrans_bmlvar_sum,
-  #   "Number of Models\nwith Divtrans" = divtrans_bmlvar_sumnonz
-  # ) |> 
   knitr::kable(col.names = c("Mean Number of DivTrans",
                             "Sum of DivTrans",
                             "Models with Divtrans"))
@@ -547,12 +662,12 @@ sim_results |>
 
 
 
-
 # Create Overview Table for Supplement
 Create one long overview table over all performance measures for the supplement.
 
 ```{r overview-table}
-
+sim_results |>
+  
 ``` 
 
 
