@@ -60,6 +60,10 @@ library(bayesplot)
 library(broom)
 library(MetBrewer)
 library(betaDelta)  # double check
+library(ggdist)
+library(ggh4x)
+library(sysfonts)
+library(showtext)
 
 source(here("scripts", "00_functions.R"))
 set.seed(35037)
@@ -872,12 +876,12 @@ gt_table |>
 
 
 
-# Addition: Bayesian Model Checks
+# BmlVAR Results in more detail
 
-We additionally check the convergence of the Bayesian model by examining convergence statistics.
+
 
 ## Convergence Statistics
-
+We additionally check the convergence of the Bayesian model by examining convergence statistics.
 We check all Rhats and effective sample sizes:
 ```{r bmlvar-convergence}
 fit_bmlvar <- readRDS(here::here("output", "empirical_example", "fit_bmlvar_empirical.rds"))
@@ -916,11 +920,131 @@ divtrans_bmlvar <- rstan::get_num_divergent(fit_bmlvar)
 We observed `r divtrans_bmlvar` divergent transitions. 
 
 
+
+## Uncertainty of Centrality
+
+### Proportion of most central node
+For each individual, we can simply count number of sampling iterations in which any node was the most central node to obtain an uncertainty statistic. 
+```{r extract-outstrength}
+outstrength_draws <-
+    rstan::extract(object = fit_bmlvar, pars = "Beta_out_strength", permute = FALSE) |>
+    posterior::as_draws_matrix() |> 
+    as.data.frame()
+
+# convert to long
+outstrength_long <- outstrength_draws  |> 
+  mutate(iteration = row_number()) |>  
+  pivot_longer(
+    cols = starts_with("Beta_out_strength"),
+    names_to = c("id", "variable"),
+    names_pattern = "Beta_out_strength\\[(\\d+),(\\d+)\\]",
+    values_to = "outstrength"
+  ) |> 
+  mutate(id = as.factor(id), 
+         variable = as.factor(variable))
+
+
+```
+
+We now calculate the proportion of having the highest outstrength for each variable: 
+```{r prop-highest-centrality}
+highest_outstrength <- outstrength_long |>
+  group_by(iteration, id) |> 
+  filter(outstrength == max(outstrength)) |> 
+  ungroup()
+
+variable_counts <- highest_outstrength |>
+  group_by(id, variable) |>
+  summarise(count = n(), .groups = "drop")
+
+total_iterations <- outstrength_long |>
+  group_by(id) |>
+  summarise(total = n_distinct(iteration), .groups = "drop") 
+
+all_combinations <- expand.grid(
+  id = unique(outstrength_long$id),
+  variable = unique(outstrength_long$variable)
+)
+
+complete_counts <- all_combinations |>
+  left_join(variable_counts, by = c("id", "variable")) |>
+  mutate(count = replace_na(count, 0)) # Replace NA counts with 0
+
+proportions <- complete_counts |>
+  left_join(total_iterations, by = "id") |>
+  mutate(proportion = count / total) |>
+  select(id, variable, proportion)
+
+
+```
+
+
+Visualize proportions: 
+```{r viz-most-central-prop}
+proportions |> 
+  ggplot(aes(y = variable, 
+             x = proportion, 
+             group = variable,
+             color = variable))+
+  ggdist::stat_histinterval()+
+  geom_point(size = .5)+
+  theme_centrality()+
+  theme(legend.position = "none")
+
+```
+
+
+### Centrality uncertainty visualizations
+We find two participants, one for which the most central node has a lower uncertainty, and one for which it is higher: 
+
+```{r two-examples-centrality}
+outstrength_bmlvar <- ests_bmlvar$outstrength_est
+
+max_outstrength <- sapply(outstrength_bmlvar$median, which.max)
+outstrength_df <- data.frame(
+  id = 1:92,
+  most_cent = max_outstrength
+)
+
+# attach the proportions
+extreme_props <- outstrength_df |> 
+  mutate(id = as.factor(id),
+         most_cent = as.factor(most_cent)) |> 
+  left_join(proportions, by = c("id" = "id", "most_cent" = "variable")) |> 
+  arrange(proportion) |> 
+  mutate(
+  lowest = min(proportion),
+  highest = max(proportion)
+  ) |> 
+  filter(proportion == lowest | proportion == highest) 
+
+extreme_ids <- as.numeric(unique(extreme_props$id))
+```
+
+We then create uncertainty plots for their proportions: 
+```{r centrality-uncertainty}
+# extract and plot their posterior samples
+outstrength_long |> 
+  filter(id %in% extreme_ids) |> 
+  mutate(id = paste0("Participant ", id)) |> 
+  ggplot(aes(x = outstrength, y = variable))+
+  ggdist::stat_slabinterval()+
+  facet_wrap2(~id,
+              axes = "all")+
+  theme_centrality()
+
+```
+
+
+
 ## Posterior Predictive
 
 ```{r bmlvar-postpred}
 
 ```
+
+
+
 
 
 
