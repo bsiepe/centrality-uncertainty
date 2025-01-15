@@ -293,6 +293,11 @@ plot_mostcentral
 
 ## Plot rank correlation of centrality measures
 
+We were interested in the performance of centrality estimation, which we assessed with regard to rank-order performance. As we expected centrality estimates to be biased downwards in some methods due to sparsity assumptions, we computed the rank-order consistency of individual centrality estimates. To do so, we computed the point estimate of network centrality $\hat{c}$ per individual in a data set, which ignored estimation uncertainty. We then estimated the Spearman rank correlation $\hat{\rho}_{i}$ in repetition $i$ of these estimates with the true network centrality $c$ and calculated its average across repetitions as:
+\begin{align*}
+    \widehat{\rho} = \frac{\sum_{i=1}^{n_{\text{sim}}} \hat{\rho}_i}{n_{\text{sim}}}
+\end{align*}
+We calculated the MCSE of this correlation via bootstrapping. 
 ```{r viz-rank-correlation}
 plot_rankcor <- sr_edit |> 
   # if mcse is missing, set to 0
@@ -338,6 +343,11 @@ ggsave("plot_rankcor.pdf", plot_rankcor, height = 12, width = 16,
        path = here::here("figures/"), device = "pdf")
 
 ``` 
+
+
+![](figures/plot_rankcor.pdf)
+
+
 
 # Regression
 
@@ -537,7 +547,8 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
           legend.text = element_text(size = 18),
           legend.title = element_text(size = 18),
           legend.key.size = unit(1.5, "lines"),
-          strip.text.x = ggplot2::element_text(size = 26)
+          strip.text = ggplot2::element_text(size = 24),
+          strip.text.x.top = ggplot2::element_text(size = 24)
           )
 
 ggsave("plot_power_bias_outstrength.pdf", 
