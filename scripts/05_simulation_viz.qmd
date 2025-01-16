@@ -267,6 +267,12 @@ plot_mostcentral <- sr_edit |>
                  show.legend = FALSE)+
   geom_point(position = position_dodge(0.7), 
              size = 1.4) +
+  # add mean as text above errorbar
+    geom_text(aes(label = sprintf("%.2f", mean)),
+              position = position_dodge(0.8),
+              vjust = -0.6,
+              size = 5,
+              show.legend = FALSE) +
   ggh4x::facet_nested(n_id ~ outcome,
                       axes = "all",
                       remove_labels = "y") +
