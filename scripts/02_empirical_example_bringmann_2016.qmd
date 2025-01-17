@@ -64,7 +64,6 @@ library(ggdist)
 library(ggh4x)
 library(sysfonts)
 library(showtext)
-
 source(here("scripts", "00_functions.R"))
 set.seed(35037)
 ```
@@ -1010,7 +1009,7 @@ outstrength_df <- data.frame(
   most_cent = max_outstrength
 )
 
-# attach the proportions
+# attach the proportions (in an ugly manner, I know)
 extreme_props <- outstrength_df |> 
   mutate(id = as.factor(id),
          most_cent = as.factor(most_cent)) |> 
@@ -1020,7 +1019,16 @@ extreme_props <- outstrength_df |>
   lowest = min(proportion),
   highest = max(proportion)
   ) |> 
-  filter(proportion == lowest | proportion == highest) 
+  filter(proportion == lowest | proportion == highest) |> 
+  mutate(most_cent = as.numeric(most_cent)) |> 
+  mutate(most_cent = case_match(most_cent, 
+    1 ~ var_names[1],
+    2 ~ var_names[2],
+    3 ~ var_names[3],
+    4 ~ var_names[4],
+    5 ~ var_names[5],
+    6 ~ var_names[6]
+  ))
 
 extreme_ids <- as.numeric(unique(extreme_props$id))
 
@@ -1029,6 +1037,21 @@ proportion_labels <- proportions |>
   mutate(id = paste0("Participant ", id)) |> 
   mutate(proportion = sub("^(-?)0.", "\\1.",sprintf("%.2f", proportion))) |> 
   mutate(variable = factor(variable, levels = 1:6, labels = var_names))
+
+# change alpha based on most cent
+proportion_labels <- proportion_labels |>
+  mutate(id = as.character(id)) |>
+  mutate(variable = as.character(variable)) |>
+  left_join(extreme_props |>
+               select(id, most_cent) |>
+              mutate(id = as.character(id),
+                     most_cent = as.character(most_cent)) |>
+              mutate(id = paste0("Participant ", id)),
+            by = "id") |>
+  # change alpha based on most cent
+  mutate(alpha = if_else(variable == most_cent, 
+                         1, 0.5))
+
 
 
 # for each participant, add the string "p(c_p = c_max)" to the plot above the first row
@@ -1071,7 +1094,8 @@ most_central_example_plot <- outstrength_long |>
               axes = "all")+
   theme_centrality()+
   theme(axis.text.y = element_text(size = 14),
-        axis.text.x = element_text(size = 14))+
+        axis.text.x = element_text(size = 14),
+        strip.text.x.top = element_text(18))+
   labs(y = "", x = "Outstrength")
 
 ggsave(here("figures", "empirical_example", "most_central_example_plot.pdf"), width = 9 * 0.8, height = 6 * 0.8)
