@@ -83,9 +83,9 @@ sim_res_cut <- sim_results |>
 
 
 Attach the seed information from the previous simulation output (before resummarization):
-#```{r}
-#sim_results <- readRDS(here("output/", "sim_results.rds"))
-# ```
+<!-- #```{r} -->
+<!-- #sim_results <- readRDS(here("output/", "sim_results.rds")) -->
+<!-- # ``` -->
 
 
 ## Data Wrangling
@@ -268,7 +268,7 @@ plot_mostcentral <- sr_edit |>
   geom_point(position = position_dodge(0.8), 
              size = 1.4) +
   # add mean as text above errorbar
-    geom_text(aes(label = sprintf("%.2f", mean)),
+    geom_text(aes(label = sub("^(-?)0.", "\\1.",sprintf("%.2f", mean))),
               position = position_dodge(0.8),
               vjust = -1.0,
               size = 4,
@@ -522,8 +522,8 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
     geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
     geom_point(position = position_dodge(0.8), 
                size = 1.4) +
-    # add mean as text above errorbar
-    geom_text(aes(label = round(mean, 2)),
+    # add mean without leading zero
+    geom_text(aes(label = sub("^(-?)0.", "\\1.",sprintf("%.2f", mean))),
               position = position_dodge(0.8),
               vjust = -0.6,
               size = 5,
@@ -538,7 +538,7 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
     )+
     labs(
       title = "",
-      x = "Timepoints",
+      x = "Time Points",
       colour = "",
       fill = "",
       group = "",
@@ -548,11 +548,13 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
     theme_centrality() +
     theme(legend.position = "bottom",
           ggh4x.facet.nestline = element_line(colour = "#6d6d6e"),
-          axis.text = element_text(size = 18),
+          axis.text.x = element_text(size = 22),
+          axis.text.y = element_text(size = 22),
+          axis.title.x = element_text(size = 24),
           # increase all legend element size
-          legend.text = element_text(size = 18),
-          legend.title = element_text(size = 18),
-          legend.key.size = unit(1.5, "lines"),
+          legend.text = element_text(size = 24),
+          legend.title = element_text(size = 24),
+          legend.key.size = unit(1.6, "lines"),
           strip.text = ggplot2::element_text(size = 24),
           strip.text.x.top = ggplot2::element_text(size = 24)
           )
