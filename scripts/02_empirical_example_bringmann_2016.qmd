@@ -64,6 +64,7 @@ library(ggdist)
 library(ggh4x)
 library(sysfonts)
 library(showtext)
+library(beeswarm)
 source(here("scripts", "00_functions.R"))
 set.seed(35037)
 ```
@@ -467,16 +468,7 @@ For the Bayesian approach, we perform network estimation and regression in one s
 ### Network & Regression
 
 We first need to compile the model, and then estimate it with similar settings as in the simulation study: 
-```{r fit-bmlvar}
-#| eval: !expr params$rerun
-
-model_name <- "MLVAR_lkj_only_empirical_example"
-
-stan_model <-   rstan::stan_model(
-    file = here::here("scripts", "models", paste0(model_name, ".stan")),
-    model_name = model_name
-  )
-
+```{r stan_data}
 n_var <- 6
 
 # indicators for partial correlations
@@ -514,6 +506,17 @@ stan_data <- list(
     reg_covariate = reg_data,
     sparsity = 2,
     mean_center = 0
+  )
+```
+
+```{r fit-bmlvar}
+#| eval: !expr params$rerun
+
+model_name <- "MLVAR_lkj_only_empirical_example"
+
+stan_model <-   rstan::stan_model(
+    file = here::here("scripts", "models", paste0(model_name, ".stan")),
+    model_name = model_name
   )
   
 pre_bmlvar <- Sys.time()  

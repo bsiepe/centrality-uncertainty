@@ -2,6 +2,7 @@
 fits/
 fits/mlvar_fit.rds
 scripts/graveyard.qmd
+output/empirical_example/
 
 .Rproj.user
 .Rhistory
