@@ -142,7 +142,7 @@ sr_edit <- sim_res_cut |>
 Prepare different colors and settings for visualization: 
 ```{r viz-prep}
 # meth_colors <- ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)]
-meth_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,3,4,5)],
+meth_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,2,4,5)],
                          c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
 ```
 
@@ -500,7 +500,7 @@ power_bias_reg_combined_df <- sr_edit |>
   mutate(n_tp = factor(n_tp, levels = c("t = 60", "t = 120"))) |>
   # split pm into two columns, take last number into new column
   separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) |> 
-  mutate(method = factor(method, levels = c("GVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
+  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) |> 
   mutate(true_effect = paste0("True Effect: .", true_effect)) |> 
   mutate(pm = case_when(
     str_detect(pm, "power") ~ "Detection Rate",
