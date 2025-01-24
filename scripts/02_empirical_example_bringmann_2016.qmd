@@ -270,10 +270,18 @@ df_data <- data_bringmann_imputed |>
 
 We also scale all variables per person for the LASSO approach: 
 ```{r scale}
-df_data <- df_data |> 
+df_data_scaled <- df_data |> 
   group_by(subj_id) |> 
   mutate(across(everything(), ~scale(.x))) |> 
   ungroup()
+
+data_list_scaled <- split(df_data, ~subj_id)
+```
+
+Also scale the regression outcome: 
+
+```{r}
+neuroticism_vec_scaled <- scale(neuroticism_vec_clean)
 ```
 
 
@@ -286,7 +294,7 @@ To estimate idiographic networks, we first split the data and then estimate a gr
 ```{r fit-gvar}
 #| eval: !expr params$rerun
 # subset data per person
-data_list <- split(df_data, ~ subj_id)
+data_list <- split(df_data_scaled, ~ subj_id)
 
 vars <- data_bringmann_imputed |> 
   select(-c(subj_id, neuroticism)) |> 
@@ -294,7 +302,7 @@ vars <- data_bringmann_imputed |>
 
 pre_gvar <- Sys.time()
 # fit for each individual
-fit_gvar <- lapply(data_list, function(x){
+fit_gvar <- lapply(data_list_scaled, function(x){
     tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
                                nLambda = 50,
                                vars = vars,
@@ -327,7 +335,7 @@ outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1])
 
 # Combine into dataframe with neuroticism
 # get neuroticism scores of filtered data frame
-reg_df_gvar <- data.frame(neuroticism = neuroticism_vec_clean,
+reg_df_gvar <- data.frame(neuroticism = neuroticism_vec_scaled,
                           dens_temp = dens_temp_gvar,
                           outstrength = outstrength_gvar_first)
 
@@ -356,7 +364,7 @@ vars <- data_bringmann_imputed |>
   colnames()
 
 pre_mlvar <- Sys.time()
-fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(data_bringmann_imputed,
+fit_mlvar <- tryCatch({suppressMessages(mlVAR::mlVAR(df_data_scaled,
                             vars = vars,
                             idvar = "subj_id",
                             estimator = "lmer",
@@ -384,7 +392,7 @@ dens_temp_mlvar <- unlist(cent_mlvar$dens_temp)
 outstrength_mlvar_first <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
 
 # Combine into dataframe with neuroticism
-reg_df_mlvar <- data.frame(neuroticism = neuroticism_vec_clean,
+reg_df_mlvar <- data.frame(neuroticism = neuroticism_vec_scaled,
                           dens_temp = dens_temp_mlvar,
                           outstrength = outstrength_mlvar_first)
 ```
@@ -404,10 +412,8 @@ reg_mlvar_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar)
 
 ```{r fit-gimme}
 #| eval: !expr params$rerun
-data_list <- split(df_data, ~ subj_id)
-
 # remove subject_id from each data set
-data_list <- lapply(data_list, function(x){
+data_list <- lapply(data_list_scaled, function(x){
     x |> 
       select(-c(subj_id))
   }) 
@@ -446,7 +452,7 @@ dens_temp_gimme <- cent_gimme$dens_temp
 outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
 
 # Combine into dataframe with neuroticism
-reg_df_gimme <- data.frame(neuroticism = neuroticism_vec_clean,
+reg_df_gimme <- data.frame(neuroticism = neuroticism_vec_scaled,
                           dens_temp = unlist(dens_temp_gimme),
                           outstrength = outstrength_gimme_first)
 ```
@@ -478,11 +484,11 @@ idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |>
   
 # repeat the outcome because we have two single-predictor regressions
 reg_data <- cbind(
-    neuroticism_vec_clean,
-    neuroticism_vec_clean
+    neuroticism_vec_scaled,
+    neuroticism_vec_scaled
   )
-Y <- data_bringmann_imputed |> 
-    dplyr::select(-c("subj_id", "neuroticism")) |>  
+Y <- df_data_scaled |> 
+    dplyr::select(-c("subj_id")) |>  
     as.matrix()
 
 # obtain number of time points per person 
@@ -627,7 +633,7 @@ cond_colors <- set_names(ggokabeito::palette_okabe_ito()[c(5, 1, 3, 4)],
 
 cond_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,2,4,5)],
                          c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
-n_id <- length(neuroticism_vec_clean)
+n_id <- length(neuroticism_vec_scaled)
 
 ```
 
