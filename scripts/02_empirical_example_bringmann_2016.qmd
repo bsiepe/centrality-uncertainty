@@ -39,7 +39,7 @@ execute:
   warning: false
   eval: true
 params:
-  rerun: false  # define parameter if all large analyses should be rerun
+  rerun: true  # define parameter if all large analyses should be rerun
 ---
 
 # Preparation
@@ -487,7 +487,7 @@ fit_gimme_scaled <- gimme::gimme(data_list_scaled_gimme,
 
 gimme_fit_time <- Sys.time()-pre_gimme
 
-saveRDS(fit_gimme, here("output", "empirical_example", "fit_gimme_scaled.rds"))
+saveRDS(fit_gimme_scaled, here("output", "empirical_example", "fit_gimme_scaled.rds"))
 
 # centered
 data_list_centered_gimme <- lapply(data_list_centered, function(x){
@@ -518,7 +518,7 @@ fit_gimme_centered <- readRDS(here("output", "empirical_example", "fit_gimme_cen
 # scaled
 # obtain partial correlations
 fit_gimme_scaled$contemp_mat <- lapply(1:length(fit_gimme_scaled$path_est_mats), function(i){
-      gimme_cor_mat(fit_gimme, id = i, n_vars = 6, pcor = TRUE)
+      gimme_cor_mat(fit_gimme_scaled, id = i, n_vars = 6, pcor = TRUE)
 })
 
 cent_gimme_scaled <- centrality_gimme(fit_gimme_scaled, var_only = TRUE)
@@ -532,7 +532,7 @@ reg_df_gimme_scaled <- data.frame(neuroticism = neuroticism_vec_scaled,
 
 # centered
 fit_gimme_centered$contemp_mat <- lapply(1:length(fit_gimme_centered$path_est_mats), function(i){
-      gimme_cor_mat(fit_gimme, id = i, n_vars = 6, pcor = TRUE)
+      gimme_cor_mat(fit_gimme_centered, id = i, n_vars = 6, pcor = TRUE)
 })
 
 cent_gimme_centered <- centrality_gimme(fit_gimme_centered, var_only = TRUE)
@@ -540,7 +540,7 @@ cent_gimme_centered <- centrality_gimme(fit_gimme_centered, var_only = TRUE)
 dens_temp_gimme_centered <- cent_gimme_centered$dens_temp
 outstrength_gimme_centered_first <- sapply(cent_gimme_centered$outstrength, function(x) unname(x[1]))
 
-reg_df_gimme_centered <- data.frame(neuroticism = neuroticism_vec_centered,
+reg_df_gimme_centered <- data.frame(neuroticism = neuroticism_vec_scaled,
                           dens_temp = unlist(dens_temp_gimme_centered),
                           outstrength = outstrength_gimme_centered_first)
 
@@ -641,7 +641,7 @@ fit_bmlvar_scaled <- rstan::sampling(
   object = stan_model,
   pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
   include = FALSE,
-  data = stan_data,
+  data = stan_data_scaled,
   chains = 4,
   cores = 4,
   warmup =500,

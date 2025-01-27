@@ -1,5 +1,5 @@
 params <-
-list(rerun = FALSE)
+list(rerun = TRUE)
 
 #' ---
 #' title: "Uncertainty is central for reliable inferences: 
@@ -42,13 +42,13 @@ list(rerun = FALSE)
 #'   warning: false
 #'   eval: true
 #' params:
-#'   rerun: false  # define parameter if all large analyses should be rerun
+#'   rerun: true  # define parameter if all large analyses should be rerun
 #' ---
 #' 
 #' # Preparation
 #' In this document, we will use an empirical data set to demonstrate the results of different network analysis techniques. 
 #' 
-## ----setup-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----setup------------------------------------------------------------------------------------------------------------------------------------------------------
 # Libraries
 library(tidyverse)
 library(graphicalVAR)
@@ -63,7 +63,11 @@ library(bayesplot)
 library(broom)
 library(MetBrewer)
 library(betaDelta)  # double check
-
+library(ggdist)
+library(ggh4x)
+library(sysfonts)
+library(showtext)
+library(beeswarm)
 source(here("scripts", "00_functions.R"))
 set.seed(35037)
 
@@ -72,7 +76,7 @@ set.seed(35037)
 #' # Data 
 #' 
 #' Load data:
-## ----load-data-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----load-data--------------------------------------------------------------------------------------------------------------------------------------------------
 data_bringmann <- readRDS(here::here("data", "data_Bringmann2016.RDS"))
 
 #' 
@@ -80,7 +84,7 @@ data_bringmann <- readRDS(here::here("data", "data_Bringmann2016.RDS"))
 #' ## Cleaning
 #' 
 #' Apparently, the neuroticism values are not imported correctly - the 95 values for different IDs are simply shown in the first 95 rows. We need to clean the data first.
-## ----clean-data------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----clean-data-------------------------------------------------------------------------------------------------------------------------------------------------
 data_bringmann <- data_bringmann |> 
   janitor::clean_names()
 
@@ -104,58 +108,58 @@ data_bringmann <- data_bringmann |>
 #' ## Descriptives & Missing Values 
 #' 
 #' We first plot the distributions of all variables: 
-## ----descriptives----------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# data_bringmann |> 
-#   select(-c(subj_id, neuroticism)) |> 
-#   gather() |> 
-#   ggplot(aes(value)) +
-#   geom_histogram(fill = "#0072B2") +
-#   facet_wrap(~key, scales = "free") +
-#   theme_centrality()+
-#   scale_x_continuous(expand = c(0, 0)) +
-#   scale_y_continuous(expand = c(0, 0))
+## ----descriptives-----------------------------------------------------------------------------------------------------------------------------------------------
+data_bringmann |> 
+  select(-c(subj_id, neuroticism)) |> 
+  gather() |> 
+  ggplot(aes(value)) +
+  geom_histogram(fill = "#0072B2") +
+  facet_wrap(~key, scales = "free") +
+  theme_centrality()+
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0))
 
 #' We can see considerable skewness in the "negative" variables. 
 #' 
 #' 
 #' 
 #' Next, we check for missing values by calculating the missingness proportions for each variable and subject:
-## ----missing-values--------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# data_bringmann |> 
-#   select(-c(neuroticism)) |> 
-#   group_by(subj_id) |> 
-#   summarise_all(~sum(is.na(.x))/n()) |>
-#   select(-subj_id) |> 
-#   gather() |>
-#   ggplot(aes(value)) +
-#   geom_histogram(fill = "#0072B2") +
-#   facet_wrap(~key, scales = "free") +
-#   theme_centrality()+
-#   scale_x_continuous(expand = c(0, 0), labels = scales::label_percent()) +
-#   scale_y_continuous(expand = c(0, 0))
+## ----missing-values---------------------------------------------------------------------------------------------------------------------------------------------
+data_bringmann |> 
+  select(-c(neuroticism)) |> 
+  group_by(subj_id) |> 
+  summarise_all(~sum(is.na(.x))/n()) |>
+  select(-subj_id) |> 
+  gather() |>
+  ggplot(aes(value)) +
+  geom_histogram(fill = "#0072B2") +
+  facet_wrap(~key, scales = "free") +
+  theme_centrality()+
+  scale_x_continuous(expand = c(0, 0), labels = scales::label_percent()) +
+  scale_y_continuous(expand = c(0, 0))
 
 #' 
 #' Apparently, the missingness is almost identical for all variables. 
 #' 
 #' Calculate the average missingness per person: 
-## ----missings-person-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# data_bringmann |> 
-#   select(-c(neuroticism)) |> 
-#   group_by(subj_id) |> 
-#   summarise(across(everything(),
-#                    ~sum(is.na(.x))/n())) |> 
-#   summarise(across(everything(),
-#                    ~mean(.x, na.rm = TRUE))) |> 
-#   # take average across all variables
-#   select(!subj_id) |> 
-#   pull() |>
-#   mean()
+## ----missings-person--------------------------------------------------------------------------------------------------------------------------------------------
+data_bringmann |> 
+  select(-c(neuroticism)) |> 
+  group_by(subj_id) |> 
+  summarise(across(everything(),
+                   ~sum(is.na(.x))/n())) |> 
+  summarise(across(everything(),
+                   ~mean(.x, na.rm = TRUE))) |> 
+  # take average across all variables
+  select(!subj_id) |> 
+  pull() |>
+  mean()
 
 #' 
 #' 
 #' 
 #' We can now check for zero or very low variances per individual, and then filter them out:
-## ----zero-variance---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----zero-variance----------------------------------------------------------------------------------------------------------------------------------------------
 subj_to_exclude <- data_bringmann |> 
   select(-c(neuroticism)) |> 
   group_by(subj_id) |> 
@@ -172,24 +176,24 @@ neuroticism_vec_clean <- data_bringmann |>
   distinct(neuroticism) |>
   pull(neuroticism)
 
-# subj_to_exclude |> 
-#   knitr::kable()
+subj_to_exclude |> 
+  knitr::kable()
 
 #' 
 #' As we can see, they all have a very low variance for "depressed"" and, in one case, for "dysphoric" and "anxious" as well.
 #' 
 #' We then create an overview table that gives the average of person-specific means, standard deviations, and non-missing observations for all variables: 
 #' 
-## ----summary-table---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# data_bringmann |> 
-#   select(-c(neuroticism)) |> 
-#   group_by(subj_id) |> 
-#   summarize(across(everything(),
-#                    list(mean = ~round(mean(.x, na.rm = TRUE), 2),
-#                           sd = ~round(sd(.x, na.rm = TRUE), 2),
-#                           obs = ~sum(!is.na(.x))),
-#                    .names = "{.col}_{.fn}")) |> 
-#   knitr::kable()
+## ----summary-table----------------------------------------------------------------------------------------------------------------------------------------------
+data_bringmann |> 
+  select(-c(neuroticism)) |> 
+  group_by(subj_id) |> 
+  summarize(across(everything(),
+                   list(mean = ~round(mean(.x, na.rm = TRUE), 2),
+                          sd = ~round(sd(.x, na.rm = TRUE), 2),
+                          obs = ~sum(!is.na(.x))),
+                   .names = "{.col}_{.fn}")) |> 
+  knitr::kable()
 
 #' 
 #' 
@@ -198,7 +202,7 @@ neuroticism_vec_clean <- data_bringmann |>
 #' 
 #' ## Imputation
 #' Some of the methods require imputation, so we impute per person and per variable, using a Kalman filter approach.
-## ----impute----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----impute-----------------------------------------------------------------------------------------------------------------------------------------------------
 # Try higher number of iterations
 new_param <- list(maxit = 5000)
 
@@ -216,7 +220,7 @@ convergence_warnings<- dplyr::last_dplyr_warnings(n = 15)
 #' 
 #' We observe some potential convergence issues here (see [here](https://github.com/SteffenMoritz/imputeTS/issues/60) for more information). In this case, it makes sense to inspect the imputed values for the affected time series. 
 #' 
-## ----impute-convergence-check, eval = FALSE--------------------------------------------------------------------------------------------------------------------------------------------
+## ----impute-convergence-check, eval = FALSE---------------------------------------------------------------------------------------------------------------------
 ## # Obtain IDs with convergence issues
 ## convergence_ids <- sapply(convergence_warnings, function(x){
 ##   x$message[[2]] |>
@@ -248,7 +252,7 @@ convergence_warnings<- dplyr::last_dplyr_warnings(n = 15)
 #' 
 #' 
 #' We rename the imputed columns and delete the non-imputed ones:
-## ----impute-finalize-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----impute-finalize--------------------------------------------------------------------------------------------------------------------------------------------
 data_bringmann_imputed <- data_bringmann_imputed |> 
   select(subj_id, contains("_imp"), neuroticism) |>
   rename_with(~str_remove(.x, "_imp"), contains("_imp"))
@@ -261,18 +265,41 @@ data_bringmann_imputed <- data_bringmann_imputed |>
 #' 
 #' We will now estimate the different network and subsequent regression models on the data set to predict neuroticism with the temporal outstrength.
 #' 
+#' ## Preparations
 #' We first split off the time-invariant outcome from the rest of the data:
-## ----ema-data--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----ema-data---------------------------------------------------------------------------------------------------------------------------------------------------
 df_data <- data_bringmann_imputed |> 
   select(-c(neuroticism))
 
 #' 
-#' We also scale all variables per person for the LASSO approach: 
-## ----scale-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-df_data <- df_data |> 
+#' We also either scale or person-center the data. 
+## ----scale------------------------------------------------------------------------------------------------------------------------------------------------------
+df_data_scaled <- df_data |> 
   group_by(subj_id) |> 
   mutate(across(everything(), ~scale(.x))) |> 
   ungroup()
+
+data_list_scaled <- split(df_data, ~subj_id)
+
+df_data_centered <- df_data |> 
+  group_by(subj_id) |> 
+  mutate(across(everything(), ~scale(.x, scale = FALSE))) |> 
+  ungroup()
+
+data_list_centered <- split(df_data_centered, ~subj_id)
+
+#' 
+#' Also scale the regression outcome: 
+#' 
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+neuroticism_vec_scaled <- scale(neuroticism_vec_clean)
+
+#' 
+#' Obtain variable names:
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+vars <- data_bringmann_imputed |> 
+  select(-c(subj_id, neuroticism)) |> 
+  colnames()
 
 #' 
 #' 
@@ -282,178 +309,255 @@ df_data <- df_data |>
 #' 
 #' To estimate idiographic networks, we first split the data and then estimate a graphical VAR model per person.
 #' 
-## ----fit-gvar--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# subset data per person
-data_list <- split(df_data, ~ subj_id)
-
-vars <- data_bringmann_imputed |>
-  select(-c(subj_id, neuroticism)) |>
-  colnames()
-
-pre_gvar <- Sys.time()
-# fit for each individual
-fit_gvar <- lapply(data_list, function(x){
-    tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x,
-                               nLambda = 50,
-                               vars = vars,
-                               verbose = FALSE,
-                               gamma = 0,
-                               scale = FALSE))}, error = function(e) NA)
-  })
-
-gvar_fit_time <- Sys.time() - pre_gvar
-# save results
-saveRDS(fit_gvar, here("output", "empirical_example", "fit_gvar.rds"))
-
-
+## ----fit-gvar---------------------------------------------------------------------------------------------------------------------------------------------------
+#| eval: !expr params$rerun
+#' pre_gvar <- Sys.time()
+#' # fit scaled data for each individual
+#' fit_gvar_scaled <- lapply(data_list_scaled, function(x){
+#'     tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
+#'                                nLambda = 50,
+#'                                vars = vars,
+#'                                verbose = FALSE,
+#'                                gamma = 0, 
+#'                                scale = FALSE))}, error = function(e) NA)
+#'   })
 #' 
-## ----include = FALSE-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
+#' gvar_fit_time <- Sys.time() - pre_gvar
+#' # save results
+#' saveRDS(fit_gvar_scaled, here("output", "empirical_example", "fit_gvar_scaled.rds"))
 #' 
+#' # fit centered data for each individual
+#' fit_gvar_centered <- lapply(data_list_centered, function(x){
+#'     tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
+#'                                nLambda = 50,
+#'                                vars = vars,
+#'                                verbose = FALSE,
+#'                                gamma = 0, 
+#'                                scale = FALSE))}, error = function(e) NA)
+#'   })
 #' 
-#' ### Regression
-#' 
-#' We first need to obtain the outstrength and density values for each individual: 
-## ----centrality-gvar-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-cent_gvar <- purrr::transpose(lapply(fit_gvar, function(x){
-    centrality_gvar(x)
-  }))
-
-dens_temp_gvar <- unlist(cent_gvar$dens_temp)
-outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1]))
-
-# Combine into dataframe with neuroticism
-# get neuroticism scores of filtered data frame
-reg_df_gvar <- data.frame(neuroticism = neuroticism_vec_clean,
-                          dens_temp = dens_temp_gvar,
-                          outstrength = outstrength_gvar_first)
-
-
-#' 
-#' Now we can regress neuroticism on outstrength:
-## ----reg-gvar--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-reg_gvar_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gvar)
-
-#' 
-#' And we can regress it on the temporal density:
-## ----reg-gvar-dens---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-reg_gvar_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gvar)
-
-#' 
-#' ## `mlVAR`
-#' 
-#' ### Network
-#' 
-#' We fit an mlVAR model to the data: 
-## ----fit-mlvar-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-vars <- data_bringmann_imputed |>
-  select(-c(subj_id, neuroticism)) |>
-  colnames()
-
-pre_mlvar <- Sys.time()
-fit_mlvar <- tryCatch({suppressWarnings(mlVAR::mlVAR(data_bringmann_imputed,
-                            vars = vars,
-                            idvar = "subj_id",
-                            estimator = "lmer",
-                            contemporaneous = "correlated",
-                            temporal = "correlated",
-                            nCores = 1,
-                            scale = FALSE))}, error = function(e) NA)
-
-mlvar_fit_time <- Sys.time() - pre_mlvar
-saveRDS(fit_mlvar, here("output", "empirical_example", "fit_mlvar.rds"))
-
-#' 
-
-
+#' # save results
+#' saveRDS(fit_gvar_centered, here("output", "empirical_example", "fit_gvar_centered.rds"))
 #' 
 #' 
-#' ### Regression
 #' 
-#' We obtain the network features: 
-## ----centrality-mlvar------------------------------------------------------------------------------------------------------------------------------------------------------------------
-cent_mlvar <- centrality_mlvar(fit_mlvar)
-
-dens_temp_mlvar <- unlist(cent_mlvar$dens_temp)
-outstrength_mlvar_first <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
-
-# Combine into dataframe with neuroticism
-reg_df_mlvar <- data.frame(neuroticism = neuroticism_vec_clean,
-                          dens_temp = dens_temp_mlvar,
-                          outstrength = outstrength_mlvar_first)
-
+#' #' 
+#' ## ----include = FALSE--------------------------------------------------------------------------------------------------------------------------------------------
+#' fit_gvar_scaled <- readRDS(here("output", "empirical_example", "fit_gvar_scaled.rds"))
+#' fit_gvar_centered <- readRDS(here("output", "empirical_example", "fit_gvar_centered.rds"))
 #' 
-#' Now perform both regressions again: 
-## ----reg-mlvar-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-reg_mlvar_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_mlvar)
-
+#' #' 
+#' #' 
+#' #' ### Regression
+#' #' 
+#' #' We first need to obtain the outstrength and density values for each individual: 
+#' ## ----centrality-gvar--------------------------------------------------------------------------------------------------------------------------------------------
+#' # scaled data
+#' cent_gvar_scaled <- purrr::transpose(lapply(fit_gvar_scaled, function(x){
+#'     centrality_gvar(x)
+#'   }))
 #' 
-## ----reg-mlvar-dens--------------------------------------------------------------------------------------------------------------------------------------------------------------------
-reg_mlvar_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar)
-
+#' dens_temp_gvar_scaled <- unlist(cent_gvar_scaled$dens_temp)
+#' outstrength_gvar_scaled_first <- sapply(cent_gvar_scaled$outstrength, function(x) unname(x[1]))
 #' 
-#' ## `GIMME`
-#' 
-#' ### Network
-#' 
-## ----fit-gimme-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-data_list <- split(df_data, ~ subj_id)
-
-# remove subject_id from each data set
-data_list <- lapply(data_list, function(x){
-    x |>
-      select(-c(subj_id))
-  })
-
-pre_gimme <- Sys.time()
-fit_gimme <- gimme::gimme(data_list,
-                            ar = TRUE,
-                            subgroup = TRUE,
-                            plot = FALSE,
-                            hybrid = FALSE,
-                            groupcutoff = .75,
-                            subcutoff = .75,
-                            VAR = TRUE)
-
-gimme_fit_time <- Sys.time()
-
-saveRDS(fit_gimme, here("output", "empirical_example", "fit_gimme.rds"))
-
-#' 
-## ----include = FALSE-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-fit_gimme <- readRDS(here("output", "empirical_example", "fit_gimme.rds"))
-
+#' reg_df_gvar_scaled <- data.frame(neuroticism = neuroticism_vec_scaled,
+#'                           dens_temp = dens_temp_gvar_scaled,
+#'                           outstrength = outstrength_gvar_scaled_first)
 #' 
 #' 
-#' ### Regression
+#' # centered data
+#' cent_gvar_centered <- purrr::transpose(lapply(fit_gvar_centered, function(x){
+#'     centrality_gvar(x)
+#'   }))
+#' dens_temp_gvar_centered <- unlist(cent_gvar_centered$dens_temp)
+#' outstrength_gvar_centered_first <- sapply(cent_gvar_centered$outstrength, function(x) unname(x[1]))
 #' 
-## ----centrality-gimme------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# obtain partial correlations
-fit_gimme$contemp_mat <- lapply(1:length(fit_gimme$path_est_mats), function(i){
-      gimme_cor_mat(fit_gimme, id = i, n_vars = 6, pcor = TRUE)
-})
-
-cent_gimme <- centrality_gimme(fit_gimme, var_only = TRUE)
-
-dens_temp_gimme <- cent_gimme$dens_temp
-outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
-
-# Combine into dataframe with neuroticism
-reg_df_gimme <- data.frame(neuroticism = neuroticism_vec_clean,
-                          dens_temp = unlist(dens_temp_gimme),
-                          outstrength = outstrength_gimme_first)
-
+#' reg_df_gvar_centered <- data.frame(neuroticism = neuroticism_vec_scaled,
+#'                           dens_temp = dens_temp_gvar_centered,
+#'                           outstrength = outstrength_gvar_centered_first)
 #' 
 #' 
-## ----reg-gimme-outstrength-------------------------------------------------------------------------------------------------------------------------------------------------------------
-reg_gimme_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gimme)
-
+#' #' 
+#' #' Now we can regress neuroticism on outstrength:
+#' ## ----reg-gvar---------------------------------------------------------------------------------------------------------------------------------------------------
+#' reg_gvar_scaled_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gvar_scaled)
+#' reg_gvar_centered_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gvar_centered)
 #' 
-## ----reg-gimmee-dens-------------------------------------------------------------------------------------------------------------------------------------------------------------------
-reg_gimme_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gimme)
+#' #' 
+#' #' And we can regress it on the temporal density:
+#' ## ----reg-gvar-dens----------------------------------------------------------------------------------------------------------------------------------------------
+#' reg_gvar_scaled_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gvar_scaled)
+#' reg_gvar_centered_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gvar_centered)
+#' 
+#' #' 
+#' #' ## `mlVAR`
+#' #' 
+#' #' ### Network
+#' #' 
+#' #' We fit an mlVAR model to the data: 
+#' ## ----fit-mlvar--------------------------------------------------------------------------------------------------------------------------------------------------
+#' #| eval: !expr params$rerun
+#' # scaled
+#' pre_mlvar <- Sys.time()
+#' fit_mlvar_scaled <- tryCatch({suppressMessages(mlVAR::mlVAR(df_data_scaled,
+#'                             vars = vars,
+#'                             idvar = "subj_id",
+#'                             estimator = "lmer",
+#'                             contemporaneous = "correlated",
+#'                             temporal = "correlated",
+#'                             nCores = 1,
+#'                             scale = FALSE))}, error = function(e) NA)
+#' 
+#' mlvar_fit_time <- Sys.time() - pre_mlvar
+#' saveRDS(fit_mlvar, here("output", "empirical_example", "fit_mlvar_scaled.rds"))
+#' 
+#' # centered
+#' fit_mlvar_centered <- tryCatch({suppressMessages(mlVAR::mlVAR(df_data_centered,
+#'                             vars = vars,
+#'                             idvar = "subj_id",
+#'                             estimator = "lmer",
+#'                             contemporaneous = "correlated",
+#'                             temporal = "correlated",
+#'                             nCores = 1,
+#'                             scale = FALSE))}, error = function(e) NA)
+#' saveRDS(fit_mlvar_centered, here("output", "empirical_example", "fit_mlvar_centered.rds"))
+#' 
+#' #' 
+#' ## ----include = FALSE--------------------------------------------------------------------------------------------------------------------------------------------
+#' fit_mlvar_scaled <- readRDS(here("output", "empirical_example", "fit_mlvar_scaled.rds"))
+#' fit_mlvar_centered <- readRDS(here("output", "empirical_example", "fit_mlvar_centered.rds"))
+#' 
+#' #' 
+#' #' 
+#' #' ### Regression
+#' #' 
+#' #' We obtain the network features: 
+#' ## ----centrality-mlvar-------------------------------------------------------------------------------------------------------------------------------------------
+#' # scaled
+#' cent_mlvar_scaled <- centrality_mlvar_scaled(fit_mlvar_scaled)
+#' 
+#' dens_temp_mlvar_scaled <- unlist(cent_mlvar_scaled$dens_temp)
+#' outstrength_mlvar_scaled_first <- sapply(cent_mlvar_scaled$outstrength, function(x) unname(x[1]))
+#' 
+#' reg_df_mlvar_scaled <- data.frame(neuroticism = neuroticism_vec_scaled,
+#'                           dens_temp = dens_temp_mlvar_scaled,
+#'                           outstrength = outstrength_mlvar_scaled_first)
+#' 
+#' # centered
+#' cent_mlvar_centered <- centrality_mlvar_centered(fit_mlvar_centered)
+#' 
+#' dens_temp_mlvar_centered <- unlist(cent_mlvar_centered$dens_temp)
+#' outstrength_mlvar_centered_first <- sapply(cent_mlvar_centered$outstrength, function(x) unname(x[1]))
+#' 
+#' reg_df_mlvar_centered <- data.frame(neuroticism = neuroticism_vec_centered,
+#'                           dens_temp = dens_temp_mlvar_centered,
+#'                           outstrength = outstrength_mlvar_centered_first)
+#' 
+#' #' 
+#' #' Now perform both regressions again: 
+#' ## ----reg-mlvar--------------------------------------------------------------------------------------------------------------------------------------------------
+#' reg_mlvar_scaled_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_mlvar_scaled)
+#' reg_mlvar_centered_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_mlvar_centered)
+#' 
+#' #' 
+#' ## ----reg-mlvar-dens---------------------------------------------------------------------------------------------------------------------------------------------
+#' reg_mlvar_centered_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar)
+#' reg_mlvar_scaled_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar_scaled)
+#' 
+#' #' 
+#' #' ## `GIMME`
+#' #' 
+#' #' ### Network
+#' #' 
+#' ## ----fit-gimme--------------------------------------------------------------------------------------------------------------------------------------------------
+#' #| eval: !expr params$rerun
+#' # scaled
+#' # remove subject_id from each data set
+#' data_list_scaled_gimme <- lapply(data_list_scaled, function(x){
+#'     x |> 
+#'       select(-c(subj_id))
+#'   }) 
+#' 
+#' pre_gimme <- Sys.time()
+#' fit_gimme_scaled <- gimme::gimme(data_list_scaled_gimme,
+#'                             ar = TRUE,
+#'                             subgroup = TRUE,
+#'                             plot = FALSE,
+#'                             hybrid = FALSE,
+#'                             groupcutoff = .75,
+#'                             subcutoff = .75,
+#'                             VAR = TRUE)
+#' 
+#' gimme_fit_time <- Sys.time()-pre_gimme
+#' 
+#' saveRDS(fit_gimme_scaled, here("output", "empirical_example", "fit_gimme_scaled.rds"))
+#' 
+#' # centered
+#' data_list_centered_gimme <- lapply(data_list_centered, function(x){
+#'     x |> 
+#'       select(-c(subj_id))
+#'   })
+#' fit_gimme_centered <- gimme::gimme(data_list_centered_gimme,
+#'                             ar = TRUE,
+#'                             subgroup = TRUE,
+#'                             plot = FALSE,
+#'                             hybrid = FALSE,
+#'                             groupcutoff = .75,
+#'                             subcutoff = .75,
+#'                             VAR = TRUE)
+#' saveRDS(fit_gimme_centered, here("output", "empirical_example", "fit_gimme_centered.rds"))
+#' 
+#' 
+#' #' 
+#' ## ----include = FALSE--------------------------------------------------------------------------------------------------------------------------------------------
+#' fit_gimme_scaled <- readRDS(here("output", "empirical_example", "fit_gimme_scaled.rds"))
+#' fit_gimme_centered <- readRDS(here("output", "empirical_example", "fit_gimme_centered.rds"))
+#' 
+#' #' 
+#' #' 
+#' #' ### Regression
+#' #' 
+#' ## ----centrality-gimme-------------------------------------------------------------------------------------------------------------------------------------------
+#' # scaled
+#' # obtain partial correlations
+#' fit_gimme_scaled$contemp_mat <- lapply(1:length(fit_gimme_scaled$path_est_mats), function(i){
+#'       gimme_cor_mat(fit_gimme_scaled, id = i, n_vars = 6, pcor = TRUE)
+#' })
+#' 
+#' cent_gimme_scaled <- centrality_gimme(fit_gimme_scaled, var_only = TRUE)
+#' 
+#' dens_temp_gimme_scaled <- cent_gimme_scaled$dens_temp
+#' outstrength_gimme_scaled_first <- sapply(cent_gimme_scaled$outstrength, function(x) unname(x[1]))
+#' 
+#' reg_df_gimme_scaled <- data.frame(neuroticism = neuroticism_vec_scaled,
+#'                           dens_temp = unlist(dens_temp_gimme_scaled),
+#'                           outstrength = outstrength_gimme_scaled_first)
+#' 
+#' # centered
+#' fit_gimme_centered$contemp_mat <- lapply(1:length(fit_gimme_centered$path_est_mats), function(i){
+#'       gimme_cor_mat(fit_gimme_centered, id = i, n_vars = 6, pcor = TRUE)
+#' })
+#' 
+#' cent_gimme_centered <- centrality_gimme(fit_gimme_centered, var_only = TRUE)
+#' 
+#' dens_temp_gimme_centered <- cent_gimme_centered$dens_temp
+#' outstrength_gimme_centered_first <- sapply(cent_gimme_centered$outstrength, function(x) unname(x[1]))
+#' 
+#' reg_df_gimme_centered <- data.frame(neuroticism = neuroticism_vec_scaled,
+#'                           dens_temp = unlist(dens_temp_gimme_centered),
+#'                           outstrength = outstrength_gimme_centered_first)
+#' 
+#' 
+#' #' 
+#' #' 
+#' ## ----reg-gimme-outstrength--------------------------------------------------------------------------------------------------------------------------------------
+#' reg_gimme_scaled_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gimme_scaled)
+#' reg_gimme_centered_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gimme_centered)
+#' 
+#' #' 
+#' ## ----reg-gimmee-dens--------------------------------------------------------------------------------------------------------------------------------------------
+#' reg_gimme_scaled_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gimme_scaled)
+#' reg_gimme_centered_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gimme_centered)
 
 #' 
 #' 
@@ -463,40 +567,52 @@ reg_gimme_dens <- lm(neuroticism ~ dens_temp, data = reg_df_gimme)
 #' 
 #' ### Network & Regression
 #' 
-#' We first need to compile the model, and then estimate it with similar settings as in the simulation study: 
-## ----fit-bmlvar------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-model_name <- "MLVAR_lkj_only_empirical_example"
-
-stan_model <-   rstan::stan_model(
-    file = here::here("scripts", "models", paste0(model_name, ".stan")),
-    model_name = model_name
-  )
-
+#' We first need to compile the model, and then estimate it with similar settings as in the simulation study. For the unscaled data, we perform the mean-centering within the model.
+## ----stan_data--------------------------------------------------------------------------------------------------------------------------------------------------
 n_var <- 6
 
 # indicators for partial correlations
-idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |>
-      c() |>
+idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |>  
+      c() |>  
       which()
-
+  
 # repeat the outcome because we have two single-predictor regressions
 reg_data <- cbind(
-    neuroticism_vec_clean,
-    neuroticism_vec_clean
+    neuroticism_vec_scaled,
+    neuroticism_vec_scaled
   )
-Y <- data_bringmann_imputed |>
-    dplyr::select(-c("subj_id", "neuroticism")) |>
+Y_scaled <- df_data_scaled |> 
+    dplyr::select(-c("subj_id")) |>  
     as.matrix()
 
-# obtain number of time points per person
-n_tp <- data_bringmann_imputed |>
-  group_by(subj_id) |>
-  count() |>
+Y <- df_data |> 
+    dplyr::select(-c("subj_id")) |>  
+    as.matrix()
+
+# obtain number of time points per person 
+n_tp <- data_bringmann_imputed |> 
+  group_by(subj_id) |> 
+  count() |> 
   pull(n)
 
 n_id <- length(unique(data_bringmann_imputed$subj_id))
-
+  
 # Prepare stan data
+stan_data_scaled <- list(
+    K = n_var,
+    I = n_id,
+    P = 2,   # number of regression outcomes
+    N_total = nrow(data_bringmann_imputed),
+    n_t = n_tp,
+    n_pc = n_var * (n_var - 1) / 2,
+    idx_rho = array(idx_rho, dim = length(idx_rho)),
+    Y = Y_scaled,
+    reg_covariate = reg_data,
+    sparsity = 2,
+    mean_center = 0
+  )
+
+# perform mean-centering within Stan
 stan_data <- list(
     K = n_var,
     I = n_id,
@@ -508,11 +624,43 @@ stan_data <- list(
     Y = Y,
     reg_covariate = reg_data,
     sparsity = 2,
-    mean_center = 0
+    mean_center = 1
   )
 
-pre_bmlvar <- Sys.time()
-fit_bmlvar <- rstan::sampling(
+
+#' 
+## ----fit-bmlvar-------------------------------------------------------------------------------------------------------------------------------------------------
+#| eval: !expr params$rerun
+
+model_name <- "MLVAR_lkj_only_empirical_example"
+
+stan_model <-   rstan::stan_model(
+    file = here::here("scripts", "models", paste0(model_name, ".stan")),
+    model_name = model_name
+  )
+  
+pre_bmlvar <- Sys.time()  
+fit_bmlvar_scaled <- rstan::sampling(
+  object = stan_model,
+  pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
+  include = FALSE,
+  data = stan_data_scaled,
+  chains = 4,
+  cores = 4,
+  warmup =500,
+  iter = 2500,
+  init = 0,
+  control = list(adapt_delta = 0.99),
+  verbose = FALSE
+  )
+
+bmlvar_fit_time <- Sys.time() - pre_bmlvar
+bmlvar_fit_time
+saveRDS(fit_bmlvar_scaled, here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
+
+
+# centered
+fit_bmlvar_centered <- rstan::sampling(
   object = stan_model,
   pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
   include = FALSE,
@@ -520,117 +668,171 @@ fit_bmlvar <- rstan::sampling(
   chains = 4,
   cores = 4,
   warmup =500,
-  iter = 2000,
+  iter = 2500,
   init = 0,
   control = list(adapt_delta = 0.99),
   verbose = FALSE
   )
 
-bmlvar_fit_time <- Sys.time() - pre_bmlvar
+saveRDS(fit_bmlvar_centered, here("output", "empirical_example", "fit_bmlvar_empirical_centered.rds"))
 
-saveRDS(fit_bmlvar, here("output", "empirical_example", "fit_bmlvar_empirical.rds"))
 
 #' 
 #' Centrality estimates are sampled automatically:
-## ----centrality-bmlvar-----------------------------------------------------------------------------------------------------------------------------------------------------------------
-# Transpose beta matrices for later summaries
-# in the DGP, cols represent lagged vars
-# but in BmlVAR, rows represent lagged vars
-n_id <- data_bringmann_imputed |> 
-  ungroup() |> 
-  distinct(subj_id) |> 
-  nrow()
-
-
-ests_bmlvar <- extract_all_estimates(fit_bmlvar,
-                                       n_id = n_id, 
-                                       n_var = n_var, 
-                                       transpose_beta = TRUE,
-                                       pcor_matrix = TRUE)
-
-
-#' 
-#' Obtain the posterior samples of the regressions: 
-## ----reg-bmlvar------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# centrality outcomes
-tempdens_bmlvar <- ests_bmlvar$tempdens_est
-outstrength_bmlvar <- ests_bmlvar$outstrength_est
-outstrength_bmlvar_first <- sapply(outstrength_bmlvar$median, function(x) unname(x[1]))
-
-# regression outcomes
-ests_bmlvar$regression_slope_est
-
-summary_bmlvar <- summary(fit_bmlvar)
-
-bmlvar_reg_standardized <- summary_bmlvar |> 
-  as.data.frame() |> 
-  rownames_to_column(var = "param") |> 
-  filter(grepl("_z", param))
-
+## ----centrality-bmlvar------------------------------------------------------------------------------------------------------------------------------------------
+#' fit_bmlvar_scaled <- readRDS(here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
+#' fit_bmlvar_centered <- readRDS(here("output", "empirical_example", "fit_bmlvar_empirical_centered.rds"))
+#' # Transpose beta matrices for later summaries
+#' # in the DGP, cols represent lagged vars
+#' # but in BmlVAR, rows represent lagged vars
+#' n_id <- data_bringmann_imputed |> 
+#'   ungroup() |> 
+#'   distinct(subj_id) |> 
+#'   nrow()
 #' 
 #' 
+#' ests_bmlvar_scaled <- extract_all_estimates(fit_bmlvar_scaled,
+#'                                        n_id = n_id, 
+#'                                        n_var = n_var, 
+#'                                        transpose_beta = TRUE,
+#'                                        pcor_matrix = TRUE)
+#' ests_bmlvar_centered <- extract_all_estimates(fit_bmlvar_centered,
+#'                                        n_id = n_id, 
+#'                                        n_var = n_var, 
+#'                                        transpose_beta = TRUE,
+#'                                        pcor_matrix = TRUE)
 #' 
-#' ## Save all
 #' 
-#' Save all regression results in one object: 
+#' #' 
+#' #' Obtain the posterior samples of the regressions: 
+#' ## ----reg-bmlvar-------------------------------------------------------------------------------------------------------------------------------------------------
+#' # scaled
+#' # centrality outcomes
+#' tempdens_bmlvar_scaled <- ests_bmlvar_scaled$tempdens_est
+#' outstrength_bmlvar_scaled <- ests_bmlvar_scaled$outstrength_est
+#' outstrength_bmlvar_scaled_first <- sapply(outstrength_bmlvar_scaled$median, function(x) unname(x[1]))
 #' 
-## ----regression-results----------------------------------------------------------------------------------------------------------------------------------------------------------------
-df_regression <- list(
-  gvar = list(reg_dens = reg_gvar_dens,
-              reg_outstrength = reg_gvar_outstrength,
-              est_dens = reg_df_gvar$dens_temp,
-              est_outstrength = reg_df_gvar$outstrength),
-  mlvar = list(reg_dens = reg_mlvar_dens,
-              reg_outstrength = reg_mlvar_outstrength,
-              est_dens = reg_df_mlvar$dens_temp,
-              est_outstrength = reg_df_mlvar$outstrength
-              ),
-  gimme = list(reg_dens = reg_gimme_dens,
-              reg_outstrength = reg_gimme_outstrength,
-              est_dens = reg_df_gimme$dens_temp,
-              est_outstrength = reg_df_gimme$outstrength
-              ),
-  bmlvar = list(
-              reg_dens = bmlvar_reg_standardized[2,2],
-              reg_outstrength = bmlvar_reg_standardized[1,2],
-              est_dens = tempdens_bmlvar$median,
-              est_outstrength = outstrength_bmlvar_first
-  )
-)
-
-saveRDS(df_regression, here("output/empirical_example/regression_empirical_example.RDS"))
-
+#' # regression outcomes
+#' ests_bmlvar_scaled$regression_slope_est
+#' 
+#' summary_bmlvar_scaled <- summary(fit_bmlvar_scaled)
+#' 
+#' bmlvar_scaled_reg_standardized <- summary_bmlvar_scaled |> 
+#'   as.data.frame() |> 
+#'   rownames_to_column(var = "param") |> 
+#'   filter(grepl("_z", param))
+#' 
+#' # centered
+#' tempdens_bmlvar_centered <- ests_bmlvar_centered$tempdens_est
+#' outstrength_bmlvar_centered <- ests_bmlvar_centered$outstrength_est
+#' outstrength_bmlvar_centered_first <- sapply(outstrength_bmlvar_centered$median, function(x) unname(x[1]))
+#' 
+#' # regression outcomes
+#' ests_bmlvar_centered$regression_slope_est
+#' 
+#' summary_bmlvar_centered <- summary(fit_bmlvar_centered)
+#' 
+#' bmlvar_centered_reg_standardized <- summary_bmlvar_centered |> 
+#'   as.data.frame() |> 
+#'   rownames_to_column(var = "param") |> 
+#'   filter(grepl("_z", param))
 #' 
 #' 
 #' 
-#' # Contrast results 
-#' In this section, we collect and contrast the results of different methods. 
-## ----load-results, include = FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------
-# df_regression <- readRDS(here::here("output", "empirical_example", "regression_empirical_example.RDS"))
-
+#' #' 
+#' #' 
+#' #' 
+#' #' ## Save all
+#' #' 
+#' #' Save all regression results in one object: 
+#' #' 
+#' ## ----regression-results-----------------------------------------------------------------------------------------------------------------------------------------
+#' # scaled
+#' df_regression_scaled <- list(
+#'   gvar = list(reg_dens = reg_gvar_scaled_dens,
+#'               reg_outstrength = reg_gvar_scaled_outstrength,
+#'               est_dens = reg_df_gvar_scaled$dens_temp,
+#'               est_outstrength = reg_df_gvar_scaled$outstrength),
+#'   mlvar = list(reg_dens = reg_mlvar_scaled_dens,
+#'               reg_outstrength = reg_mlvar_scaled_outstrength,
+#'               est_dens = reg_df_mlvar_scaled$dens_temp,
+#'               est_outstrength = reg_df_mlvar_scaled$outstrength
+#'               ),
+#'   gimme = list(reg_dens = reg_gimme_scaled_dens,
+#'               reg_outstrength = reg_gimme_scaled_outstrength,
+#'               est_dens = reg_df_gimme_scaled$dens_temp,
+#'               est_outstrength = reg_df_gimme_scaled$outstrength
+#'               ),
+#'   bmlvar = list(
+#'               reg_dens = bmlvar_scaled_reg_standardized[2,2],
+#'               reg_outstrength = bmlvar_scaled_reg_standardized[1,2],
+#'               est_dens = tempdens_bmlvar_scaled$median,
+#'               est_outstrength = outstrength_bmlvar_scaled_first
+#'   )
+#' )
 #' 
-#' Prepare plotting: 
+#' saveRDS(df_regression_scaled, here("output/empirical_example/regression_empirical_example_scaled.RDS"))
 #' 
-## ----plotting-helpers------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' # centered
+#' 
+#' df_regression_centered <- list(
+#'   gvar = list(reg_dens = reg_gvar_centered_dens,
+#'               reg_outstrength = reg_gvar_centered_outstrength,
+#'               est_dens = reg_df_gvar_centered$dens_temp,
+#'               est_outstrength = reg_df_gvar_centered$outstrength),
+#'   mlvar = list(reg_dens = reg_mlvar_centered_dens,
+#'               reg_outstrength = reg_mlvar_centered_outstrength,
+#'               est_dens = reg_df_mlvar_centered$dens_temp,
+#'               est_outstrength = reg_df_mlvar_centered$outstrength
+#'               ),
+#'   gimme = list(reg_dens = reg_gimme_centered_dens,
+#'               reg_outstrength = reg_gimme_centered_outstrength,
+#'               est_dens = reg_df_gimme_centered$dens_temp,
+#'               est_outstrength = reg_df_gimme_centered$outstrength
+#'               ),
+#'   bmlvar = list(
+#'               reg_dens = bmlvar_centered_reg_standardized[2,2],
+#'               reg_outstrength = bmlvar_centered_reg_standardized[1,2],
+#'               est_dens = tempdens_bmlvar_centered$median,
+#'               est_outstrength = outstrength_bmlvar_centered_first
+#'   )
+#' )
+#' 
+#' saveRDS(df_regression_centered, here("output/empirical_example/regression_empirical_example_centered.RDS"))
+#' 
+#' 
+#' 
+#' #' 
+#' #' 
+#' #' 
+#' #' # Contrast results 
+#' #' In this section, we collect and contrast the results of different methods. For now, we mainly analyze results of scaled data.
+#' ## ----load-results, include = FALSE------------------------------------------------------------------------------------------------------------------------------
+#' df_regression <- readRDS(here::here("output", "empirical_example", "regression_empirical_example_scaled.RDS"))
+#' 
+#' #' 
+#' #' Prepare plotting: 
+#' #' 
+#' ## ----plotting-helpers-------------------------------------------------------------------------------------------------------------------------------------------
 #' cond_colors <- set_names(ggokabeito::palette_okabe_ito()[c(5, 1, 3, 4)],
 #'                          c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
 #' 
-#' cond_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,3,4,5)],
+#' cond_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,2,4,5)],
 #'                          c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
-#' n_id <- length(neuroticism_vec_clean)
+#' n_id <- length(neuroticism_vec_scaled)
 #' 
 #' 
 #' #' 
 #' #' 
 #' #' ## Temporal Outstrength
 #' #' Create a figure that contrasts all individual estimates of the four different estimation methods: 
-#' ## ----temporal-outstrength--------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' ## ----temporal-outstrength---------------------------------------------------------------------------------------------------------------------------------------
 #' df_outstrength <- data.frame(
-#'   method = rep(c("GVAR", "mlVAR", "GIMME", "BmlVAR"), each = n_id),
+#'   method = rep(c("GVAR", "GIMME","mlVAR",  "BmlVAR"), each = n_id),
 #'   est_outstrength = c(
 #'     df_regression$gvar$est_outstrength,
-#'     df_regression$mlvar$est_outstrength,
 #'     df_regression$gimme$est_outstrength,
+#'     df_regression$mlvar$est_outstrength,
 #'     df_regression$bmlvar$est_outstrength
 #'   ),
 #'   id = rep(seq(1:n_id), 4)
@@ -640,17 +842,17 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 #' outliers <- df_outstrength |> 
 #'   filter(est_outstrength > y_limit) |> 
 #'   mutate(method = factor(method,
-#'                          levels = c("GVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
+#'                          levels = c("GVAR",  "GIMME", "mlVAR", "BmlVAR"))) |> 
 #'   group_by(method) |> 
 #'   summarize(outlier_values = paste0(round(est_outstrength, 3), collapse = ", "),
 #'             max_outlier = max(est_outstrength)) |> 
 #'   mutate(outlier_values = if_else(method == "GVAR", 
-#'                                   paste0("Large value (", outlier_values, ") removed"), 
-#'                                   paste0("Large value (", outlier_values, ") removed")))
+#'                                   paste0("Large value (", outlier_values, ")\nremoved"), 
+#'                                   paste0("Large value (", outlier_values, ")\nremoved")))
 #' 
 #' outstrength_dist <- df_outstrength |> 
 #'   mutate(method = factor(method,
-#'                          levels = c("GVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
+#'                          levels = c("GVAR",  "GIMME", "mlVAR", "BmlVAR"))) |> 
 #'   mutate(id = as.factor(id)) |> 
 #'   ggplot(aes(x = method, y = est_outstrength, fill = method, col = method)) +
 #'   geom_line(aes(group = id), alpha = 0.25)+
@@ -672,11 +874,11 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 #'                aes(x = as.numeric(method), xend = as.numeric(method),
 #'                    y = c(y_limit * 0.85, y_limit * 0.85), yend = c(y_limit, y_limit)),
 #'                arrow = arrow(length = unit(0.2, "cm")),
-#'                color = "grey40")+
+#'                color = "grey30")+
 #'   geom_text(data = outliers,
 #'             aes(x = as.numeric(method) + .05, 
 #'                 c(y_limit * 0.925, y_limit * 0.925), label = outlier_values),
-#'             color = "grey40", size = 4, inherit.aes = FALSE, hjust = 0)
+#'             color = "grey30", size = 4, inherit.aes = FALSE, hjust = 0)
 #' 
 #' outstrength_dist
 #' ggsave(here("figures/empirical_example/outstrength_distribution.pdf"), width = 9 * 0.8, height = 6 * 0.8)
@@ -685,7 +887,7 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 #' #' 
 #' #' ## Network Density
 #' #' 
-#' ## ----network-density-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' ## ----network-density--------------------------------------------------------------------------------------------------------------------------------------------
 #' df_density <- data.frame(
 #'   method = rep(c("GVAR", "mlVAR", "GIMME", "BmlVAR"), each = n_id),
 #'   est_dens = c(
@@ -747,7 +949,7 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 #' #' 
 #' #' 
 #' #' 
-#' ## ----collect-estimates-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' ## ----collect-estimates------------------------------------------------------------------------------------------------------------------------------------------
 #' methods <- c("GVAR", "mlVAR", "GIMME", "BmlVAR")
 #' outcomes <- c("Density", "Outstrength")
 #' 
@@ -811,7 +1013,7 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 #' #' 
 #' #' 
 #' #' 
-#' ## ----prepare-table---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' ## ----prepare-table----------------------------------------------------------------------------------------------------------------------------------------------
 #' # set color palette 
 #' color_palette <- c("#cf1322", "#036FE3")
 #' color_palette <- MetBrewer::met.brewer("Hiroshige")[c(1:5, 8:10)]
@@ -859,7 +1061,7 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 #' 
 #' # save to LaTeX
 #' gt_table |> 
-#'   gtsave(here("output", "empirical_example", "mock_table.tex"))
+#'   gtsave(here("output", "empirical_example", "summary_table.tex"))
 #' 
 #' 
 #' #' 
@@ -868,14 +1070,14 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 #' #' 
 #' #' 
 #' #' 
-#' #' # Addition: Bayesian Model Checks
+#' #' # BmlVAR Results in more detail
 #' #' 
-#' #' We additionally check the convergence of the Bayesian model by examining convergence statistics.
+#' #' 
 #' #' 
 #' #' ## Convergence Statistics
-#' #' 
+#' #' We additionally check the convergence of the Bayesian model by examining convergence statistics.
 #' #' We check all Rhats and effective sample sizes:
-#' ## ----bmlvar-convergence----------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' ## ----bmlvar-convergence-----------------------------------------------------------------------------------------------------------------------------------------
 #' fit_bmlvar <- readRDS(here::here("output", "empirical_example", "fit_bmlvar_empirical.rds"))
 #' 
 #' summary_bmlvar <- rstan::summary(fit_bmlvar,
@@ -907,22 +1109,211 @@ saveRDS(df_regression, here("output/empirical_example/regression_empirical_examp
 #' rhat_bmlvar_mean <- mean(rhat_bmlvar_tmp, na.rm = TRUE)
 #' rhat_bmlvar_11 <- sum(rhat_bmlvar_tmp > 1.1)/length(rhat_bmlvar_tmp)
 #' divtrans_bmlvar <- rstan::get_num_divergent(fit_bmlvar)
+#' 
+#' #' 
+#' #' We observed `r divtrans_bmlvar` divergent transitions. 
+#' #' 
+#' #' 
+#' #' 
+#' #' ## Uncertainty of Centrality
+#' #' 
+#' #' ### Proportion of most central node
+#' #' For each individual, we can simply count number of sampling iterations in which any node was the most central node to obtain an uncertainty statistic. 
+#' ## ----extract-outstrength----------------------------------------------------------------------------------------------------------------------------------------
+#' # Variable names
+#' var_names <- colnames(data_bringmann_imputed |> select(!c(subj_id, neuroticism)))
+#' 
+#' 
+#' outstrength_draws <-
+#'     rstan::extract(object = fit_bmlvar, pars = "Beta_out_strength", permute = FALSE) |>
+#'     posterior::as_draws_matrix() |> 
+#'     as.data.frame()
+#' 
+#' # convert to long
+#' outstrength_long <- outstrength_draws  |> 
+#'   mutate(iteration = row_number()) |>  
+#'   pivot_longer(
+#'     cols = starts_with("Beta_out_strength"),
+#'     names_to = c("id", "variable"),
+#'     names_pattern = "Beta_out_strength\\[(\\d+),(\\d+)\\]",
+#'     values_to = "outstrength"
+#'   ) |> 
+#'   mutate(id = as.factor(id), 
+#'          variable = as.factor(variable))
+#' 
+#' 
+#' 
+#' #' 
+#' #' We now calculate the proportion of having the highest outstrength for each variable: 
+#' ## ----prop-highest-centrality------------------------------------------------------------------------------------------------------------------------------------
+#' highest_outstrength <- outstrength_long |>
+#'   group_by(iteration, id) |> 
+#'   filter(outstrength == max(outstrength)) |> 
+#'   ungroup()
+#' 
+#' variable_counts <- highest_outstrength |>
+#'   group_by(id, variable) |>
+#'   summarise(count = n(), .groups = "drop")
+#' 
+#' total_iterations <- outstrength_long |>
+#'   group_by(id) |>
+#'   summarise(total = n_distinct(iteration), .groups = "drop") 
+#' 
+#' all_combinations <- expand.grid(
+#'   id = unique(outstrength_long$id),
+#'   variable = unique(outstrength_long$variable)
+#' )
+#' 
+#' complete_counts <- all_combinations |>
+#'   left_join(variable_counts, by = c("id", "variable")) |>
+#'   mutate(count = replace_na(count, 0)) # Replace NA counts with 0
+#' 
+#' proportions <- complete_counts |>
+#'   left_join(total_iterations, by = "id") |>
+#'   mutate(proportion = count / total) |>
+#'   select(id, variable, proportion)
+#' 
+#' 
+#' 
+#' #' 
+#' #' 
+#' #' Visualize proportions: 
+#' ## ----viz-most-central-prop--------------------------------------------------------------------------------------------------------------------------------------
+#' proportions |> 
+#'   ggplot(aes(y = variable, 
+#'              x = proportion, 
+#'              group = variable,
+#'              color = variable))+
+#'   ggdist::stat_histinterval()+
+#'   geom_point(size = .5)+
+#'   theme_centrality()+
+#'   theme(legend.position = "none")
+#' 
+#' 
+#' #' 
+#' #' 
+#' #' ### Centrality uncertainty visualizations
+#' #' We find two participants, one for which the most central node has a lower uncertainty, and one for which it is higher: 
+#' #' 
+#' ## ----two-examples-centrality------------------------------------------------------------------------------------------------------------------------------------
+#' outstrength_bmlvar <- ests_bmlvar$outstrength_est
+#' 
+#' max_outstrength <- sapply(outstrength_bmlvar$median, which.max)
+#' outstrength_df <- data.frame(
+#'   id = 1:92,
+#'   most_cent = max_outstrength
+#' )
+#' 
+#' # attach the proportions (in an ugly manner, I know)
+#' extreme_props <- outstrength_df |> 
+#'   mutate(id = as.factor(id),
+#'          most_cent = as.factor(most_cent)) |> 
+#'   left_join(proportions, by = c("id" = "id", "most_cent" = "variable")) |> 
+#'   arrange(proportion) |> 
+#'   mutate(
+#'   lowest = min(proportion),
+#'   highest = max(proportion)
+#'   ) |> 
+#'   filter(proportion == lowest | proportion == highest) |> 
+#'   mutate(most_cent = as.numeric(most_cent)) |> 
+#'   mutate(most_cent = case_match(most_cent, 
+#'     1 ~ var_names[1],
+#'     2 ~ var_names[2],
+#'     3 ~ var_names[3],
+#'     4 ~ var_names[4],
+#'     5 ~ var_names[5],
+#'     6 ~ var_names[6]
+#'   ))
+#' 
+#' extreme_ids <- as.numeric(unique(extreme_props$id))
+#' 
+#' proportion_labels <- proportions |> 
+#'   filter(id %in% extreme_ids) |> 
+#'   mutate(id = paste0("Participant ", id)) |> 
+#'   mutate(proportion = sub("^(-?)0.", "\\1.",sprintf("%.2f", proportion))) |> 
+#'   mutate(variable = factor(variable, levels = 1:6, labels = var_names))
+#' 
+#' # change alpha based on most cent
+#' proportion_labels <- proportion_labels |>
+#'   mutate(id = as.character(id)) |>
+#'   mutate(variable = as.character(variable)) |>
+#'   left_join(extreme_props |>
+#'                select(id, most_cent) |>
+#'               mutate(id = as.character(id),
+#'                      most_cent = as.character(most_cent)) |>
+#'               mutate(id = paste0("Participant ", id)),
+#'             by = "id") |>
+#'   # change alpha based on most cent
+#'   mutate(alpha = if_else(variable == most_cent, 
+#'                          1, 0.5))
+#' 
+#' 
+#' 
+#' # for each participant, add the string "p(c_p = c_max)" to the plot above the first row
+#' # and evaluate the text as formula
+#' proportion_title <- proportion_labels |> 
+#'   group_by(id) |> 
+#'   mutate(proportion_title = "p(c[p] == c[max])") |> 
+#'   distinct(id, proportion_title) |> 
+#'   mutate(x = 0.23, y = 6.5)
+#'  
+#' 
+#' #' 
+#' #' We then create uncertainty plots for their proportions: 
+#' ## ----centrality-uncertainty-------------------------------------------------------------------------------------------------------------------------------------
+#' # extract and plot their posterior samples
+#' most_central_example_plot <- outstrength_long |> 
+#'   filter(id %in% extreme_ids) |> 
+#'   left_join(proportions, by = c("id" = "id", "variable" = "variable")) |> 
+#'   mutate(id = paste0("Participant ", id)) |> 
+#'   # rename variables with "var_names" based on their order
+#'   mutate(variable = factor(variable, levels = 1:6, labels = var_names)) |>
+#'   ggplot(aes(x = outstrength, y = variable))+
+#'   ggdist::stat_halfeye(.width = c(.66, .95), 
+#'                        fill = cond_colors[4],
+#'                        point_fill = "grey70",
+#'                        point_color = "grey70",
+#'                        color = "grey70",
+#'                        point_alpha = 1,
+#'                        interval_alpha = 1,
+#'                        scale = 1.1)+
+#'   # add proportion_labels as text for each variable
+#'   geom_text(data = proportion_labels,
+#'             aes(x = 0.23, y = variable, label = proportion),
+#'             hjust = 0, vjust = -0.8, size = 4, color = "#6d6d6e")+
+#'   # add title for proportions
+#'   geom_text(data = proportion_title,
+#'             aes(x = x, y = y, label = proportion_title),
+#'             hjust = 0.4, vjust = 0, size = 4, parse = TRUE, color = "#6d6d6e")+
+#'   facet_wrap2(~id,
+#'               axes = "all")+
+#'   theme_centrality()+
+#'   theme(axis.text.y = element_text(size = 14),
+#'         axis.text.x = element_text(size = 14),
+#'         strip.text.x.top = element_text(18))+
+#'   labs(y = "", x = "Outstrength")
+#' 
+#' ggsave(here("figures", "empirical_example", "most_central_example_plot.pdf"), width = 9 * 0.8, height = 6 * 0.8)
+#' 
+#' most_central_example_plot
 
 #' 
-#' We observed `r divtrans_bmlvar` divergent transitions. 
 #' 
 #' 
 #' ## Posterior Predictive
 #' 
-## ----bmlvar-postpred-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----bmlvar-postpred--------------------------------------------------------------------------------------------------------------------------------------------
 
 
+#' 
+#' 
+#' 
 #' 
 #' 
 #' 
 #' # Print to normal R script
 #' 
-## ----eval = FALSE----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----eval = FALSE-----------------------------------------------------------------------------------------------------------------------------------------------
 ## knitr::purl(here::here("scripts", "02_empirical_example_bringmann_2016.qmd"),
 ##             output = here::here("scripts", "02_empirical_example_bringmann_2016.R"),
 ##             documentation = 2)
