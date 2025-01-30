@@ -431,7 +431,7 @@ fit_mlvar_centered <- readRDS(here("output", "empirical_example", "fit_mlvar_cen
 We obtain the network features: 
 ```{r centrality-mlvar}
 # scaled
-cent_mlvar_scaled <- centrality_mlvar_scaled(fit_mlvar_scaled)
+cent_mlvar_scaled <- centrality_mlvar(fit_mlvar_scaled)
 
 dens_temp_mlvar_scaled <- unlist(cent_mlvar_scaled$dens_temp)
 outstrength_mlvar_scaled_first <- sapply(cent_mlvar_scaled$outstrength, function(x) unname(x[1]))
@@ -441,12 +441,12 @@ reg_df_mlvar_scaled <- data.frame(neuroticism = neuroticism_vec_scaled,
                           outstrength = outstrength_mlvar_scaled_first)
 
 # centered
-cent_mlvar_centered <- centrality_mlvar_centered(fit_mlvar_centered)
+cent_mlvar_centered <- centrality_mlvar(fit_mlvar_centered)
 
 dens_temp_mlvar_centered <- unlist(cent_mlvar_centered$dens_temp)
 outstrength_mlvar_centered_first <- sapply(cent_mlvar_centered$outstrength, function(x) unname(x[1]))
 
-reg_df_mlvar_centered <- data.frame(neuroticism = neuroticism_vec_centered,
+reg_df_mlvar_centered <- data.frame(neuroticism = neuroticism_vec_scaled,
                           dens_temp = dens_temp_mlvar_centered,
                           outstrength = outstrength_mlvar_centered_first)
 ```
@@ -458,7 +458,7 @@ reg_mlvar_centered_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_ml
 ```
 
 ```{r reg-mlvar-dens}
-reg_mlvar_centered_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar)
+reg_mlvar_centered_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar_centered)
 reg_mlvar_scaled_dens <- lm(neuroticism ~ dens_temp, data = reg_df_mlvar_scaled)
 ```
 
@@ -805,7 +805,8 @@ saveRDS(df_regression_centered, here("output/empirical_example/regression_empiri
 # Contrast results 
 In this section, we collect and contrast the results of different methods. For now, we mainly analyze results of scaled data.
 ```{r load-results, include = FALSE}
-df_regression <- readRDS(here::here("output", "empirical_example", "regression_empirical_example_scaled.RDS"))
+df_regression_scaled <- readRDS(here::here("output", "empirical_example", "regression_empirical_example_scaled.RDS"))
+df_regression_centered <- readRDS(here::here("output", "empirical_example", "regression_empirical_example_centered.RDS"))
 ```
 
 Prepare plotting: 

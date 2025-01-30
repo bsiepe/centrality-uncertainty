@@ -621,7 +621,7 @@ stan_data <- list(
     n_t = n_tp,
     n_pc = n_var * (n_var - 1) / 2,
     idx_rho = array(idx_rho, dim = length(idx_rho)),
-    Y = Y,
+    Y = Y/20,
     reg_covariate = reg_data,
     sparsity = 2,
     mean_center = 1
@@ -639,24 +639,24 @@ stan_model <-   rstan::stan_model(
     model_name = model_name
   )
   
-pre_bmlvar <- Sys.time()  
-fit_bmlvar_scaled <- rstan::sampling(
-  object = stan_model,
-  pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
-  include = FALSE,
-  data = stan_data_scaled,
-  chains = 4,
-  cores = 4,
-  warmup =500,
-  iter = 2500,
-  init = 0,
-  control = list(adapt_delta = 0.99),
-  verbose = FALSE
-  )
-
-bmlvar_fit_time <- Sys.time() - pre_bmlvar
-bmlvar_fit_time
-saveRDS(fit_bmlvar_scaled, here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
+# pre_bmlvar <- Sys.time()  
+# fit_bmlvar_scaled <- rstan::sampling(
+#   object = stan_model,
+#   pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
+#   include = FALSE,
+#   data = stan_data_scaled,
+#   chains = 4,
+#   cores = 4,
+#   warmup =500,
+#   iter = 2500,
+#   init = 0,
+#   control = list(adapt_delta = 0.99),
+#   verbose = FALSE
+#   )
+# 
+# bmlvar_fit_time <- Sys.time() - pre_bmlvar
+# bmlvar_fit_time
+# saveRDS(fit_bmlvar_scaled, here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
 
 
 # centered
