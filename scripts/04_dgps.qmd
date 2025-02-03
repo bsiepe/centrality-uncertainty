@@ -26,7 +26,7 @@ It's based on https://osf.io/7fpw5, data can be obtained from https://osf.io/5a2
 
 ### Preparation
 ```{r}
-load(here::here("data/clean_network.RData"))
+load(here::here("data", "clean_network.RData"))
 Data5b <- Data2
 
 # Alpha to detrend:

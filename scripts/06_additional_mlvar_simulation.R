@@ -71,6 +71,10 @@ graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 # sparse DGP
 graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
+# try out what happens if we decrease sigma substantially
+
+graph_sparse$sigma <- graph_sparse$sigma * 0.3
+
 #' 
 #' 
 #' 
@@ -1355,7 +1359,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
 
 
-n_rep <- 15
+n_rep <- 2
 future::plan(multisession, workers = n_rep)
 df_design_mlvar <- df_design[4,]
 
@@ -1363,13 +1367,13 @@ df_design_mlvar <- df_design[4,]
 # df_design_test <- df_design[c(4),]
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design, 
+                                    design = df_design_mlvar, 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    parallel = "future",
+                                    # parallel = "future",
                                     # parallel = TRUE,
                                     max_errors = 2,
                                     packages = c("tidyverse", 
@@ -1382,8 +1386,9 @@ sim_results <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "corpcor",
                                                  "Rcpp"),
-                                    save_results = TRUE,
-                                    filename = "additional_mlvar_sim"
+                                    # save_results = TRUE,
+                                    debug = "analyse"
+                                    # filename = "additional_mlvar_sim"
                                     # save_seeds = TRUE
                                     )
 
