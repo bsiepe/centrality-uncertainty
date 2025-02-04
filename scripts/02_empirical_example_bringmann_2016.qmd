@@ -33,7 +33,7 @@ format:
     fig-width: 7
     fig-height: 4.5
     fig-align: "center"
-    embded-resouces: true
+    embed-resources: true
 execute:
   message: false
   warning: false

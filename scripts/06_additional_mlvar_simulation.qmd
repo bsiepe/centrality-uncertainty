@@ -33,7 +33,7 @@ format:
     fig-width: 7
     fig-height: 4.5
     fig-align: "center"
-    embded-resouces: true
+    embed-resources: true
 execute:
   message: false
   warning: false
@@ -41,7 +41,7 @@ execute:
 ---
 
 # Background
-This script contains the `SimDesign` code for an additional simulation investigation into `mlVAR`, where we try varios different things to investigate why mlVARs performance for random effects was poor. 
+This script contains the `SimDesign` code for an additional simulation investigation into `mlVAR`, where we try various different things to investigate why mlVARs performance for random effects was poor. 
 
 We first load all relevant packages: 
 ```{r packages}
@@ -127,7 +127,7 @@ sim_pars <- list(
 
 
 As we only need to compute the true SD once, we can simply load it from disk to save time: 
-```{r}
+```{r, eval=FALSE}
 true_sd <- readRDS(here::here("data", "true_sd_semisparse.RDS"))
 names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 df_design$strength_sd <- unlist(true_sd$sd_results_strength)
@@ -834,7 +834,6 @@ df_centrality_mlvar <- do.call(rbind, centrality_list_mlvar)
 # add an identifier column to track which element each row came from
 df_centrality_mlvar$sim_rep <- rep(seq_along(sim_res_4$results), sapply(centrality_list_mlvar, nrow))
 
-df_centrality_mlvar
 
 
 df_centrality_mlvar |> 
@@ -1061,7 +1060,7 @@ sim_data <- sim_gvar_loop(
 
 ## Estimate
 
-```{r}
+```{r, message=FALSE}
 df_data <- dplyr::bind_rows(purrr::map(sim_data$data, dplyr::as_tibble)
                               , .id = "ID") |> 
     dplyr::mutate(ID = as.factor(ID))
@@ -1088,7 +1087,6 @@ true_beta <- sim_data$beta_l
 Compare them individually:
 ```{r}
 bias_list <- mapply(`-`, mlvar_beta, true_beta, SIMPLIFY = FALSE)
-
 ```
 
 
@@ -1137,8 +1135,18 @@ plot_list_transposed <- lapply(1:36, function(var) {
 
 gridExtra::grid.arrange(grobs = plot_list_transposed, ncol = 6)
 ```
+Nothing else.
 
 
+We can additionally calculate the within-matrix correlation of true and estimates effects for each individual: 
+```{r}
+beta_cors <- sapply(1:200, function(i) {
+  cor(c(true_beta[[i]]), c(mlvar_beta[[i]]))
+})
+hist(beta_cors)
+```
+
+This means that for each individual, the estimated betas show good recovery, but not across individuals. That also explains why recovery of the most central edge works alright, but relating it to an outcome does not work. 
 
 
 
