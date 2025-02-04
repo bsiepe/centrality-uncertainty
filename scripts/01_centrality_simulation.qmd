@@ -1415,3 +1415,22 @@ sim_res_resum <- SimDesign::reSummarise(summarise = sim_summarise,
 saveRDS(object = sim_res_resum, here::here("output", "sim_results.RDS"))
 ```
 
+
+Add the run information (seed, time, etc.) from the previous output to the resummarized results object:
+
+```{r results-info}
+sim_res_old <- readRDS(here("output", "sim_full.RDS"))
+
+sim_res_resum <- readRDS(here("output", "sim_results.RDS"))
+
+sim_info <- sim_res_old |> 
+  select(REPLICATIONS, SIM_TIME, RAM_USED, SEED, COMPLETED, WARNINGS) 
+
+sim_res <- bind_cols(sim_res_resum, sim_info)
+  
+saveRDS(object = sim_res, here::here("output", "sim_results.RDS"))
+```
+
+
+
+
