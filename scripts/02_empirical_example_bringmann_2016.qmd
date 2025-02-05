@@ -803,10 +803,9 @@ saveRDS(df_regression_centered, here("output/empirical_example/regression_empiri
 
 
 # Contrast results 
-In this section, we collect and contrast the results of different methods. For now, we mainly analyze results of scaled data.
+In this section, we collect and contrast the results of different methods. For now, we analyze results of scaled data.
 ```{r load-results, include = FALSE}
 df_regression_scaled <- readRDS(here::here("output", "empirical_example", "regression_empirical_example_scaled.RDS"))
-df_regression_centered <- readRDS(here::here("output", "empirical_example", "regression_empirical_example_centered.RDS"))
 ```
 
 Prepare plotting: 
@@ -828,10 +827,10 @@ Create a figure that contrasts all individual estimates of the four different es
 df_outstrength <- data.frame(
   method = rep(c("GVAR", "GIMME","mlVAR",  "BmlVAR"), each = n_id),
   est_outstrength = c(
-    df_regression$gvar$est_outstrength,
-    df_regression$gimme$est_outstrength,
-    df_regression$mlvar$est_outstrength,
-    df_regression$bmlvar$est_outstrength
+    df_regression_scaled$gvar$est_outstrength,
+    df_regression_scaled$gimme$est_outstrength,
+    df_regression_scaled$mlvar$est_outstrength,
+    df_regression_scaled$bmlvar$est_outstrength
   ),
   id = rep(seq(1:n_id), 4)
 )
@@ -870,12 +869,12 @@ outstrength_dist <- df_outstrength |>
   # label outliers
   geom_segment(data = outliers,
                aes(x = as.numeric(method), xend = as.numeric(method),
-                   y = c(y_limit * 0.85, y_limit * 0.85), yend = c(y_limit, y_limit)),
+                   y =  y_limit * 0.85, yend =  y_limit),
                arrow = arrow(length = unit(0.2, "cm")),
                color = "grey30")+
   geom_text(data = outliers,
             aes(x = as.numeric(method) + .05, 
-                c(y_limit * 0.925, y_limit * 0.925), label = outlier_values),
+                y = y_limit * 0.925, label = outlier_values),
             color = "grey30", size = 4, inherit.aes = FALSE, hjust = 0)
 
 outstrength_dist
@@ -921,30 +920,6 @@ df_density |>
 
 We combine the results for different network features and network estimation methods in one table: 
 
-<!-- Currently, this is based on mock data: -->
-
-<!-- ```{r mock-data-table} -->
-<!-- methods <- c("GVAR", "mlVAR", "GIMME", "BmlVAR") -->
-<!-- outcomes <- c("Density", "Outstrength") -->
-
-<!-- # create mock data -->
-<!-- mock_data <- data.frame( -->
-<!--   Method = rep(methods, each = 2), -->
-<!--   Outcome = rep(outcomes, times = 4), -->
-<!--   Point_Estimate = runif(8, 0.2, 0.8), -->
-<!--   Lower_Limit = runif(8, 0.1, 0.5), -->
-<!--   Upper_Limit = runif(8, 0.6, 1.0) -->
-<!-- ) -->
-
-<!-- # reshape data to wider -->
-<!-- mock_table <- mock_data |>  -->
-<!--   pivot_wider(names_from = Outcome, -->
-<!--                      values_from = c(Point_Estimate, Lower_Limit, Upper_Limit), -->
-<!--                      names_glue = "{Outcome}_{.value}") -->
-
-
-<!-- ``` -->
-
 
 
 ```{r collect-estimates}
@@ -969,41 +944,41 @@ get_standardized_estimate <- function(model_summary, type = c("estimate", "lower
 }
 
 
-df_estimates <- data.frame(
+df_estimates_scaled <- data.frame(
   Method = rep(methods, each = 2),
   Outcome = rep(outcomes, times = 4),
   Point_Estimate = c(
-    get_standardized_estimate(reg_gvar_dens, "estimate"),
-    get_standardized_estimate(reg_mlvar_dens, "estimate"),
-    get_standardized_estimate(reg_gimme_dens, "estimate"),
-    bmlvar_reg_standardized[2,]$summary.mean,
-    get_standardized_estimate(reg_gvar_outstrength, "estimate"),
-    get_standardized_estimate(reg_mlvar_outstrength, "estimate"),
-    get_standardized_estimate(reg_gimme_outstrength, "estimate"),
-    bmlvar_reg_standardized[1,]$summary.mean
+    get_standardized_estimate(reg_gvar_scaled_dens, "estimate"),
+    get_standardized_estimate(reg_mlvar_scaled_dens, "estimate"),
+    get_standardized_estimate(reg_gimme_scaled_dens, "estimate"),
+    bmlvar_scaled_reg_standardized[2,]$summary.mean,
+    get_standardized_estimate(reg_gvar_scaled_outstrength, "estimate"),
+    get_standardized_estimate(reg_mlvar_scaled_outstrength, "estimate"),
+    get_standardized_estimate(reg_gimme_scaled_outstrength, "estimate"),
+    bmlvar_scaled_reg_standardized[1,]$summary.mean
   ),
   Lower_Limit = c(
-    get_standardized_estimate(reg_gvar_dens, "lower_ci"),
-    get_standardized_estimate(reg_mlvar_dens, "lower_ci"),
-    get_standardized_estimate(reg_gimme_dens, "lower_ci"),
-    bmlvar_reg_standardized[2,]$summary.2.5.,
-    get_standardized_estimate(reg_gvar_outstrength, "lower_ci"),
-    get_standardized_estimate(reg_mlvar_outstrength, "lower_ci"),
-    get_standardized_estimate(reg_gimme_outstrength, "lower_ci"),
-    bmlvar_reg_standardized[1,]$summary.2.5.
+    get_standardized_estimate(reg_gvar_scaled_dens, "lower_ci"),
+    get_standardized_estimate(reg_mlvar_scaled_dens, "lower_ci"),
+    get_standardized_estimate(reg_gimme_scaled_dens, "lower_ci"),
+    bmlvar_scaled_reg_standardized[2,]$summary.2.5.,
+    get_standardized_estimate(reg_gvar_scaled_outstrength, "lower_ci"),
+    get_standardized_estimate(reg_mlvar_scaled_outstrength, "lower_ci"),
+    get_standardized_estimate(reg_gimme_scaled_outstrength, "lower_ci"),
+    bmlvar_scaled_reg_standardized[1,]$summary.2.5.
   ),
   Upper_Limit = c(
-    get_standardized_estimate(reg_gvar_dens, "upper_ci"),
-    get_standardized_estimate(reg_mlvar_dens, "upper_ci"),
-    get_standardized_estimate(reg_gimme_dens, "upper_ci"),
-    bmlvar_reg_standardized[2,]$summary.97.5.,
-    get_standardized_estimate(reg_gvar_outstrength, "upper_ci"),
-    get_standardized_estimate(reg_mlvar_outstrength, "upper_ci"),
-    get_standardized_estimate(reg_gimme_outstrength, "upper_ci"),
-    bmlvar_reg_standardized[1,]$summary.97.5.
+    get_standardized_estimate(reg_gvar_scaled_dens, "upper_ci"),
+    get_standardized_estimate(reg_mlvar_scaled_dens, "upper_ci"),
+    get_standardized_estimate(reg_gimme_scaled_dens, "upper_ci"),
+    bmlvar_scaled_reg_standardized[2,]$summary.97.5.,
+    get_standardized_estimate(reg_gvar_scaled_outstrength, "upper_ci"),
+    get_standardized_estimate(reg_mlvar_scaled_outstrength, "upper_ci"),
+    get_standardized_estimate(reg_gimme_scaled_outstrength, "upper_ci"),
+    bmlvar_scaled_reg_standardized[1,]$summary.97.5.
   )
 )
-df_estimates <- df_estimates |> 
+df_estimates_scaled <- df_estimates_scaled |> 
   pivot_wider(names_from = Outcome,
                      values_from = c(Point_Estimate, Lower_Limit, Upper_Limit),
                      names_glue = "{Outcome}_{.value}")
@@ -1015,10 +990,10 @@ df_estimates <- df_estimates |>
 # set color palette 
 color_palette <- c("#cf1322", "#036FE3")
 color_palette <- MetBrewer::met.brewer("Hiroshige")[c(1:5, 8:10)]
-min_val <- min(df_estimates$Density_Point_Estimate, df_estimates$Outstrength_Point_Estimate)
-max_val <- max(df_estimates$Density_Point_Estimate, df_estimates$Outstrength_Point_Estimate)
+min_val <- min(df_estimates_scaled$Density_Point_Estimate, df_estimates_scaled$Outstrength_Point_Estimate)
+max_val <- max(df_estimates_scaled$Density_Point_Estimate, df_estimates_scaled$Outstrength_Point_Estimate)
 
-gt_table <- df_estimates |> 
+gt_table <- df_estimates_scaled |> 
   gt(rowname_col = "Method") |> 
   # hierarchical cols
   cols_label(
