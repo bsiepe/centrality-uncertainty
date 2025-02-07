@@ -40,7 +40,7 @@ execute:
 
 # Background
 
-This document contains code to reproduce the visualizations of the simulation study in the manuscript. It also contains additional results not shown in the main manuscript. 
+This document contains code to reproduce the visualizations of the simulation study in the manuscript. It also contains additional results not shown in the main manuscript.
 
 # Preparation
 
@@ -48,32 +48,19 @@ Load relevant packages:
 
 ```{r}
 library(tidyverse)
+library(SimDesign)
 library(here)
 library(cowplot)
 library(ggh4x)
-library(ggokabeito)
 library(pander)
+library(MetBrewer)
 source(here::here("scripts", "00_functions.R"))
 ```
 
-<!-- Create some mock simulation results:  -->
-<!-- ```{r mock-res} -->
-<!-- sim_results <- readRDS(here("sim_prelium_0312.rds")) -->
+Load the simulation results:
 
-<!-- # add some mock results -->
-<!-- sim_results[3, ] <- sim_results[1, ] -->
-<!-- sim_results[4, ] <- sim_results[2, ] -->
-
-<!-- sim_results[3, "n_tp"] <- 120 -->
-<!-- sim_results[4, "n_tp"] <- 60 -->
-
-<!-- ``` -->
-
-
-
-Load the simulation results: 
 ```{r}
-sim_results <- readRDS(here("output/", "sim_results.rds"))
+sim_results <- readRDS(here("output", "sim_results.RDS"))
 
 # Create a cut version of the simulation results without MCMC diagnostics
 sim_res_cut <- sim_results |>
@@ -81,16 +68,10 @@ sim_res_cut <- sim_results |>
   select(-contains("divtrans"))
 ```
 
-
-Attach the seed information from the previous simulation output (before resummarization):
-<!-- #```{r} -->
-<!-- #sim_results <- readRDS(here("output/", "sim_results.rds")) -->
-<!-- # ``` -->
-
-
 ## Data Wrangling
 
 Prepare dataframe for visualization by giving proper names, removing unnecessary columns, and pivoting longer:
+
 ```{r}
 sr_edit <- sim_res_cut |> 
   mutate(
@@ -101,7 +82,7 @@ sr_edit <- sim_res_cut |>
   rename_with(~str_remove(., "reg_")) |> 
   # remove everything before a "." in the column names
   rename_with(~str_remove(., ".*\\.")) |> 
-  # dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS", "RAM_USED", "heterogeneity")) |>
+  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS", "RAM_USED")) |>
   dplyr::select(-c("heterogeneity")) |> 
   # pivot longer except conditions cols
   pivot_longer(cols = -c("dgp", "n_tp", "n_id"), 
@@ -138,22 +119,51 @@ sr_edit <- sim_res_cut |>
 
 ```
 
+Prepare different colors and settings for visualization:
 
-Prepare different colors and settings for visualization: 
 ```{r viz-prep}
-# meth_colors <- ggokabeito::palette_okabe_ito()[c(5, 1, 2, 3)]
 meth_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,2,4,5)],
                          c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
 ```
 
+# Check Warnings and Errors
 
-# Check Warnings and Non-Convergence
-Check if any non-convergence occurred:
+## Errors
+
+Check if any errors that led to non-convergence occurred:
+
 ```{r sim-errors}
+# load results before resummarization, which contain potential error messages
+sim_full_pre_resum <- readRDS(here("output", "sim_full.rds"))
+
+sim_errors <- SimExtract(sim_full_pre_resum, "errors")
 
 ```
 
+There were `r ncol(sim_errors)` error messages.
 
+## Warnings
+
+We extract all warnings and rename them properly:
+
+```{r sim-warnings}
+sim_warnings <- SimExtract(sim_full_pre_resum, what = "warnings")
+
+sim_warnings |> 
+  select(!c(heterogeneity, strength_sd, outstrength_sd, instrength_sd)) |> 
+  rename("Deprecated dplyr function" = "WARNING:  c(\"Warning in NULL : `funs()` was deprecated in dplyr 0.8.0.\", \"Warning in NULL : Please use a list of either functions or lambdas: \\n\\n  # Simple nam",
+         "Bulk ESSlow" = "WARNING:  Warning in NULL : Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.\nRunning the chains for more i",
+         "Potential Stan sampling problems" = "WARNING:  Warning in NULL : Examine the pairs() plot to diagnose sampling problems\n",
+         "Tail ESS low" = "WARNING:  Warning in NULL : Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.\nRunning the chains",
+         "NA R-hat" = "WARNING:  Warning in NULL : The largest R-hat is NA, indicating chains have not mixed.\nRunning the chains for more iterations may help. See\nhttps://mc-stan.org/mi",
+         "Divergent transition" = "WARNING:  Warning in NULL : There were 1 divergent transitions after warmup. See\nhttps://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup\nto find",
+         "Exceeded maximum treedepth" = "WARNING:  Warning in NULL : There were 497 transitions after warmup that exceeded the maximum treedepth. Increase max_treedepth above 10. See\nhttps://mc-stan.org",
+         "Rothman algorithm warning" = "WARNING:  Warning in Rothmana(data_l, data_c, lambdas$beta[i], lambdas$kappa[i], regularize_mat_beta = regularize_mat_beta,     regularize_mat_kappa = regulariz",
+         "Variable naming warning" = "WARNING:  Warning in validityMethod(object) : The following variables have undefined values:  reg_intercept_z[1],The following variables have undefined values: ") |> 
+  knitr::kable()
+```
+
+Unfortunately, we removed warnings from `mlVAR` during our simulation. However, in our additional simulations in `06_additional_mlvar_simulation.qmd`, we noticed that warning messages from mlVAR were only related to the renaming of certain variables, so we assume that we did not miss any substantial warnings.
 
 # Point Estimates
 
@@ -232,14 +242,11 @@ plot_bias <- sr_edit |>
 plot_bias
 ```
 
-
-
-
 # Centrality
 
-## Plot most central identical 
+## Plot most central identical
 
-```{r viz-most-central}
+```{r viz-most-central, eval = TRUE}
 plot_mostcentral <- sr_edit |> 
   # if mcse is missing, set to 0
   mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
@@ -296,15 +303,13 @@ plot_mostcentral
 
 ```
 
-
 ## Plot rank correlation of centrality measures
 
-We were interested in the performance of centrality estimation, which we assessed with regard to rank-order performance. As we expected centrality estimates to be biased downwards in some methods due to sparsity assumptions, we computed the rank-order consistency of individual centrality estimates. To do so, we computed the point estimate of network centrality $\hat{c}$ per individual in a data set, which ignored estimation uncertainty. We then estimated the Spearman rank correlation $\hat{\rho}_{i}$ in repetition $i$ of these estimates with the true network centrality $c$ and calculated its average across repetitions as:
-\begin{align*}
+We were interested in the performance of centrality estimation, which we assessed with regard to rank-order performance. As we expected centrality estimates to be biased downwards in some methods due to sparsity assumptions, we computed the rank-order consistency of individual centrality estimates. To do so, we computed the point estimate of network centrality $\hat{c}$ per individual in a data set, which ignored estimation uncertainty. We then estimated the Spearman rank correlation $\hat{\rho}_{i}$ in repetition $i$ of these estimates with the true network centrality $c$ and calculated its average across repetitions as: \begin{align*}
     \widehat{\rho} = \frac{\sum_{i=1}^{n_{\text{sim}}} \hat{\rho}_i}{n_{\text{sim}}}
-\end{align*}
-We calculated the MCSE of this correlation via bootstrapping. 
-```{r viz-rank-correlation}
+\end{align*} We calculated the MCSE of this correlation via bootstrapping.
+
+```{r viz-rank-correlation, eval = TRUE}
 plot_rankcor <- sr_edit |> 
   # if mcse is missing, set to 0
   mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
@@ -343,25 +348,21 @@ plot_rankcor <- sr_edit |>
        y = "Centrality Rank Correlation")
 
 
-plot_rankcor
-
 ggsave("plot_rankcor.pdf", plot_rankcor, height = 12, width = 16,
        path = here::here("figures/"), device = "pdf")
 
-``` 
+plot_rankcor
 
-
-![](figures/plot_rankcor.pdf)
-
-
+```
 
 # Regression
-
 
 ## Power of Regression
 
 ### In- and Outstrength combined
+
 Prep data
+
 ```{r viz-regression-power-prep}
 # Split data set into three based on true effect
 power_df <- sr_edit |> 
@@ -387,7 +388,7 @@ power_df <- sr_edit |>
 power_list <- split(power_df, power_df$true_effect)
 ```
 
-Function to create the plots: 
+Function to create the plots:
 
 ```{r viz-regression-fn}
 # Function to create the plot for a given dataframe
@@ -427,8 +428,8 @@ power_plot <- function(df) {
 
 ```
 
-
 Create the plots and combine them with patchwork
+
 ```{r viz-regression-power-combined}
 plot_power_list <- lapply(power_list, power_plot)
 
@@ -461,13 +462,16 @@ plot_power_combined <- cowplot::plot_grid(plot_power_list[[1]],
 
 ggsave("plot_power_combined.pdf", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
        path = here::here("figures/"))
+ggsave("plot_power_combined.svg", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
+       path = here::here("scripts", "simulation_viz_figures"))
 
-plot_power_combined
 
 ```
 
+![](simulation_viz_figures/plot_power_bias_strength.svg){width="710"}
 
 How large was the difference between instrength and outstrength?
+
 ```{r instrength-outstrength}
 power_df |> 
   pivot_wider(id_cols = c(dgp, n_id, n_tp, pm, true_effect, method), 
@@ -476,12 +480,14 @@ power_df |>
   filter(true_effect != 0) |> 
   janitor::clean_names() |> 
   mutate(mean_diff = mean_temporal_instrength - mean_temporal_outstrength) |> 
-  summarize(mean_mean_diff = mean(mean_diff))
+  summarize(mean_mean_diff = mean(mean_diff)) |> 
+  knitr::kable()
 
 ```
 
-
 ## Power and Bias for Outstrength
+
+This reproduces the simulation figure in the manuscript.
 
 ```{r outstrength-plot}
 power_bias_reg_combined_df <- sr_edit |> 
@@ -568,8 +574,7 @@ ggsave("plot_power_bias_outstrength.pdf",
 
 ## Power and Bias for Contemporaneous Strength
 
-
-```{r contemporaneous-strength-plot}
+```{r contemporaneous-strength-plot, eval = FALSE}
 power_bias_reg_strength_df <- sr_edit |> 
   mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
   filter(!str_detect(pm, "poweroneside")) |>
@@ -646,15 +651,18 @@ plot_power_bias_strength <- power_bias_reg_strength_df |>
 ggsave("plot_power_bias_strength.pdf", 
        plot_power_bias_strength, height = 16* 0.95, width = 16* 0.8,
        path = here::here("figures/"))
+ggsave("plot_power_bias_strength.svg", 
+       plot_power_bias_strength, height = 16* 0.95, width = 16* 0.8,
+       path = here::here("scripts", "simulation_viz_figures"), device = "svg")
 ```
 
-![](figures/plot_power_bias_strength.pdf)
-
+![](../scripts/simulation_viz_figures/plot_power_bias_strength.svg){width="710"}
 
 ## RMSE and Bias of Regression
 
-Create some utility functions to create plots for different outcomes: 
-```{r bias-rmse-functions}
+We create plot for different regression outcomes here: 
+
+```{r bias-rmse-functions, eval = FALSE}
 process_data <- function(data, summary) {
   df_clean <- data |> 
     filter(str_detect(pm, summary)) |> 
@@ -740,12 +748,12 @@ generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined.pd
 
 
 
-
-
 # MCMC Diagnostics
+
 We can now look at the Bayesian models in more detail and check if the Rhats are satisfactory, as well as if there were any divergent transitions.
 
 First, look at Rhats:
+
 ```{r viz-rhat}
 sim_results |> 
   select(bmlvar_diagnostics.rhat_bmlvar_mean) |> 
@@ -754,6 +762,7 @@ sim_results |>
 ```
 
 Second, we tabulate divergent transitions:
+
 ```{r check-divtrans}
 sim_results |> 
   select(contains("divtrans")) |> 
@@ -763,22 +772,8 @@ sim_results |>
                             "Models with Divtrans"))
 ```
 
-
-
-# Create Overview Table for Supplement
-Create one long overview table over all performance measures for the supplement.
-
-```{r overview-table}
-sim_results |>
-  
-``` 
-
-
 # Session Info
 
 ```{r session-info}
 pander::pander(sessionInfo())
 ```
-
-
-

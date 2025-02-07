@@ -62,6 +62,8 @@ source(here::here("scripts", "00_functions.R"))
 
 # Idea 1: Different Simulation
 
+We have tried various different simulation settings (different random effects variance, different number of time points), but none of them really improved the performance of mlVAR for outcome prediction with centrality indices. Here, we showcase results with a low innovation variance. Note that the association with the outcome must be off here (because we did not resimulate the true standard deviation for the centralities), but the rank order of centrality should still be recovered if mlVAR worked well. 
+
 ## Data-Generating Processes
 
 Load DGP based on estimated network structures:  
@@ -154,13 +156,13 @@ sim_generate <- function(condition, fixed_objects = NULL){
                     0.05,
                     0.075)
   sigma_sd <- ifelse(condition$heterogeneity == "low",
-                    0.05,
-                    0.075)
+                    0.005,
+                    0.005)
   
   # scale kappa random effects w.r.t diagonal elements
   mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
-  kappa_sd_low <- 0.05 * mean_diag_kappa
-  kappa_sd_high <- 0.075 * mean_diag_kappa
+  kappa_sd_low <- 0.005 * mean_diag_kappa
+  kappa_sd_high <- 0.005 * mean_diag_kappa
   
   kappa_sd <- ifelse(condition$heterogeneity == "low",
                      kappa_sd_low,
@@ -745,9 +747,6 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   ret_vec <- unlist(ret, use.names = TRUE)
   return(ret_vec)
   
-  
-  
-  
 }
 
 
@@ -759,10 +758,6 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 ```{r run-sim, eval=FALSE}
 n_rep <- 5
 future::plan(multisession, workers = n_rep)
-# df_design_mlvar <- df_design[4,]
-
-# started 2024-08-13 ~08:35
-# df_design_test <- df_design[c(4),]
 
 sim_results <- SimDesign::runSimulation(
                                     design = df_design[c(3,4),], 
@@ -786,19 +781,25 @@ sim_results <- SimDesign::runSimulation(
                                                  "Rcpp"),
                                     save_results = TRUE,
                                     # debug = "generate",
-                                    filename = "high_n_mlvar"
+                                    filename = "low_kappa_sd_mlvar"
                                     # save_seeds = TRUE
                                     )
 
 plan(sequential)
 
-# SimClean()
-# saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
+
 
 ```
 
 
+Investigate the results. The average rank correlation for temporal coefficients is effectively zero. We only have five repetitions here, but the pattern is clear: 
+```{r}
+sim_res_mlvar <- readRDS(here("output", "low_kappa_sd_mlvar_results", "low_kappa_sd_mlvar.rds"))
 
+sim_res_mlvar |> 
+  select(rankcor_temp_mlvar_mean, rankcor_temp_mlvar_mcse) |> 
+  knitr::kable()
+```
 
 
 
@@ -844,6 +845,55 @@ df_centrality_mlvar |>
   labs(x = "True Outstrength",
        y = "mlVAR Outstrength")
 ```
+
+
+### Check density recovery
+
+We can additionally check network density (although this was not explicitly manipulated here, so there will be less true score variance). The results don't seem to be much different: 
+
+```{r}
+density_list_mlvar <- list()
+
+for (i in seq_along(sim_res_4$results)) {
+  
+    mlvar_density = sapply(sim_res_4$results[[i]]$mlvar$outstrength, sum)
+    true_density = sapply(sim_res_4$results[[i]]$true_cent$outstrength, sum)
+  
+    df_temp <- data.frame(
+      mlvar_density, 
+      true_density
+    )
+  
+  density_list_mlvar[[i]] <- df_temp
+}
+
+df_density_mlvar <- do.call(rbind, density_list_mlvar)
+
+# add an identifier column to track which element each row came from
+df_density_mlvar$sim_rep <- rep(seq_along(sim_res_4$results), sapply(density_list_mlvar, nrow))
+
+
+df_density_mlvar |> 
+  ggplot(aes(x = true_density, y = mlvar_density)) + 
+  geom_point() + 
+  geom_smooth() + 
+  theme_centrality()+
+  labs(x = "True Density",
+       y = "mlVAR Density")
+```
+
+Alternatively, we can calculate the correlation between true and estimated density for each iteration of the simulation: 
+```{r}
+df_density_mlvar |> 
+  group_by(sim_rep) |> 
+  summarize(true_est_cor = cor(true_density, mlvar_density)) |> 
+  ggplot(aes(x = true_est_cor))+
+  geom_histogram()+ 
+  theme_centrality()+
+  labs(x = "Correlation of true and estimated densities")
+```
+
+
 
 
 
