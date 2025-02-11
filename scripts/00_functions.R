@@ -881,6 +881,168 @@ centrality_mlvar_sim <- function(simobj,
 }
 
 
+# nlme mlVAR implementation for sanity checks
+mlVAR_nlme <- function(data,
+                       id,
+                       time,
+                       vars,
+                       center = FALSE,
+                       scale = FALSE) {
+  
+  
+  data <- data |>
+    dplyr::arrange(.data[[id]], .data[[time]])
+  
+  
+  # Person-specific centering or scaling
+  if (center & !scale) {
+    data <- data |>
+      dplyr::group_by(.data[[id]]) |>
+      dplyr::mutate(across(all_of(vars), ~ . - mean(.))) |>
+      dplyr::ungroup()
+  } else if (scale) {
+    data <- data |>
+      dplyr::group_by(.data[[id]]) |>
+      dplyr::mutate(across(all_of(vars), ~ as.numeric(scale(.)))) |>
+      dplyr::ungroup()
+  }
+  
+  # create lagged versions of the variables (lag-1).
+  # for each variable in 'vars', create a new variable called "<var>_lag"
+  for (v in vars) {
+    lag_name <- paste0(v, "_lag")
+    data <- data |>
+      dplyr::group_by(.data[[id]]) |>
+      dplyr::mutate(!!lag_name := lag(.data[[v]], n = 1)) |>
+      dplyr::ungroup()
+  }
+  
+  # remove rows with missing lag values (i.e. the first time point per person)
+  lag_vars <- paste0(vars, "_lag")
+  data_fit <- data |>
+    dplyr::filter(if_all(all_of(lag_vars), ~ !is.na(.)))
+  
+  # prepare storage
+  p <- length(vars)
+  
+  # matrix for fixed beta coefficients:
+  fixedBeta <- matrix(NA, nrow = p, ncol = p + 1)
+  rownames(fixedBeta) <- vars
+  colnames(fixedBeta) <- c("Intercept", paste0(vars, "_lag"))
+  
+  # lists to store per–outcome lme models, their random effects, and residuals
+  model_list <- list()
+  random_effects_list <- list()
+  residuals_list <- list()
+  
+  # browser()
+  
+  # loop over outcomes and fit a lag-1 multilevel regression using nlme
+  for (i in seq_along(vars)) {
+    outcome <- vars[i]
+    # Construct the fixed-effects formula: outcome ~ lagged predictors
+    predictors <- paste0(vars, "_lag")
+    formula_str <- paste(outcome, "~ 1+", paste(predictors, collapse = " + "))
+    formula_obj <- as.formula(formula_str)
+    
+    # Construct the random-effects formula:
+    # Here we allow a random intercept and random slopes for all predictors.
+    # (nlme will estimate an unstructured covariance matrix by default.)
+    # rand_formula <- as.formula(paste("~ ", paste(predictors, collapse = " + "), "|", id))
+    rand_formula <- as.formula(paste("~ 1 ", "|", id))
+    
+    # Fit the lme model
+    model <- nlme::lme(
+      fixed = formula_obj,
+      data = data_fit,
+      random = rand_formula,
+      method = "REML",
+      control = nlme::lmeControl(opt = "optim", msMaxIter = 50, msVerbose = TRUE)
+    )
+    
+    model_list[[outcome]] <- model
+    
+    # extract fixed effects
+    fe <- fixed.effects(model)
+    fixedBeta[i, ] <- fe
+    
+    # extract the person–specific random effects (a data.frame with one row per person)
+    re <- ranef(model)
+    random_effects_list[[outcome]] <- re
+    
+    # also, extract residuals (with id and time information) for later merging.
+    res_df <- data_fit[, c(id, time)]
+    res_df$outcome_resid <- resid(model)
+    # Rename the residual column to the outcome name
+    names(res_df)[names(res_df) == "outcome_resid"] <- outcome
+    residuals_list[[outcome]] <- res_df
+  }
+  
+  # merge the residuals from the p models by id and time
+  # assumes that the same observations were used in each model
+  residuals_merged <- residuals_list[[1]]
+  if (p > 1) {
+    for (j in 2:p) {
+      residuals_merged <- merge(residuals_merged, residuals_list[[vars[j]]], by = c(id, time))
+    }
+  }
+  
+  # compute the fixed (pooled) residual covariance matrix, theta
+  # this is computed using the residuals from all observations.
+  res_mat <- as.matrix(residuals_merged[, vars])
+  fixedTheta <- cov(res_mat, use = "complete.obs")
+  
+  # compute person–specific residual covariance matrices.
+  unique_ids <- unique(residuals_merged[[id]])
+  randomTheta <- list()
+  for (i in unique_ids) {
+    sub_df <- residuals_merged[residuals_merged[[id]] == i, ]
+    if (nrow(sub_df) > 1) {
+      theta_i <- cov(as.matrix(sub_df[, vars]), use = "complete.obs")
+    } else {
+      theta_i <- NA  # Not enough time points to compute covariance
+    }
+    randomTheta[[as.character(i)]] <- theta_i
+  }
+  
+  # compute person–specific beta matrices.
+  # for each person, for each outcome, add the person’s random effects to the fixed effect.
+  # the result is a list (by person) of p x (p+1) matrices (rows = outcomes).
+  randomBeta <- list()
+  for (i in unique(data_fit[[id]])) {
+    beta_matrix <- matrix(NA, nrow = p, ncol = ncol(fixedBeta))
+    rownames(beta_matrix) <- vars
+    colnames(beta_matrix) <- colnames(fixedBeta)
+    for (j in seq_along(vars)) {
+      outcome <- vars[j]
+      # Get the random effects for this outcome for person i
+      re_df <- random_effects_list[[outcome]]
+      if (as.character(i) %in% rownames(re_df)) {
+        beta_matrix[outcome, ] <- fixedBeta[outcome, ] + as.numeric(re_df[as.character(i), ])
+      } else {
+        beta_matrix[outcome, ] <- fixedBeta[outcome, ]
+      }
+    }
+    randomBeta[[as.character(i)]] <- beta_matrix
+  }
+  
+  return(
+    list(
+      fixedBeta   = fixedBeta,
+      # p x (p+1) fixed effects: intercept and slopes for each outcome.
+      fixedTheta  = fixedTheta,
+      # p x p pooled (fixed) residual covariance matrix.
+      randomBeta  = randomBeta,
+      # A list (by person) of person–specific beta matrices.
+      randomTheta = randomTheta,
+      # A list (by person) of person–specific residual covariance matrices.
+      model_list  = model_list     # The individual lme model fits (optional).
+    )
+  )
+}
+
+
+
 #------------------------------------------------------------------------------>
 # Simulation Helper Functions
 #------------------------------------------------------------------------------>

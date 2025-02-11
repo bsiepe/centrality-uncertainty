@@ -54,6 +54,7 @@ library(here)
 library(future)
 library(corpcor)
 library(gridExtra)
+library(nlme)
 source(here::here("scripts", "00_functions.R"))
 ```
 
@@ -1198,6 +1199,54 @@ hist(beta_cors)
 
 This means that for each individual, the estimated betas show good recovery, but not across individuals. That also explains why recovery of the most central edge works alright, but relating it to an outcome does not work. 
 
+
+
+# Idea 5: Different mlVAR Estimator
+
+We can also try a different self-made estimator for a multilevel VAR model in a frequentist framework. We build it by estimating univariate regressions with nlme. 
+
+```{r mlvar-nlme}
+# get data 
+graph_sparse <- readRDS(here("data", "graph_sparse.RDS"))
+
+ml_sim <- sim_gvar_loop(
+                     graph = graph_sparse,
+                     beta_sd = 0.05,
+                     kappa_sd = 0.05,
+                     sigma_sd = 0.05, 
+                     n_person = 100,
+                     n_time = 100,
+                     n_node = 6,
+                     max_try = 10000,
+                     listify = TRUE,
+                     sim_pkg = "mlVAR",
+                     sparse_sim = TRUE,
+                     most_cent_diff_temp = FALSE,
+                     # most_cent_diff_temp_min = 0.05,
+                     most_cent_diff_cont = FALSE,
+                     # most_cent_diff_cont_min = 0.05,
+                     innov_var_fixed_sigma = TRUE)
+
+
+# estimate the model
+df_data <- dplyr::bind_rows(purrr::map(ml_sim$data, dplyr::as_tibble)
+                              , .id = "ID") |> 
+    mutate(ID = as.factor(ID)) |> 
+    group_by(ID) |> 
+    mutate(tp = row_number()) |> 
+    ungroup()
+
+nlme_fit <- mlVAR_nlme(
+                       data = df_data,
+                       id = "ID",
+                       time = "tp",
+                       vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
+                       center = TRUE,
+                       scale = FALSE
+)
+
+
+```
 
 
 
