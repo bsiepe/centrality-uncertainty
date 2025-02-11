@@ -39,7 +39,7 @@ execute:
   warning: false
   eval: true
 params:
-  rerun: true  # define parameter if all large analyses should be rerun
+  rerun: false  # define parameter if all large analyses should be rerun
 ---
 
 # Preparation
@@ -47,6 +47,7 @@ In this document, we will use an empirical data set to demonstrate the results o
 
 ```{r setup}
 # Libraries
+library(plyr)
 library(tidyverse)
 library(graphicalVAR)
 library(mlVAR)
@@ -64,8 +65,9 @@ library(ggdist)
 library(ggh4x)
 library(sysfonts)
 library(showtext)
-library(beeswarm)
-source(here("scripts", "00_functions.R"))
+# library(beeswarm)
+
+source(here::here("scripts", "00_functions.R"))
 set.seed(35037)
 ```
 
@@ -694,8 +696,8 @@ ests_bmlvar_scaled <- extract_all_estimates(fit_bmlvar_scaled,
                                        transpose_beta = TRUE,
                                        pcor_matrix = TRUE)
 ests_bmlvar_centered <- extract_all_estimates(fit_bmlvar_centered,
-                                       n_id = n_id, 
-                                       n_var = n_var, 
+                                       n_id = n_id,
+                                       n_var = n_var,
                                        transpose_beta = TRUE,
                                        pcor_matrix = TRUE)
 
@@ -797,7 +799,8 @@ df_regression_centered <- list(
 
 saveRDS(df_regression_centered, here("output/empirical_example/regression_empirical_example_centered.RDS"))
 
-
+rm(ests_bmlvar_centered)
+rm(fit_bmlvar_centered)
 ```
 
 
@@ -1291,6 +1294,51 @@ ggsave(here("figures", "empirical_example", "most_central_example_plot.pdf"), wi
 
 An additional advantage of Bayesian inference is the use of posterior predictive simulations, where we can compare predictive simulations from the posterior with the true observed data patterns. 
 ```{r bmlvar-postpred}
+y_rep_draws <- rstan::extract(fit_bmlvar, "Y_rep")
+
+posterior_draws <- y_rep_draws$Y_rep
+
+# transpose posterior_draws
+posterior_draws <- aperm(y_rep_draws$Y_rep, c(2,1,3))
+
+# Sample 200 columns
+posterior_samples <- posterior_draws[, sample(dim(posterior_draws)[2], 200),]
+
+# split into list
+samples_list <- plyr::alply(posterior_samples, 3)
+
+# convert to dataframe with id
+samples_list <- lapply(samples_list, function(x){
+  x |> 
+    as.data.frame() |> 
+    mutate(subj_id = data_bringmann_imputed$subj_id) |> 
+    dplyr::group_by(subj_id) |> 
+    dplyr::mutate(obs = row_number()) |> 
+    dplyr::ungroup() |> 
+    pivot_longer(cols = !c(subj_id, obs),
+                 values_to = "est",
+                 names_to = "iter") |> 
+    dplyr::mutate(iter = as.numeric(gsub("V", "", iter)))
+})
+
+
+# plot example participant with second variable (happy)
+samples_list[[2]] |> 
+  dplyr::filter(subj_id == "31") |> 
+  dplyr::group_by(obs) |> 
+  dplyr::summarize(est_mean = mean(est)) |> 
+  ungroup() |> 
+  # attach observed centered data
+  bind_cols(df_data_scaled |> filter(subj_id == 31) |> select(happy)) |> 
+  dplyr::rename(estimate = est_mean, 
+         observed = happy) |> 
+  pivot_longer(!obs) |> 
+  ggplot(aes(x = obs, y = value, color = name)) + 
+  geom_line()+
+  theme_centrality()+
+  labs(x = "Time Point",
+       y = "Happiness")
+
 
 ```
 

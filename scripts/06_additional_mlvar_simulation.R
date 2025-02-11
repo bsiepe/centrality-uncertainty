@@ -1,7 +1,7 @@
 #' ---
 #' title: "Uncertainty is central for reliable inferences: 
 #'         Using dynamic network features as predictors"
-#' subtitle: "Simulation Code"
+#' subtitle: "Investigations into mlVAR performance"
 #' author: 
 #'  - name: Björn S. Siepe
 #'    orcid: 0000-0002-9558-4648
@@ -33,18 +33,18 @@
 #'     fig-width: 7
 #'     fig-height: 4.5
 #'     fig-align: "center"
-#'     embded-resouces: true
+#'     embed-resources: true
 #' execute:
 #'   message: false
 #'   warning: false
-#'   eval: false # only show code
+#'   eval: true # only show code
 #' ---
 #' 
 #' # Background
-#' This script contains the `SimDesign` code for an additional simulation investigation into `mlVAR`, where we try uncorrelated random effects to see if this improves the performance of the method. 
+#' This script contains the `SimDesign` code for an additional simulation investigation into `mlVAR`, where we try various different things to investigate why mlVARs performance for random effects was poor. 
 #' 
 #' We first load all relevant packages: 
-## ----packages-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -53,45 +53,44 @@ library(gimme)
 library(here)
 library(future)
 library(corpcor)
+library(gridExtra)
 source(here::here("scripts", "00_functions.R"))
 
 #' 
 #' 
 #' 
 #' 
-#' # Data Generation
+#' # Idea 1: Different Simulation
+#' 
+#' We have tried various different simulation settings (different random effects variance, different number of time points), but none of them really improved the performance of mlVAR for outcome prediction with centrality indices. Here, we showcase results with a low innovation variance. Note that the association with the outcome must be off here (because we did not resimulate the true standard deviation for the centralities), but the rank order of centrality should still be recovered if mlVAR worked well. 
 #' 
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----eval=FALSE--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
 # sparse DGP
 graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
-# try out what happens if we decrease sigma substantially
-
-graph_sparse$sigma <- graph_sparse$sigma * 0.3
-
-#' 
-#' 
-#' 
+#'
+#'
+#'
 #' ## Setting parameters
-#' 
+#'
 #' We define the conditions and the fixed parameters for the simulation.
-#' 
-## ----params-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#'
+## ----params, eval=FALSE------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 dgp <- c("sparse")
 
 # Number of timepoints
-n_tp <- c(60, 120)
+n_tp <- c(60, 900)
 
 heterogeneity <- "high"
 
 # Simulation parameters
-# Number of individuals 
+# Number of individuals
 n_id <- c(75, 200)
 
 # Design Conditions
@@ -117,149 +116,63 @@ gimme_pcor = TRUE
 # Should data for non-Bayesian methods be person-mean centered?
 mean_center = TRUE
 
-
-# random effects sds
-# beta_sd <- 0.1
-# kappa_sd <- 0.1
-# # Strength of the correlation
-# hard-coded down below
-# beta_reg <- c(0, 0.2, 0.4)
-
 sim_pars <- list(
   n_id = n_id,
   n_var = n_var,
-  # n_tp = n_tp,
   reg_error_sd = reg_error_sd,
-  # beta_sd = beta_sd,
-  # kappa_sd = kappa_sd,
   graph_nonsparse = graph_nonsparse,
   graph_sparse = graph_sparse,
   gimme_var_only = gimme_var_only,
   mean_center = mean_center
 )
 
-#' 
-#' <!-- Pre-compiling the Stan model -->
-#' <!-- ```{r precompile} -->
-#' <!-- model_name <- "MLVAR_lkj_only" -->
-#' <!-- # Compile model -->
-#' <!-- sim_pars$mlvar_model <- -->
-#' <!--   rstan::stan_model( -->
-#' <!--     file = here::here("scripts", "models", paste0(model_name, ".stan")), -->
-#' <!--     model_name = model_name -->
-#' <!--   ) -->
-#' 
-#' <!-- ``` -->
-#' 
-#' 
-#' To simulate data with a specific correlation, we need to obtain the true standard deviation of the different centrality measures. For the temporal network, this is easy to compute, as it just follows from the random effects of the VAR matrix. 
-#' For the partial correlations, this is a bit more complicated, as we simulate from the true covariance matrix, but calculate the centrality based on the partial correlation matrix. Therefore, we just simulate a large number of partial correlation matrices for the data-generating process of each condition and then calculate the implied standard deviation of the centrality measure.
-#' 
-#' # ```{r true-strength-sd, eval = FALSE}
-#' # # number of simulations to obtain sd
-#' # n_sim_sd <- 30000
-#' # sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
-#' # 
-#' # for(i in 1:nrow(df_design)){
-#' #   condition <- df_design[i,]
-#' #   
-#' #   dgp_graph <- ifelse(condition$dgp == "sparse", 
-#' #                       "graph_sparse", 
-#' #                       "graph_nonsparse")
-#' #   beta_sd <- ifelse(condition$heterogeneity == "low",
-#' #                     0.05,
-#' #                     0.075)
-#' #   sigma_sd <- ifelse(condition$heterogeneity == "low",
-#' #                     0.05,
-#' #                     0.075)
-#' #   ml_sim <- sim_gvar_loop(
-#' #                      graph = sim_pars[[dgp_graph]],
-#' #                      beta_sd = beta_sd,
-#' #                      kappa_sd = kappa_sd,
-#' #                      sigma_sd = sigma_sd, 
-#' #                      n_person = n_sim_sd,
-#' #                      n_time = condition$n_tp,
-#' #                      n_node = sim_pars$n_var,
-#' #                      max_try = 1000,
-#' #                      verbose = FALSE,
-#' #                      listify = TRUE,
-#' #                      sim_pkg = "mlVAR",
-#' #                      sparse_sim = TRUE,
-#' #                      most_cent_diff_temp = TRUE,
-#' #                      most_cent_diff_temp_min = 0.05,
-#' #                      most_cent_diff_cont = TRUE,
-#' #                      most_cent_diff_cont_min = 0.05,
-#' #                      innov_var_fixed_sigma = TRUE)
-#' #   
-#' #   # Obtain true centralities
-#' #   true_cent <- centrality_mlvar_sim(ml_sim,
-#' #                                   sim_fn = "sim_gvar_loop")
-#' # 
-#' #   strength <- sapply(true_cent$strength, `[`, 1)
-#' #   outstrength <- sapply(true_cent$outstrength, `[`, 1)
-#' #   instrength <- sapply(true_cent$instrength, `[`, 1)
-#' #   strength_sd <- sd(strength)
-#' #   outstrength_sd <- sd(outstrength)
-#' #   instrength_sd <- sd(instrength)
-#' #   sd_results_strength[[i]] <- strength_sd
-#' #   sd_results_outstrength[[i]] <- outstrength_sd
-#' #   sd_results_instrength[[i]] <- instrength_sd
-#' # }
-#' # 
-#' # 
-#' # sd_results <- list(sd_results_strength, sd_results_outstrength, sd_results_instrength)
-#' # names(sd_results) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
-#' # 
-#' # 
-#' # saveRDS(sd_results, here::here("data", "true_sd_semisparse.RDS"))
-#' # 
-#' # ```
-#' 
-#' As we only need to compute the true SD once, we can simply load it from disk to save time: 
-## -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#'
+#'
+#' As we only need to compute the true SD once, we can simply load it from disk to save time:
+## ----eval=FALSE--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 true_sd <- readRDS(here::here("data", "true_sd_semisparse.RDS"))
 names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 df_design$strength_sd <- unlist(true_sd$sd_results_strength)
 df_design$outstrength_sd <- unlist(true_sd$sd_results_outstrength)
 df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
 
-#' 
-#' 
-#' 
+#'
+#'
+#'
 #' ## Simulating Data
-#' 
-#' 
-## ----generate-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+#'
+#'
+## ----generate, eval=FALSE----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
   # obtain fixed params
   SimDesign::Attach(fixed_objects)
 
-  dgp_graph <- ifelse(condition$dgp == "sparse", 
-                      "graph_sparse", 
+  dgp_graph <- ifelse(condition$dgp == "sparse",
+                      "graph_sparse",
                       "graph_nonsparse")
   beta_sd <- ifelse(condition$heterogeneity == "low",
                     0.05,
                     0.075)
   sigma_sd <- ifelse(condition$heterogeneity == "low",
-                    0.05,
-                    0.075)
-  
+                    0.005,
+                    0.005)
+
   # scale kappa random effects w.r.t diagonal elements
-  mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
-  kappa_sd_low <- 0.05 * mean_diag_kappa
-  kappa_sd_high <- 0.075 * mean_diag_kappa
-  
+  mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa))
+  kappa_sd_low <- 0.005 * mean_diag_kappa
+  kappa_sd_high <- 0.005 * mean_diag_kappa
+
   kappa_sd <- ifelse(condition$heterogeneity == "low",
                      kappa_sd_low,
                      kappa_sd_high)
-  
+
   ml_sim <- sim_gvar_loop(
                      graph = fixed_objects[[dgp_graph]],
                      beta_sd = beta_sd,
                      kappa_sd = kappa_sd,
-                     sigma_sd = sigma_sd, 
+                     sigma_sd = sigma_sd,
                      n_person = condition$n_id,
                      n_time = condition$n_tp,
                      n_node = n_var,
@@ -275,12 +188,12 @@ sim_generate <- function(condition, fixed_objects = NULL){
   if(any(is.na(ml_sim$beta))){
     stop("Generation of Betas failed")
   }
-  
+
   if(any(is.na(ml_sim$pcor))){
     stop("Generation of PCORs failed")
-  } 
-  
-  
+  }
+
+
   # Obtain true centralities
   true_cent <- centrality_mlvar_sim(ml_sim,
                                     sim_fn = "sim_gvar_loop")
@@ -289,40 +202,35 @@ sim_generate <- function(condition, fixed_objects = NULL){
   instrength <- sapply(true_cent$instrength, `[`, 1)
   outstrength <- sapply(true_cent$outstrength, `[`, 1)
   strength <- sapply(true_cent$strength, `[`, 1)
-  
-  
+
+
   # Simulate correlated data with true variance of centralities
   # first column is the density to keep track of the density
   # and for compatibility with an old sim function
-  sim_correlated <- function(density, 
-                             r_true, 
+  sim_correlated <- function(density,
+                             r_true,
                              sd_true){
   y_matrix <- matrix(NA, nrow = length(density), ncol = length(r_true) + 1)
   y_matrix[, 1] <- density
-  
+
   for (i in seq_along(r_true)) {
     sd_error <- sd_true * sqrt(1 - r_true[i]^2)
     y_matrix[, i + 1] <- r_true[i] * density + rnorm(length(density), mean = 0, sd = sd_error)
   }
-  
+
   return(y_matrix)
   }
-  
-  # True density standard deviations would just be the random effects sds
-  # divided by the sqrt(n) -> it's just the standard deviation of the average
-  # of multiple independent random variables. BUT we convert to partial 
-  # correlations, and we take the absolute values, so we just approximate
-  # the true SD with a monte carlo approach
+
   covariate_cont_strength <- sim_correlated(density = strength,
                                             r_true = c(0, 0.2, 0.4),
                                             sd_true = condition$strength_sd)
-  covariate_in_strength <- sim_correlated(density = instrength, 
-                                          r_true = c(0, 0.2, 0.4), 
+  covariate_in_strength <- sim_correlated(density = instrength,
+                                          r_true = c(0, 0.2, 0.4),
                                           sd_true = condition$instrength_sd)
-  covariate_out_strength <- sim_correlated(density = outstrength, 
-                                           r_true = c(0, 0.2, 0.4), 
+  covariate_out_strength <- sim_correlated(density = outstrength,
+                                           r_true = c(0, 0.2, 0.4),
                                            sd_true = condition$outstrength_sd)
-  
+
 
   if(sd(instrength) == 0){
     stop("No variation in instrength")
@@ -338,8 +246,8 @@ sim_generate <- function(condition, fixed_objects = NULL){
   cor_strength <- cor(covariate_cont_strength[,1], covariate_cont_strength)
   cor_instrength <- cor(covariate_in_strength[,1], covariate_in_strength)
   cor_outstrength <- cor(covariate_out_strength[,1], covariate_out_strength)
-  
-  
+
+
   # Return data and true centralities
   ret_data <- list(
     data = ml_sim$data,
@@ -350,159 +258,57 @@ sim_generate <- function(condition, fixed_objects = NULL){
     covariate_out_strength = covariate_out_strength,
     covariate_in_strength = covariate_in_strength,
     true_cent = true_cent,
-    # TODO delete these
     cor_strength = cor_strength,
     cor_instrength = cor_instrength,
     cor_outstrength = cor_outstrength
   )
-  
+
   return(ret_data)
-  
-  
+
+
 }
 
-#' 
-#' 
-#' 
-#' 
-#' 
-#' # Analysis
-#' 
-## ----data-analysis------------------------------------------------------------------------------------------------------------------------------------------------------------
+#'
+#'
+#'
+#'
+#'
+#' ## Analysis
+#'
+## ----data-analysis, eval=FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
-  
+
   #--- Preparation
   SimDesign::Attach(fixed_objects)
-  
+
   # Check if mean centering option is true, if so, mean center
   if(isTRUE(fixed_objects$mean_center)){
     dat$data_centered <- lapply(dat$data, function(x){
-      x |> 
-        dplyr::as_tibble() |> 
+      x |>
+        dplyr::as_tibble() |>
         dplyr::mutate(across(everything(), ~ . - mean(.)))
-      
+
+    })
+  } else {
+    dat$data_centered <- lapply(dat$data, function(x){
+      x |>
+        dplyr::as_tibble()
+
     })
   }
-  
+
   # Concatenate list of data into dataframe with id column
   df_data_centered <- dplyr::bind_rows(purrr::map(dat$data_centered, dplyr::as_tibble)
-                              , .id = "ID") |> 
+                              , .id = "ID") |>
     dplyr::mutate(ID = as.factor(ID))
-  
+
   df_data <- dplyr::bind_rows(purrr::map(dat$data, dplyr::as_tibble)
-                              , .id = "ID") |> 
+                              , .id = "ID") |>
     dplyr::mutate(ID = as.factor(ID))
-  
+
   n_id <- condition$n_id
-  
-  # #--- graphicalVAR
-  # # Fit models
-  # fit_gvar <- lapply(dat$data_centered, function(x){
-  #   tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
-  #                              nLambda = 50,
-  #                              verbose = FALSE,
-  #                              gamma = 0, 
-  #                              scale = FALSE))}, error = function(e) NA)
-  # })
-  # 
-  # if(any(is.na(fit_gvar))){
-  #   stop("Not all GVAR models converged.")
-  # }
-  # 
-  # # Obtain centralities, IDs nested in list
-  # cent_gvar <- purrr::transpose(lapply(fit_gvar, function(x){
-  #   centrality_gvar(x)
-  # }))
-  # 
-  # 
-  # dens_temp_gvar <- unlist(cent_gvar$dens_temp)
-  # dens_cont_gvar <- unlist(cent_gvar$dens_cont)
-  # outstrength_gvar <- lapply(cent_gvar$outstrength, function(x) unname(x))
-  # instrength_gvar <- lapply(cent_gvar$instrength, function(x) unname(x))
-  # strength_gvar <- lapply(cent_gvar$strength, function(x) unname(x))
-  # instrength_gvar_first <- sapply(cent_gvar$instrength, function(x) unname(x[1]))
-  # strength_gvar_first <- sapply(cent_gvar$strength, function(x) unname(x[1]))
-  # outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1]))
-  # 
-  # # Create list of subject-specific estimates
-  # beta_gvar <- lapply(fit_gvar, function(x){
-  #   x$beta[,-1]
-  # })
-  # pcor_gvar <- lapply(fit_gvar, function(x){
-  #   x$PCC
-  # })
-  # 
-  # # Fit regression
-  # reg_gvar_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_gvar_first))
-  # reg_gvar_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_gvar_first))
-  # reg_gvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gvar_first))
-  # 
-  # # remove fit object to save memory
-  # rm(fit_gvar)
-  
-  # #--- GIMME
-  # 
-  # # Fit model
-  # fit_gimme <- tryCatch({gimme::gimme(dat$data_centered,
-  #                           ar = TRUE,
-  #                           subgroup = TRUE,
-  #                           plot = FALSE,
-  #                           hybrid = FALSE,
-  #                           groupcutoff = .75,
-  #                           subcutoff = .75,
-  #                           VAR = gimme_var_only)}, error = function(e) NA)
-  # 
-  # 
-  # if(any(is.na(fit_gimme))){
-  #   stop("GIMME did not converge.")
-  # }
-  # 
-  # # for var_only, we need to first extract the contemporaneous matrices
-  # if(isTRUE(gimme_var_only)){
-  #   fit_gimme$contemp_mat <- lapply(1:length(fit_gimme$path_est_mats), function(i){
-  #     gimme_cor_mat(fit_gimme, id = i, n_vars = n_var, pcor = fixed_objects$gimme_pcor)
-  #   }
-  # )
-  # }
-  # 
-  # cent_gimme <- centrality_gimme(fit_gimme,
-  #                                var_only = gimme_var_only)
-  # 
-  # # Obtain centralities
-  # dens_temp_gimme <- unlist(cent_gimme$dens_temp)
-  # dens_cont_gimme <- unlist(cent_gimme$dens_cont)
-  # outstrength_gimme <- lapply(cent_gimme$outstrength, function(x) unname(x))
-  # instrength_gimme <- lapply(cent_gimme$instrength, function(x) unname(x))
-  # strength_gimme <- lapply(cent_gimme$strength, function(x) unname(x))
-  # outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
-  # instrength_gimme_first <- sapply(cent_gimme$instrength, function(x) unname(x[1]))
-  # strength_gimme_first <- sapply(cent_gimme$strength, function(x) unname(x[1]))
-  # 
-  # # Create list of subject-specific estimates
-  # beta_gimme <- lapply(fit_gimme$path_est_mats, function(x){
-  #   x[,1:n_var]
-  # })
-  # 
-  # if(isFALSE(gimme_var_only)){
-  #     pcor_gimme <- lapply(fit_gimme$path_est_mats, function(x){
-  #   x[, (n_var+1):(n_var*2)]
-  # })
-  # }
-  # 
-  # if(isTRUE(gimme_var_only)){
-  #   pcor_gimme <- lapply(fit_gimme$contemp_mat, function(x){
-  #     x
-  #   })
-  # }
-  # 
-  # 
-  # # Fit regression
-  # reg_gimme_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_gimme_first))
-  # reg_gimme_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_gimme_first))
-  # reg_gimme_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gimme_first))
-  # 
-  # rm(fit_gimme)
-  
+
+
   # #--- frequentist mlVAR
 
   # Fit model
@@ -517,8 +323,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   if(any(is.na(fit_mlvar))){
     stop("mlVAR did not converge.")
   }
-  
-  
+
+
 
   # Obtain centralities
   cent_mlvar <- centrality_mlvar(fit_mlvar)
@@ -530,7 +336,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   outstrength_mlvar_first <- sapply(cent_mlvar$outstrength, function(x) unname(x[1]))
   instrength_mlvar_first <- sapply(cent_mlvar$instrength, function(x) unname(x[1]))
   strength_mlvar_first <- sapply(cent_mlvar$strength, function(x) unname(x[1]))
-  
+
   # Create list of subject-specific estimates
   beta_mlvar <- lapply(1:n_id, function(i){
     t(mlVAR::getNet(fit_mlvar,
@@ -544,7 +350,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                   type = "contemporaneous",
                   nonsig = "show")
   })
-  
+
   # # Calculate fixed effects adjacency matrix
   adj_mat_beta <- t(ifelse(
     mlVAR::getNet(fit_mlvar,
@@ -567,149 +373,12 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   reg_mlvar_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_mlvar_first))
   reg_mlvar_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_mlvar_first))
   reg_mlvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_mlvar_first))
-  
+
   rm(fit_mlvar)
-  # 
-  # #--- Bayesian mlVAR
-  # # indicators for partial correlations
-  # idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |> 
-  #     c() |> 
-  #     which()
-  # 
-  # reg_data <- cbind(
-  #   dat$covariate_in_strength[, 2:4],
-  #   dat$covariate_out_strength[, 2:4],
-  #   dat$covariate_cont_strength[, 2:4]
-  # )
-  # Y <- df_data |> 
-  #   dplyr::select(-"ID") |> 
-  #   as.matrix()
-  # 
-  # n_tp <- condition$n_tp
-  # 
-  # # Prepare stan data
-  # stan_data <- list(
-  #   K = n_var,
-  #   I = n_id,
-  #   P = 9,   # number of regression outcomes
-  #   N_total = n_id * n_tp,
-  #   n_t = rep(n_tp, n_id),
-  #   n_pc = n_var * (n_var - 1) / 2,
-  #   idx_rho = array(idx_rho, dim = length(idx_rho)),
-  #   Y = Y,
-  #   reg_covariate = reg_data,
-  #   sparsity = 2,
-  #   # should lagged estimates be mean-centered?
-  #   mean_center = 1
-  # )
-  # 
-  # 
-  # fit_bmlvar <- rstan::sampling(
-  # object = fixed_objects$mlvar_model,
-  # pars = c("Beta_raw", "Intercepts_raw", "L_Theta", "Rho", "lp__"),
-  # include = FALSE,
-  # data = stan_data,
-  # # seed = 2023,
-  # chains = 4,
-  # cores = 1,
-  # warmup = 500,
-  # iter = 1000,
-  # init = 0,
-  # control = list(adapt_delta = 0.90),
-  # verbose = FALSE
-  # )
-  # 
-  # if(!inherits(fit_bmlvar, "stanfit")){
-  #   stop("BmlVAR model failed.")
-  # }
-  # 
-  # # Transpose beta matrices for later summaries
-  # # in the DGP, cols represent lagged vars
-  # # but in BmlVAR, rows represent lagged vars
-  # ests_bmlvar <- extract_all_estimates(fit_bmlvar,
-  #                                      n_id = n_id, 
-  #                                      n_var = n_var, 
-  #                                      transpose_beta = FALSE,
-  #                                      pcor_matrix = TRUE)
-  # 
-  # # Obtain centralities
-  # dens_temp_bmlvar <- ests_bmlvar$tempdens_est$median
-  # dens_cont_bmlvar <- ests_bmlvar$contdens_est$median
-  # instrength_bmlvar <- ests_bmlvar$instrength_est$median
-  # outstrength_bmlvar <- ests_bmlvar$outstrength_est$median
-  # strength_bmlvar <- ests_bmlvar$pcor_centrality_est$median
-  # outstrength_bmlvar_first <- sapply(ests_bmlvar$outstrength_est$median, function(x) unname(x[1]))
-  # strength_bmlvar_first <- sapply(ests_bmlvar$pcor_centrality_est$median, function(x) unname(x[1]))
-  # instrength_bmlvar_first <- sapply(ests_bmlvar$instrength_est$median, function(x) unname(x[1]))
-  # 
-  # # Obtain regression coefficients
-  # reg_bmlvar <- list(
-  #   regression_intercept = ests_bmlvar$regression_intercept_est, 
-  #   regression_slope = ests_bmlvar$regression_slope_est)
-  # 
-  # # save summary, but not the c_summary of individual chains
-  # summary_bmlvar <- rstan::summary(fit_bmlvar,
-  #                                  pars = c("Beta",
-  #                                           "mu_Beta",
-  #                                           "sigma_Beta",
-  #                                           "mu_Intercepts",
-  #                                           "sigma_Intercepts",
-  #                                           "reg_intercept",
-  #                                           "reg_slope_density",
-  #                                           "sigma_residual",
-  #                                           "Intercepts",
-  #                                           "Sigma",
-  #                                           "Rho_vec",
-  #                                           "Beta_out_strength",
-  #                                           "Beta_in_strength",
-  #                                           "Rho_strength",
-  #                                           "mu_regression",
-  #                                           "reg_slope_density_z",
-  #                                           "reg_intercept_z",
-  #                                           "theta_sd"))$summary
-  # 
-  # # remove some posterior descriptives
-  # summary_bmlvar <- summary_bmlvar[, !(colnames(summary_bmlvar) %in% c("25%", "75%"))]
-  # 
-  # # convergence diagnostics
-  # rhat_bmlvar_tmp <- summary_bmlvar |> as.data.frame() |> pull(Rhat)
-  # rhat_bmlvar_tmp <- rhat_bmlvar_tmp[!is.nan(rhat_bmlvar_tmp)]
-  # rhat_bmlvar_mean <- mean(rhat_bmlvar_tmp, na.rm = TRUE)
-  # rhat_bmlvar_11 <- sum(rhat_bmlvar_tmp > 1.1)/length(rhat_bmlvar_tmp)
-  # divtrans_bmlvar <- rstan::get_num_divergent(fit_bmlvar)
-  # 
-  # rm(fit_bmlvar)
-  
+
   #--- Return Results
   # Also return true centralities for comparison later
   ret_results <- list(
-    # gvar = list(
-    #   fit_gvar = list(
-    #     beta = beta_gvar,
-    #     pcor = pcor_gvar),
-    #   dens_temp = dens_temp_gvar,
-    #   dens_cont = dens_cont_gvar,
-    #   outstrength = outstrength_gvar,
-    #   strength = strength_gvar,
-    #   instrength = instrength_gvar,
-    #   reg_instrength = reg_gvar_in_strength,
-    #   reg_strength = reg_gvar_cont_strength,
-    #   reg_outstrength = reg_gvar_out_strength
-    # ),
-    # gimme = list(
-    #   fit_gimme = list(
-    #     beta = beta_gimme,
-    #     pcor = pcor_gimme
-    #   ),
-    #   dens_temp = dens_temp_gimme,
-    #   dens_cont = dens_cont_gimme,
-    #   outstrength = outstrength_gimme,
-    #   strength = strength_gimme,
-    #   instrength = instrength_gimme,
-    #   reg_instrength = reg_gimme_in_strength,
-    #   reg_strength = reg_gimme_cont_strength,
-    #   reg_outstrength = reg_gimme_out_strength
-    # ),
     mlvar = list(
       fit_mlvar = list(
         beta = beta_mlvar,
@@ -723,23 +392,6 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
       reg_strength = reg_mlvar_cont_strength,
       reg_outstrength = reg_mlvar_out_strength
     ),
-    # bmlvar = list(
-    #   fit_bmlvar = list(
-    #     beta = ests_bmlvar$beta_est$median,
-    #     pcor = ests_bmlvar$pcor_est$median
-    #   ),
-    #   dens_temp = dens_temp_bmlvar,
-    #   dens_cont = dens_cont_bmlvar,
-    #   outstrength = outstrength_bmlvar,
-    #   strength = strength_bmlvar,
-    #   instrength = instrength_bmlvar,
-    #   reg_bmlvar = reg_bmlvar,
-    #   ests_bmlvar = ests_bmlvar,
-    #   summary_bmlvar = summary_bmlvar,
-    #   rhat_bmlvar_mean = rhat_bmlvar_mean,
-    #   rhat_bmlvar_11 = rhat_bmlvar_11,
-    #   divtrans_bmlvar = divtrans_bmlvar
-    # ),
     true_cent = dat$true_cent,
     covariate_cont_strength = dat$covariate_cont_strength,
     covariate_in_strength = dat$covariate_in_strength,
@@ -752,60 +404,52 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
     true_cor_instrength = dat$cor_instrength,
     true_cor_outstrength = dat$cor_outstrength
   )
-  
-  
+
+
   return(ret_results)
-  
+
 }
 
 
-#' 
-#' 
-#' 
-#' # Summary
-#' 
-#' To note about data structure:
-#' - GVAR fit: cols as lagged, also in the DGP
-#' - mlVAR fit: rows as lagged, cols as contemp --> now transposed
-#' - gimme fit: cols as lagged
-#' - bmlVAR fit: different data structure, but uses rows as lagged
-#' 
-#' 
-#' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
-#' 
-## ----summarize----------------------------------------------------------------------------------------------------------------------------------------------------------------
+#'
+#'
+#'
+#' ## Summary
+#'
+#'
+## ----summarize, eval=FALSE---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
-  
+
   #--- Preparation
   SimDesign::Attach(fixed_objects)
   ret <- list()
   n_id <- condition$n_id
-  
+
   # Global settings
   use_lm_beta <- FALSE
-  
-  
-  #--- Parameter recovery  
+
+
+  #--- Parameter recovery
   # IMPORTANT: Keep in mind structure of sim object (rows vs. cols)
   #-- RMSE
   summary_calc <- function(results, method, fit, measure, func) {
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[fit]])){
       return(NA)
-    } 
+    }
     else{
       unlist(func(results[[i]][[method]][[fit]][[measure]], results[[i]][[measure]]))
     }
   })
 }
 
-  
+
   methods <- c("mlvar")
   measures <- c("beta", "pcor")
-  funcs <- list("rmse" = rmse_mean_list, 
-                "mse" = mse_mean_list, 
+  funcs <- list("rmse" = rmse_mean_list,
+                "mse" = mse_mean_list,
                 "bias" = bias_mean_list)
-  
+
   # Loop to get summaries and save them into the ret list
   rmse_list <- list()
   mse_list <- list()
@@ -814,23 +458,23 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
         for (func_name in names(funcs)) {
           result_name <- paste(func_name, measure, method, sep = "_")
           calc_list <- summary_calc(
-            results, 
-            method, 
-            paste0("fit_", method), 
-            measure, 
+            results,
+            method,
+            paste0("fit_", method),
+            measure,
             funcs[[func_name]])
           mean_tmp <- colMeans(apply(as.matrix(calc_list), c(1,2), as.numeric))
           ret[[paste0(result_name, "_mean")]] <- mean(mean_tmp)
           if(func_name == "rmse"){
             # calculate MSE, needed for MCSE of RMSE
             mse_tmp <- summary_calc(
-            results, 
-            method, 
-            paste0("fit_", method), 
-            measure, 
+            results,
+            method,
+            paste0("fit_", method),
+            measure,
             funcs[["mse"]])
             mse_mean_tmp <- mean(colMeans(apply(as.matrix(mse_tmp), c(1,2), as.numeric)))
-            ret[[paste0(result_name, "_mcse")]] <- sqrt(stats::var(mean_tmp) / 
+            ret[[paste0(result_name, "_mcse")]] <- sqrt(stats::var(mean_tmp) /
                                                           (4 * n_rep * mse_mean_tmp))
           }
           else if(func_name == "mse"){
@@ -843,23 +487,23 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
       }
   }
 
-  
-    
+
+
   #--- Centrality
   #-- Rank-Order between individuals
   calc_correlation <- function(results, method, measure) {
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[paste0("fit_", method)]])){
       return(NA)
-    } 
+    }
     else{
-      stats::cor(results[[i]][[method]][[paste0("dens_", measure)]], 
-                 unlist(results[[i]]$true_cent[[paste0("dens_", measure)]]), 
+      stats::cor(results[[i]][[method]][[paste0("dens_", measure)]],
+                 unlist(results[[i]]$true_cent[[paste0("dens_", measure)]]),
                  method = "spearman")
     }
   })
   }
-  
+
   # Bootstrap the MCSE for the rank correlation
   bootstrap_rankcor <- function(data, n_boot){
     bootstrap_res <- vector("numeric", n_boot)
@@ -869,7 +513,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     }
       sd(bootstrap_res, na.rm = TRUE)
   }
-  
+
   measures <- c("temp", "cont")
   for (method in methods) {
     for (measure in measures) {
@@ -884,64 +528,64 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
       ret[[paste0(result_name, "_mcse")]] <- sd_tmp
     }
   }
-  
-    
+
+
   #-- Most central within individuals
   calc_most_cent_ident <- function(results, method, measure) {
     sapply(seq_along(results), function(i){
       if(is.null(results[[i]][[method]][paste0("fit_", method)])){
         return(NA)
-      } 
+      }
       else{
-        mci <- most_cent_ident(results[[i]][[method]][[measure]], 
+        mci <- most_cent_ident(results[[i]][[method]][[measure]],
                               results[[i]]$true_cent[[measure]])
         # check if calculation worked to prevent error
         if(!is.vector(mci) |is.null(mci) | is.null(unlist(mci))){
           return(NA)
         }
-        colSums(matrix(unlist(mci), 
-                      nrow = n_id, 
+        colSums(matrix(unlist(mci),
+                      nrow = n_id,
                       byrow = FALSE))/n_id
       }
     })
   }
-  
+
   measures <- c("instrength", "outstrength", "strength")
-  
+
   for(method in methods){
     for(measure in measures){
       calc_list <- calc_most_cent_ident(
-        results = results, 
-        method = method, 
+        results = results,
+        method = method,
         measure = measure)
-        mean_tmp <- mean(calc_list, na.rm = TRUE) 
+        mean_tmp <- mean(calc_list, na.rm = TRUE)
         mcse_tmp <- sqrt(mean_tmp * (1 - mean_tmp) / n_rep)
       if(measure == "outstrength"){
         ret[[paste0("mostcent_beta_", method, "_mean")]] <- mean_tmp
         ret[[paste0("mostcent_beta_", method, "_mcse")]] <- mcse_tmp
-        
+
       } else if(measure == "strength"){
         ret[[paste0("mostcent_pcor_", method, "_mean")]] <- mean_tmp
         ret[[paste0("mostcent_pcor_", method, "_mcse")]] <- mcse_tmp
       }
     }
   }
-  
-  
 
-  
-  
+
+
+
+
   #--- Regression
   #-- Power
-  regression_power <- function(results, 
-                               method, 
+  regression_power <- function(results,
+                               method,
                                measure,
                                true_coef = c(0,.2,.4),
                                lm_beta = use_lm_beta) {
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[paste0("reg_", measure)]])){
       return(NA)
-    } 
+    }
     else{
       reg_pvals <- sapply(results[[i]][[method]][[paste0("reg_", measure)]],
                           function(x){
@@ -962,8 +606,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
   #-- Summary
   true_coef <- c(0, .2, .4)
-  regression_summary <- function(results, 
-                              method, 
+  regression_summary <- function(results,
+                              method,
                               measure,
                               true_coef = c(0,.2,.4),
                               lm_beta = use_lm_beta,
@@ -971,7 +615,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[paste0("reg_", measure)]])){
       return(NA)
-    } 
+    }
     else{
       reg_coefs <- sapply(results[[i]][[method]][[paste0("reg_", measure)]],
                           function(x){
@@ -988,20 +632,20 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
       } else if(summary == "bias"){
         reg_coefs - true_coef
       }
-        
-      
+
+
       }
   })
   }
-  
 
-  
-  
+
+
+
   # exclude bmlvar because of its different data structure
   methods <- c("mlvar")
   measures <- c("instrength", "outstrength", "strength")
   summaries <- c("rmse", "bias", "mse")
-  
+
 
   for (method in methods) {
       for (measure in measures) {
@@ -1009,14 +653,14 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
           # Calculate summary
           result_name_summary <- paste(summary, "reg", measure, method, sep = "_")
           calc_list <- regression_summary(
-            results = results, 
-            method = method, 
+            results = results,
+            method = method,
             measure = measure,
             summary = summary)
           mean_tmp <- rowMeans(calc_list, na.rm = TRUE)
           # bit of a hack to add the names for the different correlation
           # levels
-          names(mean_tmp) <- paste0(summary, 
+          names(mean_tmp) <- paste0(summary,
                                    "_reg",
                                    c(0, 2, 4),
                                    "_",
@@ -1028,13 +672,13 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
           if(summary == "rmse"){
             # calculate MSE
             mse_tmp <- regression_summary(
-            results, 
-            method, 
+            results,
+            method,
             measure,
             summary = "mse")
             mse_mean_tmp <- rowMeans(mse_tmp, na.rm = TRUE)
             mcse_tmp <- sqrt (apply(calc_list, 1, var, na.rm = TRUE) / (4*n_rep*mse_mean_tmp))
-            names(mcse_tmp) <- paste0(summary, 
+            names(mcse_tmp) <- paste0(summary,
                                    "_reg",
                                    c(0, 2, 4),
                                    "_",
@@ -1046,7 +690,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
           } else if(summary == "mse"){
             mcse_tmp <- sqrt(
               apply(calc_list, 1, var, na.rm = TRUE) / n_rep)
-            names(mcse_tmp) <- paste0(summary, 
+            names(mcse_tmp) <- paste0(summary,
                                    "_reg",
                                    c(0, 2, 4),
                                    "_",
@@ -1059,7 +703,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
             mcse_bias <- sqrt(
               apply(calc_list, 1, var, na.rm = TRUE) / n_rep
             )
-            names(mcse_bias) <- paste0(summary, 
+            names(mcse_bias) <- paste0(summary,
                                    "_reg",
                                    c(0, 2, 4),
                                    "_",
@@ -1072,11 +716,11 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
           # Calculate Power
           result_name_power <- paste("power", "reg", measure, method, sep = "_")
           calc_list_pwr <- regression_power(
-            results = results, 
-            method = method, 
+            results = results,
+            method = method,
             measure = measure)
           pwr_mean <- rowMeans(calc_list_pwr, na.rm = TRUE)
-          names(pwr_mean) <- paste0("power", 
+          names(pwr_mean) <- paste0("power",
                                    "_reg",
                                    c(0, 2, 4),
                                    "_",
@@ -1087,7 +731,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
           ret[[paste0(result_name_power, "_mean")]] <- pwr_mean
           pwr_mcse_tmp <- sqrt(
             pwr_mean * (1 - pwr_mean) / n_rep)
-          names(pwr_mcse_tmp) <- paste0("power", 
+          names(pwr_mcse_tmp) <- paste0("power",
                                    "_reg",
                                    c(0, 2, 4),
                                    "_",
@@ -1099,284 +743,33 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
         }
       }
   }
-  
-  # # Summary for bmlvar
-  # method <- "bmlvar"
-  # regression_rmse_bmlvar <- function(
-  #                             results, 
-  #                             method = "bmlvar", 
-  #                             true_coef = c(0,.2,.4),
-  #                             # lm_beta = TRUE,
-  #                             rmse = TRUE) {
-  # sapply(seq_along(results), function(i){
-  #   if(is.null(results[[i]][[method]][["reg_bmlvar"]])){
-  #     return(NA)
-  #   } 
-  #   else{
-  #     reg_coefs <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["median"]]
-  #     # Have them all in one vector
-  #     # thus need to repeat the true_coefs 
-  #     true_coef_all <- rep(true_coef, 3)
-  # 
-  #     # Calculate RMSE
-  #     if(isTRUE(rmse)){
-  #       sqrt( (reg_coefs - true_coef )^2 )
-  #     } else{
-  #       (reg_coefs - true_coef)^2
-  #     }
-  #     
-  #     }
-  # })
-  # }
-  # 
-  # regression_bias_bmlvar <- function(
-  #                             results, 
-  #                             method = "bmlvar", 
-  #                             true_coef = c(0,.2,.4)
-  #                             # lm_beta = TRUE
-  #                             )
-  #                             {
-  # sapply(seq_along(results), function(i){
-  #   if(is.null(results[[i]][[method]][["reg_bmlvar"]])){
-  #     return(NA)
-  #   } 
-  #   else{
-  #     reg_coefs <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["median"]]
-  #     # Have them all in one vector
-  #     # thus need to repeat the true_coefs 
-  #     true_coef_all <- rep(true_coef, 3)
-  # 
-  #     # Calculate Bias
-  #     reg_coefs - true_coef
-  #     
-  #     }
-  # })
-  # }
-  # 
-  # regression_power_bmlvar <- function(
-  #                             results, 
-  #                             method = "bmlvar", 
-  #                             measure,
-  #                             oneside = TRUE){
-  # sapply(seq_along(results), function(i){
-  #   if(is.null(results[[i]][[method]][["reg_bmlvar"]])){
-  #     return(NA)
-  #   } 
-  #   else{
-  #     ci_twoside <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["ci_95_l"]]
-  #     ci_oneside <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["ci_oneside"]]
-  #     if(isTRUE(oneside)){
-  #       ifelse(ci_oneside > 0, 1, 0)
-  #     } else{
-  #       ifelse(ci_twoside > 0, 1, 0)
-  #     
-  #   }
-  # }
-  # })
-  # }
-  # 
-  # # Apply the functions
-  # calc_rmse <- regression_rmse_bmlvar(
-  #   results = results, 
-  #   method = "bmlvar", 
-  #   rmse = TRUE)
-  # calc_bias <- regression_bias_bmlvar(
-  #   results = results, 
-  #   method = "bmlvar"
-  # )
-  # calc_mse <- regression_rmse_bmlvar(
-  #   results = results, 
-  #   method = "bmlvar", 
-  #   rmse = FALSE)
-  # calc_pwr_oneside <- regression_power_bmlvar(
-  #   results = results, 
-  #   method = "bmlvar",
-  #   oneside = TRUE)
-  # calc_pwr_twoside <- regression_power_bmlvar(
-  #   results = results, 
-  #   method = "bmlvar",
-  #   oneside = FALSE)
-  # 
-  # # Calculate mean
-  # mean_rmse <- rowMeans(calc_rmse, na.rm = TRUE)
-  # names(mean_rmse) <- paste0("rmse", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mean")
-  # mean_bias <- rowMeans(calc_bias, na.rm = TRUE)
-  # names(mean_bias) <- paste0("bias", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mean")
-  # mean_mse <- rowMeans(calc_mse, na.rm = TRUE)
-  # names(mean_mse) <- paste0("mse", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mean")
-  # mean_pwroneside <- rowMeans(calc_pwr_oneside, na.rm = TRUE)
-  # names(mean_pwroneside) <- paste0("poweroneside", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mean")
-  # mean_pwrtwoside <- rowMeans(calc_pwr_twoside, na.rm = TRUE)
-  # names(mean_pwrtwoside) <- paste0("powertwoside", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mean")
-  # ret[["mean_rmse"]] <- mean_rmse
-  # ret[["mean_bias"]] <- mean_bias
-  # ret[["mean_mse"]] <- mean_mse
-  # ret[["mean_pwroneside"]] <- mean_pwroneside
-  # ret[["mean_pwrtwoside"]] <- mean_pwrtwoside
-  # 
-  # # calculate mcse
-  # # mcse_rmse <- sqrt(
-  # #   mean_rmse * (1 - mean_rmse) / n_rep)
-  # var_rmse <- apply(calc_rmse, 1, stats::var)
-  # mcse_rmse <- sqrt(
-  #   var_rmse/(4 * n_rep * mean_mse)
-  # )
-  # names(mcse_rmse) <- paste0("rmse", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mcse")
-  # var_bias <- apply(calc_bias, 1, stats::var)
-  # mcse_bias <- sqrt(
-  #   var_bias/n_rep
-  # )
-  # names(mcse_bias) <- paste0("bias", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mcse")
-  # 
-  # mcse_mse <- sqrt(
-  #   mean_mse * (1 - mean_mse) / n_rep)
-  # names(mcse_mse) <- paste0("mse", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mcse")
-  # mcse_pwroneside <- sqrt(
-  #   mean_pwroneside * (1 - mean_pwroneside) / n_rep)
-  # names(mcse_pwroneside) <- paste0("poweroneside", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mcse")
-  # mcse_pwrtwoside <- sqrt(
-  #   mean_pwrtwoside * (1 - mean_pwrtwoside) / n_rep)
-  # names(mcse_pwrtwoside) <- paste0("powertwoside", 
-  #                            "_reg",
-  #                            c(0, 2, 4),
-  #                            "_",
-  #                            rep(measures, each = 3),
-  #                            "_",
-  #                            "bmlvar",
-  #                            "_mcse")
-  # ret[["mcse_rmse"]] <- mcse_rmse
-  # ret[["mcse_bias"]] <- mcse_bias
-  # ret[["mcse_mse"]] <- mcse_mse
-  # ret[["mcse_pwroneside"]] <- mcse_pwroneside
-  # ret[["mcse_pwrtwoside"]] <- mcse_pwrtwoside
-  # 
-  # 
-  # #--- Return
-  # ret$bmlvar_diagnostics <- list()
-  # ret$bmlvar_diagnostics$rhat_bmlvar_mean <- mean(sapply(results, function(x){
-  #    x$bmlvar$rhat_bmlvar_mean}))
-  # ret$bmlvar_diagnostics$rhat11_bmlvar_mean <- mean(sapply(results, function(x){
-  #    x$bmlvar$rhat_bmlvar_11}))
-  # ret$bmlvar_diagnostics$divtrans_bmlvar_mean <- mean(sapply(results, function(x){
-  #   x$bmlvar$divtrans_bmlvar}))
-  # ret$bmlvar_diagnostics$divtrans_bmlvar_sum <- sum(sapply(results, function(x){
-  #   x$bmlvar$divtrans_bmlvar}))
-  # ret$bmlvar_diagnostics$divtrans_bmlvar_sumnonz <- sum(sapply(results, function(x){
-  #   x$bmlvar$divtrans_bmlvar}) > 0)
+
   ret_vec <- unlist(ret, use.names = TRUE)
   return(ret_vec)
-  
-  
-  
-  
+
 }
 
 
 
-#' 
-#' 
-#' # Executing Simulation
-#' 
-## ----run-sim------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# For testing
-# df_design_test <- df_design[3,]
-# df_design_test$n_id <- 200
-# df_design_test$n_var <- 4
-# sim_pars$n_id <- 200
-# sim_pars$n_var <- 4
-# n_var <- 4
-# n_id <- 200
-# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
-# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
-# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
-# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
-# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
-# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
-# sim_pars$graph_sparse$sigma <- sim_pars$graph_sparse$sigma[1:4,1:4]
-# sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
-
-
-n_rep <- 2
+#'
+#'
+#' ## Executing Simulation
+#'
+## ----run-sim, eval=FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+n_rep <- 5
 future::plan(multisession, workers = n_rep)
-df_design_mlvar <- df_design[4,]
-
-# started 2024-08-13 ~08:35
-# df_design_test <- df_design[c(4),]
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design_mlvar, 
-                                    replications = n_rep, 
-                                    generate = sim_generate, 
-                                    analyse = sim_analyse, 
+                                    design = df_design[c(3,4),],
+                                    replications = n_rep,
+                                    generate = sim_generate,
+                                    analyse = sim_analyse,
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
-                                    # parallel = "future",
+                                    parallel = "future",
                                     # parallel = TRUE,
                                     max_errors = 2,
-                                    packages = c("tidyverse", 
+                                    packages = c("tidyverse",
                                                  "gimme",
                                                  "mlVAR",
                                                  "graphicalVAR",
@@ -1386,37 +779,384 @@ sim_results <- SimDesign::runSimulation(
                                                  "rstan",
                                                  "corpcor",
                                                  "Rcpp"),
-                                    # save_results = TRUE,
-                                    debug = "analyse"
-                                    # filename = "additional_mlvar_sim"
+                                    save_results = TRUE,
+                                    # debug = "generate",
+                                    filename = "low_kappa_sd_mlvar"
                                     # save_seeds = TRUE
                                     )
 
 plan(sequential)
 
-# SimClean()
-# saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
+
+
+
+#'
+#' 
+#' Investigate the results: 
+## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 #' 
 #' 
 #' 
 #' 
-#' # Write to standard R script
+#' # Idea 2: Investigate Centrality Estimates in More Detail
 #' 
-#' To run the simulation on the server, it can be easier to just execute an R script.
+#' Load the results of the full simulation, specifically the condition with $n = 200$ and $tp = 120$:
+## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' sim_res_4 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-4.rds")
 #' 
-## ----eval = FALSE-------------------------------------------------------------------------------------------------------------------------------------------------------------
-## knitr::purl(here::here("scripts", "06_additional_mlvar_simulation.qmd"),
-##             output = here::here("scripts", "06_additional_mlvar_simulation.R"),
-##             documentation = 2)
-
+#' #' 
+#' #' 
+#' #' ## Plot Centrality Recovery
+#' #' 
+#' #' Plot correlation of centrality estimates with true centrality: 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' centrality_list_mlvar <- list()
 #' 
-#' <!-- # Resummarize after fixing details in summary function -->
+#' for (i in seq_along(sim_res_4$results)) {
+#'   df_temp <- data.frame(
+#'     mlvar_outstrength = sapply(sim_res_4$results[[i]]$mlvar$outstrength, function(x) x[[1]]),
+#'     mlvar_instrength = sapply(sim_res_4$results[[i]]$mlvar$instrength, function(x) x[[1]]),
+#'     mlvar_strength = sapply(sim_res_4$results[[i]]$mlvar$strength, function(x) x[[1]]),
+#'     true_outstrength = sapply(sim_res_4$results[[i]]$true_cent$outstrength, function(x) x[[1]]),
+#'     true_instrength = sapply(sim_res_4$results[[i]]$true_cent$instrength, function(x) x[[1]]),
+#'     true_strength = sapply(sim_res_4$results[[i]]$true_cent$strength, function(x) x[[1]])
+#'   )
+#'   
+#'   centrality_list_mlvar[[i]] <- df_temp
+#' }
 #' 
-#' <!-- ```{r resummarize} -->
-#' <!-- sim_res_resum <- SimDesign::reSummarise(summarise = sim_summarise, -->
-#' <!--                                         dir = here("sim_full.rds-results_pc04798")) -->
-#' <!-- saveRDS(object = sim_res_resum, here::here("output", "sim_results.RDS")) -->
-#' <!-- ``` -->
+#' df_centrality_mlvar <- do.call(rbind, centrality_list_mlvar)
 #' 
+#' # add an identifier column to track which element each row came from
+#' df_centrality_mlvar$sim_rep <- rep(seq_along(sim_res_4$results), sapply(centrality_list_mlvar, nrow))
+#' 
+#' 
+#' 
+#' df_centrality_mlvar |> 
+#'   ggplot(aes(x = true_outstrength, y = mlvar_outstrength)) + 
+#'   geom_point() + 
+#'   geom_smooth() + 
+#'   theme_centrality()+
+#'   labs(x = "True Outstrength",
+#'        y = "mlVAR Outstrength")
+#' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' ## Potential extraction errors
+#' #' One possible reason for a surprisingly bad performance of a method in a simulation study could be errors in the simulation code or, more specifically, some extraction function. In this section, we work with the results of our full simulation study. We checked this explanation multiple times and could not find any errors that would explain the results. 
+#' #' 
+#' #' ### Transposing
+#' #' One potential error could be wrong transposing, which would mean that instrength and outstrength are confused with one another.
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' df_centrality_mlvar |> 
+#'   ggplot(aes(x = true_outstrength, y = mlvar_instrength)) + 
+#'   geom_point() + 
+#'   geom_smooth() + 
+#'   theme_centrality()+
+#'   labs(x = "True Outstrength",
+#'        y = "mlVAR Instrength")
+#' 
+#' #' 
+#' #' Obviously, the results don't change much, so this is an unlikely issue. 
+#' #' 
+#' #' 
+#' #' ### Overregularization
+#' #' 
+#' #' Compare the true and estimated variability of centrality estimates: 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' df_centrality_mlvar |> 
+#'   group_by(sim_rep) |> 
+#'   summarize(across(everything(),list(mean = mean, sd = sd))) |> 
+#'   ungroup() |> 
+#'   pivot_longer(cols = !sim_rep) |> 
+#'   separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
+#'   pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value) |> 
+#'   group_by(est, centrality) |> 
+#'   summarize(average_mean = mean(mean),
+#'             average_sd = mean(sd)) |> 
+#'   knitr::kable()
+#' 
+#' #' mlVAR slightly underestimates the variability of temporal centrality coefficients, but severely underestimates the variabli
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' # Idea 3: Investigate Recovery of Raw Random Effects
+#' #' 
+#' #' Create plots showing recovery for each of the coefficients in the first column, i.e., for the outgoing edges from variable 1: 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' all_results <- lapply(seq_along(sim_res_4[["results"]]), function(i) {
+#'   
+#'   col_1_true <- lapply(sim_res_4[["results"]][[i]][["beta"]], function(x) x[,1])
+#'   
+#'   df_true <- do.call(rbind, col_1_true) |> 
+#'     as.data.frame() |> 
+#'     mutate(param = "true_est", id = row_number(), iteration = i)
+#'   
+#'   col_1_mlvar <- lapply(sim_res_4[["results"]][[i]][["mlvar"]][["fit_mlvar"]][["beta"]], function(x) x[,1])
+#'   
+#'   df_mlvar <- do.call(rbind, col_1_mlvar) |> 
+#'     as.data.frame() |> 
+#'     mutate(param = "mlvar_est", id = row_number(), iteration = i)
+#'   
+#'   col_1_bmlvar <- lapply(sim_res_4[["results"]][[i]][["bmlvar"]][["fit_bmlvar"]][["beta"]], function(x) x[,1])
+#'   
+#'   df_bmlvar <- do.call(rbind, col_1_bmlvar) |> 
+#'     as.data.frame() |> 
+#'     mutate(param = "bmlvar_est", id = row_number(), iteration = i)
+#'   
+#'   df_all <- rbind(df_true, df_mlvar, df_bmlvar)
+#'   
+#'   df_all_wide <- df_all |> 
+#'     pivot_wider(id_cols = c(id, iteration), names_from = param, values_from = c(V1, V2, V3, V4, V5, V6)) |> 
+#'     mutate(
+#'       across(starts_with("V"), 
+#'              .fns = list(mlvar_bias = ~ get(sub("true_est", "mlvar_est", cur_column())) - ., 
+#'                          bmlvar_bias = ~ get(sub("true_est", "bmlvar_est", cur_column())) - .), 
+#'              .names = "{.col}_{.fn}")
+#'     )
+#'   
+#'   return(df_all_wide)
+#' })
+#' 
+#' df_combined <- all_results |> 
+#'     bind_rows() |> 
+#'     select(!contains("mlvar_bias")) |> 
+#'     select(!contains("bmlvar_bias")) 
+#' 
+#' df_combined_2 <- rename_with(df_combined, ~gsub("_est", "", .x))
+#' df_ests <- df_combined_2 |>   
+#'   pivot_longer(
+#'     cols = !c(id, iteration), 
+#'     names_to = c("variable", "method"), 
+#'     names_sep = "_", 
+#'     values_to = "est"
+#'   ) |> 
+#'   pivot_wider(
+#'     id_cols = c(id, iteration, variable),
+#'     names_from = method, 
+#'     values_from = est
+#'   )
+#' 
+#' df_ests |> 
+#'   ggplot(aes(y = mlvar, x = true))+
+#'   geom_point()+
+#'   geom_smooth()+
+#'   facet_grid(~variable) + 
+#'   theme_centrality()+
+#'   labs(x = "True Estimate",
+#'        y = "mlVAR Estimate")
+#' 
+#' 
+#' #' 
+#' #' That's how the results look for the Bayesian mlVAR approach: 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' df_ests |> 
+#'   ggplot(aes(y = bmlvar, x = true))+
+#'   geom_point()+
+#'   geom_smooth()+
+#'   facet_grid(~variable) + 
+#'   theme_centrality()+
+#'   labs(x = "True Estimate",
+#'        y = "BmlVAR Estimate")
+#' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' We can additionally create heatmaps indicating the bias for each estimate for each individual. We do not show the output here, as it is a long PDF - but we found no systematic issues in these investigations. 
+#' #' 
+#' #' 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' generate_heatmaps <- function(true_matrices, estimated_matrices, output_file, n_ind) {
+#'   
+#'   if (length(true_matrices) != length(estimated_matrices)) {
+#'     stop("The lists of matrices must have the same length.")
+#'   }
+#'   
+#'   pdf(file = output_file, width = 8, height = 10)
+#'   
+#'   # loop over each pair
+#'   for (i in 1:n_ind) {
+#'     
+#'     diff_matrix <- true_matrices[[i]] - estimated_matrices[[i]]
+#'     
+#'     # convert the difference matrix to a data frame for ggplot
+#'     diff_df <- reshape2::melt(diff_matrix)
+#'     
+#'     p <- ggplot(diff_df, aes(x = Var1, y = Var2, fill = value)) +
+#'       geom_tile() +
+#'       scale_fill_gradient2(low = "darkblue", mid = "white", high = "darkred", midpoint = 0) +
+#'       # plot the numerical value
+#'       geom_text(aes(label = round(value, 2)), color = "black", size = 3) +
+#'       labs(title = paste("Difference Matrix for Individual", i),
+#'            x = "",
+#'            y = "",
+#'            fill = "Difference") +
+#'       theme_minimal()
+#'     
+#'     print(p)
+#'   }
+#'   
+#'   dev.off()
+#' }
+#' 
+#' 
+#' generate_heatmaps(sim_res_4$results[[1]]$beta, sim_res_4$results[[1]]$mlvar$fit_mlvar$beta, "heatmaps.pdf", n_ind = 200)
+#' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' # Idea 4: Different DGP, long time series
+#' #' Here, we don't simulate any external outcome, but rather simulate from a single DGP with a very long time series to check random effects recovery in this somewhat idealized situation. This implicitly also checks whether our simulation setup might be at fault for the poor performance. 
+#' #' 
+#' #' 
+#' #' ## New DGP
+#' #' 
+#' #' We use a grpah obtained by estimating mlVAR models on data by Fried et al. (2022). More information on the fitting process can be found in the file `04_dgps.qmd`. 
+#' #' 
+#' #' Load the graph:
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' graph_sparse <- readRDS(here("data", "graph_sparse.RDS"))
+#' 
+#' # compute Sigma (covariance matrix)
+#' graph_sparse$sigma <- solve(graph_sparse$kappa)
+#' 
+#' 
+#' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' ## Simulate Data
+#' #' 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' sim_data <- sim_gvar_loop(
+#'                      graph = graph_sparse,
+#'                      beta_sd = .075,
+#'                      kappa_sd = NA,
+#'                      sigma_sd = .075, 
+#'                      n_person = 200,
+#'                      n_time = 1000,
+#'                      n_node = 6,
+#'                      max_try = 10000,
+#'                      listify = TRUE,
+#'                      sim_pkg = "mlVAR",
+#'                      sparse_sim = TRUE,
+#'                      most_cent_diff_temp = FALSE,
+#'                      most_cent_diff_cont = FALSE,
+#'                      innov_var_fixed_sigma = FALSE)
+#' 
+#' #' 
+#' #' ## Estimate
+#' #' 
+#' ## ----message=FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' df_data <- dplyr::bind_rows(purrr::map(sim_data$data, dplyr::as_tibble)
+#'                               , .id = "ID") |> 
+#'     dplyr::mutate(ID = as.factor(ID))
+#' 
+#' fit_mlvar <- mlVAR(df_data,
+#'                    vars = paste0("V", seq(1:6)),
+#'                    idvar = "ID",
+#'                    estimator = "lmer",
+#'                    contemporaneous = "correlated",
+#'                    temporal = "correlated",
+#'                    nCores = 4,
+#'                    scale = TRUE)
+#' 
+#' #' 
+#' #' 
+#' #' ## Check Recovery
+#' #' 
+#' #' Compare estimates: 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' mlvar_beta <- lapply(fit_mlvar$results$Beta$subject, function(x) x[,,1])
+#' true_beta <- sim_data$beta_l
+#' 
+#' #' 
+#' #' Compare them individually:
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' bias_list <- mapply(`-`, mlvar_beta, true_beta, SIMPLIFY = FALSE)
+#' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' Plot recovery for each variable: 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' agg_data <- do.call(rbind, lapply(1:200, function(i) {
+#'   data.frame(True = c(true_beta[[i]]), Estimate = c(mlvar_beta[[i]]),
+#'              Variable = rep(1:36, each = 1))
+#' }))
+#' 
+#' plot_list <- lapply(1:36, function(var) {
+#'   data <- subset(agg_data, Variable == var)
+#'   ggplot(data, aes(x = True, y = Estimate)) +
+#'     geom_point(alpha = 0.5) +
+#'     geom_smooth(formula = y ~ x, method = loess)+
+#'     theme_minimal() +
+#'     ggtitle(paste("Variable", var))
+#' })
+#' 
+#' 
+#' gridExtra::grid.arrange(grobs = plot_list, ncol = 6)
+#' 
+#' 
+#' plot_list[[3]]
+#' 
+#' #' 
+#' #' Sanity check: What happens if I transpose the matrix:
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' mlvar_beta_transposed <- lapply(mlvar_beta, t)
+#' 
+#' agg_data <- do.call(rbind, lapply(1:200, function(i) {
+#'   data.frame(True = c(true_beta[[i]]), Estimate = c(mlvar_beta_transposed[[i]]),
+#'              Variable = rep(1:36, each = 1))
+#' }))
+#' 
+#' plot_list_transposed <- lapply(1:36, function(var) {
+#'   data <- subset(agg_data, Variable == var)
+#'   ggplot(data, aes(x = True, y = Estimate)) +
+#'     geom_point(alpha = 0.5) +
+#'     geom_smooth()+
+#'     theme_minimal() +
+#'     ggtitle(paste("Variable", var))
+#' })
+#' 
+#' gridExtra::grid.arrange(grobs = plot_list_transposed, ncol = 6)
+#' 
+#' #' Nothing else.
+#' #' 
+#' #' 
+#' #' We can additionally calculate the within-matrix correlation of true and estimates effects for each individual: 
+#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' beta_cors <- sapply(1:200, function(i) {
+#'   cor(c(true_beta[[i]]), c(mlvar_beta[[i]]))
+#' })
+#' hist(beta_cors)
+#' 
+#' #' 
+#' #' This means that for each individual, the estimated betas show good recovery, but not across individuals. That also explains why recovery of the most central edge works alright, but relating it to an outcome does not work. 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' 
+#' #' # Write to standard R script
+#' #' 
+#' #' To run the simulation on the server, it can be easier to just execute an R script.
+#' #' 
+#' ## ----eval = FALSE------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' # knitr::purl(here::here("scripts", "06_additional_mlvar_simulation.qmd"),
+#' #             output = here::here("scripts", "06_additional_mlvar_simulation.R"),
+#' #             documentation = 2)
+#' 
+#' #' 
