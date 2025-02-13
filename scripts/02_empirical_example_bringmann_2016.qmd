@@ -143,15 +143,15 @@ Apparently, the missingness is almost identical for all variables.
 Calculate the average missingness per person: 
 ```{r missings-person}
 data_bringmann |> 
-  select(-c(neuroticism)) |> 
-  group_by(subj_id) |> 
-  summarise(across(everything(),
+  dplyr::select(-c(neuroticism)) |> 
+  dplyr::group_by(subj_id) |> 
+  dplyr::summarise(across(everything(),
                    ~sum(is.na(.x))/n())) |> 
-  summarise(across(everything(),
+  dplyr::summarise(across(everything(),
                    ~mean(.x, na.rm = TRUE))) |> 
   # take average across all variables
-  select(!subj_id) |> 
-  pull() |>
+  dplyr::select(!subj_id) |> 
+  dplyr::pull() |>
   mean()
 ```
 
@@ -160,20 +160,20 @@ data_bringmann |>
 We can now check for zero or very low variances per individual, and then filter them out:
 ```{r zero-variance}
 subj_to_exclude <- data_bringmann |> 
-  select(-c(neuroticism)) |> 
-  group_by(subj_id) |> 
-  summarise(across(everything(),
+  dplyr::select(-c(neuroticism)) |> 
+  dplyr::group_by(subj_id) |> 
+  dplyr::summarise(across(everything(),
                    ~var(.x, na.rm = TRUE))) |> 
-  filter(if_any(everything(), ~.x < 1)) |> 
-  pull(subj_id)
+  dplyr::filter(if_any(everything(), ~.x < 1)) |> 
+  dplyr::pull(subj_id)
 
 data_bringmann <- data_bringmann |> 
-  filter(!subj_id %in% subj_to_exclude)
+  dplyr::filter(!subj_id %in% subj_to_exclude)
 
 neuroticism_vec_clean <- data_bringmann |> 
-  group_by(subj_id) |> 
-  distinct(neuroticism) |>
-  pull(neuroticism)
+  dplyr::group_by(subj_id) |> 
+  dplyr::distinct(neuroticism) |>
+  dplyr::pull(neuroticism)
 
 subj_to_exclude |> 
   knitr::kable()
@@ -185,9 +185,9 @@ We then create an overview table that gives the average of person-specific means
 
 ```{r summary-table}
 data_bringmann |> 
-  select(-c(neuroticism)) |> 
-  group_by(subj_id) |> 
-  summarize(across(everything(),
+  dplyr::select(-c(neuroticism)) |> 
+  dplyr::group_by(subj_id) |> 
+  dplyr::summarize(across(everything(),
                    list(mean = ~round(mean(.x, na.rm = TRUE), 2),
                           sd = ~round(sd(.x, na.rm = TRUE), 2),
                           obs = ~sum(!is.na(.x))),
@@ -206,13 +206,13 @@ Some of the methods require imputation, so we impute per person and per variable
 new_param <- list(maxit = 5000)
 
 data_bringmann_imputed <- data_bringmann |> 
-  select(-neuroticism) |> 
-  group_by(subj_id) |> 
-  mutate(across(everything(),
+  dplyr::select(-neuroticism) |> 
+  dplyr::group_by(subj_id) |> 
+  dplyr::mutate(across(everything(),
                 ~imputeTS::na_kalman(.x, optim.control = new_param),
                 .names = "{.col}_imp")) |> 
-  ungroup() |> 
-  left_join(neuroticism_vec, by = "subj_id")
+  dplyr::ungroup() |> 
+  dplyr::left_join(neuroticism_vec, by = "subj_id")
 
 convergence_warnings<- dplyr::last_dplyr_warnings(n = 15)
 ```
@@ -230,12 +230,12 @@ convergence_ids <- sapply(convergence_warnings, function(x){
 # Check their time series
 columns <- c("angry", "depressed", "dysphoric", "anxious", "relaxed", "happy")
 
-pdf(here("figures", "empirical_example_imputations.pdf"))  # Customize width and height as needed
+pdf(here::here("figures", "empirical_example_imputations.pdf"))  # Customize width and height as needed
 for (i in 1:length(convergence_ids)) {
   for (col in 1:length(columns)) {
     
     dat1 <- data_bringmann_imputed |> 
-      filter(subj_id %in% convergence_ids[[i]])
+      dplyr::filter(subj_id %in% convergence_ids[[i]])
     
     print(imputeTS::ggplot_na_imputations(
       x_with_na = dat1[[columns[col]]], 
@@ -253,8 +253,8 @@ They generally all appear reasonable, and it seems like issues often occurred in
 We rename the imputed columns and delete the non-imputed ones:
 ```{r impute-finalize}
 data_bringmann_imputed <- data_bringmann_imputed |> 
-  select(subj_id, contains("_imp"), neuroticism) |>
-  rename_with(~str_remove(.x, "_imp"), contains("_imp"))
+  dplyr::select(subj_id, contains("_imp"), neuroticism) |>
+  dplyr::rename_with(~str_remove(.x, "_imp"), contains("_imp"))
 
 ```
 
@@ -268,22 +268,22 @@ We will now estimate the different network and subsequent regression models on t
 We first split off the time-invariant outcome from the rest of the data:
 ```{r ema-data}
 df_data <- data_bringmann_imputed |> 
-  select(-c(neuroticism))
+  dplyr::select(-c(neuroticism))
 ```
 
 We also either scale or person-center the data. 
 ```{r scale}
 df_data_scaled <- df_data |> 
-  group_by(subj_id) |> 
-  mutate(across(everything(), ~scale(.x))) |> 
-  ungroup()
+  dplyr::group_by(subj_id) |> 
+  dplyr::mutate(across(everything(), ~scale(.x))) |> 
+  dplyr::ungroup()
 
 data_list_scaled <- split(df_data, ~subj_id)
 
 df_data_centered <- df_data |> 
-  group_by(subj_id) |> 
-  mutate(across(everything(), ~scale(.x, scale = FALSE))) |> 
-  ungroup()
+  dplyr::group_by(subj_id) |> 
+  dplyr::mutate(across(everything(), ~scale(.x, scale = FALSE))) |> 
+  dplyr::ungroup()
 
 data_list_centered <- split(df_data_centered, ~subj_id)
 ```
@@ -323,7 +323,7 @@ fit_gvar_scaled <- lapply(data_list_scaled, function(x){
 
 gvar_fit_time <- Sys.time() - pre_gvar
 # save results
-saveRDS(fit_gvar_scaled, here("output", "empirical_example", "fit_gvar_scaled.rds"))
+saveRDS(fit_gvar_scaled, here::here("output", "empirical_example", "fit_gvar_scaled.rds"))
 
 # fit centered data for each individual
 fit_gvar_centered <- lapply(data_list_centered, function(x){
@@ -336,14 +336,14 @@ fit_gvar_centered <- lapply(data_list_centered, function(x){
   })
 
 # save results
-saveRDS(fit_gvar_centered, here("output", "empirical_example", "fit_gvar_centered.rds"))
+saveRDS(fit_gvar_centered, here::here("output", "empirical_example", "fit_gvar_centered.rds"))
 
 
 ```
 
 ```{r, include = FALSE}
-fit_gvar_scaled <- readRDS(here("output", "empirical_example", "fit_gvar_scaled.rds"))
-fit_gvar_centered <- readRDS(here("output", "empirical_example", "fit_gvar_centered.rds"))
+fit_gvar_scaled <- readRDS(here::here("output", "empirical_example", "fit_gvar_scaled.rds"))
+fit_gvar_centered <- readRDS(here::here("output", "empirical_example", "fit_gvar_centered.rds"))
 ```
 
 
@@ -382,6 +382,9 @@ Now we can regress neuroticism on outstrength:
 reg_gvar_scaled_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gvar_scaled)
 reg_gvar_centered_outstrength <- lm(neuroticism ~ outstrength, data = reg_df_gvar_centered)
 ```
+
+
+
 
 And we can regress it on the temporal density:
 ```{r reg-gvar-dens}
@@ -423,8 +426,8 @@ saveRDS(fit_mlvar_centered, here("output", "empirical_example", "fit_mlvar_cente
 ```
 
 ```{r, include = FALSE}
-fit_mlvar_scaled <- readRDS(here("output", "empirical_example", "fit_mlvar_scaled.rds"))
-fit_mlvar_centered <- readRDS(here("output", "empirical_example", "fit_mlvar_centered.rds"))
+fit_mlvar_scaled <- readRDS(here::here("output", "empirical_example", "fit_mlvar_scaled.rds"))
+fit_mlvar_centered <- readRDS(here::here("output", "empirical_example", "fit_mlvar_centered.rds"))
 ```
 
 
@@ -489,7 +492,7 @@ fit_gimme_scaled <- gimme::gimme(data_list_scaled_gimme,
 
 gimme_fit_time <- Sys.time()-pre_gimme
 
-saveRDS(fit_gimme_scaled, here("output", "empirical_example", "fit_gimme_scaled.rds"))
+saveRDS(fit_gimme_scaled, here::here("output", "empirical_example", "fit_gimme_scaled.rds"))
 
 # centered
 data_list_centered_gimme <- lapply(data_list_centered, function(x){
@@ -504,13 +507,13 @@ fit_gimme_centered <- gimme::gimme(data_list_centered_gimme,
                             groupcutoff = .75,
                             subcutoff = .75,
                             VAR = TRUE)
-saveRDS(fit_gimme_centered, here("output", "empirical_example", "fit_gimme_centered.rds"))
+saveRDS(fit_gimme_centered, here::here("output", "empirical_example", "fit_gimme_centered.rds"))
 
 ```
 
 ```{r, include = FALSE}
-fit_gimme_scaled <- readRDS(here("output", "empirical_example", "fit_gimme_scaled.rds"))
-fit_gimme_centered <- readRDS(here("output", "empirical_example", "fit_gimme_centered.rds"))
+fit_gimme_scaled <- readRDS(here::here("output", "empirical_example", "fit_gimme_scaled.rds"))
+fit_gimme_centered <- readRDS(here::here("output", "empirical_example", "fit_gimme_centered.rds"))
 ```
 
 
@@ -655,7 +658,7 @@ fit_bmlvar_scaled <- rstan::sampling(
 
 bmlvar_fit_time <- Sys.time() - pre_bmlvar
 bmlvar_fit_time
-saveRDS(fit_bmlvar_scaled, here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
+saveRDS(fit_bmlvar_scaled, here::here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
 
 
 # centered
@@ -673,14 +676,14 @@ fit_bmlvar_centered <- rstan::sampling(
   verbose = FALSE
   )
 
-saveRDS(fit_bmlvar_centered, here("output", "empirical_example", "fit_bmlvar_empirical_centered.rds"))
+saveRDS(fit_bmlvar_centered, here::here("output", "empirical_example", "fit_bmlvar_empirical_centered.rds"))
 
 ```
 
 Centrality estimates are sampled automatically:
 ```{r centrality-bmlvar}
-fit_bmlvar_scaled <- readRDS(here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
-fit_bmlvar_centered <- readRDS(here("output", "empirical_example", "fit_bmlvar_empirical_centered.rds"))
+fit_bmlvar_scaled <- readRDS(here::here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
+fit_bmlvar_centered <- readRDS(here::here("output", "empirical_example", "fit_bmlvar_empirical_centered.rds"))
 # Transpose beta matrices for later summaries
 # in the DGP, cols represent lagged vars
 # but in BmlVAR, rows represent lagged vars
@@ -770,7 +773,7 @@ df_regression_scaled <- list(
   )
 )
 
-saveRDS(df_regression_scaled, here("output/empirical_example/regression_empirical_example_scaled.RDS"))
+saveRDS(df_regression_scaled, here::here("output/empirical_example/regression_empirical_example_scaled.RDS"))
 
 # centered
 
@@ -797,7 +800,7 @@ df_regression_centered <- list(
   )
 )
 
-saveRDS(df_regression_centered, here("output/empirical_example/regression_empirical_example_centered.RDS"))
+saveRDS(df_regression_centered, here::here("output/empirical_example/regression_empirical_example_centered.RDS"))
 
 rm(ests_bmlvar_centered)
 rm(fit_bmlvar_centered)
@@ -881,7 +884,7 @@ outstrength_dist <- df_outstrength |>
             color = "grey30", size = 4, inherit.aes = FALSE, hjust = 0)
 
 outstrength_dist
-ggsave(here("figures/empirical_example/outstrength_distribution.pdf"), width = 9 * 0.8, height = 6 * 0.8)
+ggsave(here::here("figures/empirical_example/outstrength_distribution.pdf"), width = 9 * 0.8, height = 6 * 0.8)
 ```
 
 
@@ -948,8 +951,8 @@ get_standardized_estimate <- function(model_summary, type = c("estimate", "lower
 
 
 df_estimates_scaled <- data.frame(
-  Method = rep(methods, each = 2),
-  Outcome = rep(outcomes, times = 4),
+  Method = rep(methods, times = 2),
+  Outcome = rep(outcomes, each = 4),
   Point_Estimate = c(
     get_standardized_estimate(reg_gvar_scaled_dens, "estimate"),
     get_standardized_estimate(reg_mlvar_scaled_dens, "estimate"),
@@ -1040,7 +1043,7 @@ gt_table
 
 # save to LaTeX
 gt_table |> 
-  gtsave(here("output", "empirical_example", "summary_table.tex"))
+  gtsave(here::here("output", "empirical_example", "summary_table.tex"))
 
 ```
 
@@ -1285,7 +1288,7 @@ most_central_example_plot <- outstrength_long_labeled |>
 
 most_central_example_plot
 
-ggsave(here("figures", "empirical_example", "most_central_example_plot.pdf"), width = 9 * 0.9, height = 6 * 0.9)
+ggsave(here::here("figures", "empirical_example", "most_central_example_plot.pdf"), width = 9 * 0.9, height = 6 * 0.9)
 ```
 
 
