@@ -1211,11 +1211,11 @@ graph_sparse <- readRDS(here("data", "graph_sparse.RDS"))
 
 ml_sim <- sim_gvar_loop(
                      graph = graph_sparse,
-                     beta_sd = 0.05,
-                     kappa_sd = 0.05,
-                     sigma_sd = 0.05, 
-                     n_person = 100,
-                     n_time = 100,
+                     beta_sd = 0.03,
+                     kappa_sd = 0.03,
+                     sigma_sd = 0.03, 
+                     n_person = 60,
+                     n_time = 60,
                      n_node = 6,
                      max_try = 10000,
                      listify = TRUE,
@@ -1242,7 +1242,9 @@ nlme_fit <- mlVAR_nlme(
                        time = "tp",
                        vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
                        center = TRUE,
-                       scale = FALSE
+                       scale = FALSE, 
+                       random_intercepts = TRUE, 
+                       random_slopes = TRUE
 )
 
 

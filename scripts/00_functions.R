@@ -886,6 +886,8 @@ mlVAR_nlme <- function(data,
                        id,
                        time,
                        vars,
+                       random_intercepts = TRUE,
+                       random_slopes = TRUE,
                        center = FALSE,
                        scale = FALSE) {
   
@@ -945,12 +947,17 @@ mlVAR_nlme <- function(data,
     formula_str <- paste(outcome, "~ 1+", paste(predictors, collapse = " + "))
     formula_obj <- as.formula(formula_str)
     
-    # Construct the random-effects formula:
-    # Here we allow a random intercept and random slopes for all predictors.
-    # (nlme will estimate an unstructured covariance matrix by default.)
-    # rand_formula <- as.formula(paste("~ ", paste(predictors, collapse = " + "), "|", id))
-    rand_formula <- as.formula(paste("~ 1 ", "|", id))
+    # construct random effects
+    rand_formula <- NULL
+    if (random_intercepts & random_slopes) {
+      rand_formula <- as.formula(paste("~ 1 +", paste(predictors, collapse = " + "), "|", id))
+    } else if (random_intercepts) {
+      rand_formula <- as.formula(paste("~ 1 |", id))
+    } else if (random_slopes) {
+      rand_formula <- as.formula(paste("~", paste(predictors, collapse = " + "), "|", id))
+    }
     
+
     # Fit the lme model
     model <- nlme::lme(
       fixed = formula_obj,
