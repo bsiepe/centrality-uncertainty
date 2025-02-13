@@ -88,13 +88,13 @@ df_design <- SimDesign::createDesign(
 
 # Simulation parameters
 # Number of individuals 
-n_id <- 50
+n_id <- 20
 
 # Number of variables
 n_var <- 6
 
 # Number of timepoints
-n_tp <- 100
+n_tp <- 20
 
 # for regression
 reg_error_sd = 1
@@ -156,7 +156,10 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      listify = TRUE,
                      sparse_sim = TRUE,
                      most_cent_diff_temp = TRUE,
-                     most_cent_diff_temp_min = 0.1)
+                     most_cent_diff_temp_min = 0.05,
+                     most_cent_diff_cont = TRUE,
+                     most_cent_diff_cont_min = 0.05,
+                     innov_var_fixed_sigma = TRUE)
   if(any(is.na(ml_sim$beta))){
     stop("Generation of Betas failed")
   }
@@ -274,7 +277,8 @@ stan_data <- list(
   idx_rho = array(idx_rho, dim = length(idx_rho)),
   Y = Y,
   reg_covariate = reg_data,
-  sparsity = 2
+  sparsity = 2, 
+  mean_center = 1
 )
 ```
 
@@ -285,7 +289,7 @@ model_name <- "MLVAR_lkj_only"
 # Compile model
 mlvar_model <-
   rstan::stan_model(
-    file = here("scripts", "models", paste0(model_name, ".stan")),
+    file = here::here("scripts", "models", paste0(model_name, ".stan")),
     model_name = model_name#,
     # verbose = TRUE,
     # warn_pedantic = TRUE,
@@ -301,13 +305,13 @@ fit_bmlvar <- rstan::sampling(
   include = FALSE,
   data = stan_data,
   seed = 35032,
-  chains = 4,
-  cores = 4,
+  chains = 2,
+  cores = 2,
   warmup = 300,
-  iter = 200,
+  iter = 500,
   init = .1,
   control = list(adapt_delta = 0.8),
-  verbose = FALSE
+  verbose = TRUE
   )
 saveRDS(fit_bmlvar, here("fits", paste0(model_name, "_fit.rds")))
 ```

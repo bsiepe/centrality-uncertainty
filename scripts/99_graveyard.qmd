@@ -1,0 +1,722 @@
+
+# Old DGP for mlVARsim
+Old DGPS with mlVAR_sim:
+```{r dgps}
+# Settings for data simulation
+# for mlvar sim
+thetaVar = 1
+DF_theta = 2
+mu_SD = c(1, 1)
+init_beta_SD = c(0.3, 1.5) 
+fixedMuSD = 1
+shrink_fixed = 0.9
+shrink_deviation = 0.9
+pcor_sparsity = 0.5
+beta_sparsity = 0.5
+
+# for regression
+reg_error_sd = 1
+
+# Parameters
+# sim_pars_old <- list(
+#   reg_error_sd = reg_error_sd,
+#   thetaVar = thetaVar,
+#   DF_theta = DF_theta,
+#   mu_SD = mu_SD,
+#   init_beta_SD = init_beta_SD,
+#   fixedMuSD = fixedMuSD,
+#   shrink_fixed = shrink_fixed,
+#   shrink_deviation = shrink_deviation
+#   # mlvar_model = mlvar_model
+# )
+```
+
+
+
+
+
+## Another old sim function
+
+```{r}
+# -------------------------------------------------------------------------
+# mlVAR simulation function -----------------------------------------------
+# -------------------------------------------------------------------------
+# Copied from: https://github.com/SachaEpskamp/mlVAR/blob/master/R/mlVARmodel.R
+# and adapted
+# 1. fixed effects (means) for every parameter and a variance-covariance matrix.
+# 2. Generate Beta's 
+# 3. Shrink all beta's untill all eigens are in unit circle.
+mlVARsim_mod <- function(
+    # Simulation setup:
+  nPerson = 10, # # of persons.
+  nNode = 5, # # of nodes 
+  nTime = 100, # Or vector with time points per person. 
+  lag = 1,
+  thetaVar = rep(1,nNode),
+  DF_theta = nNode*2,
+  mu_SD = c(1,1),
+  init_beta_SD = c(0.1,1),
+  fixedMuSD = 1,
+  shrink_fixed = 0.9,
+  shrink_deviation = 0.9,
+  pcor_sparsity = 0.5,
+  beta_sparsity = 0.5
+){
+  contemporaneous <- "wishart"
+  GGMsparsity = pcor_sparsity
+  
+  if (length(nTime)==1){
+    nTime <- rep(nTime,nPerson)
+  }
+  # Number of temporal effects:
+  nTemporal <- nNode^2 * lag
+  
+  # 1. Generate structures:
+  # Generate Omega:
+  
+  # Simulate mu means:
+  Omega_mu <- cov2cor(solve(diag(nNode)-mlVAR:::simGraph(nNode)))
+  # Omega_mu <- genPositiveDefMat(nNode, "onion", rangeVar = c(1,1))$Sigma
+  # Simulate temporal:
+  Omega_Beta <- cov2cor(solve(diag(nTemporal)-mlVAR:::simGraph(nTemporal)))
+  
+  #   mat <- Omega_mu
+  #   diag(mat) <- 0
+  #   rowSums(mat)
+  #   
+  Omega <- rbind(
+    cbind(Omega_mu, matrix(0,nNode,nTemporal)),
+    cbind(matrix(0,nTemporal,nNode), Omega_Beta)
+  )
+  
+  # Omega <- genPositiveDefMat(nNode + nTemporal, "onion", rangeVar = c(1,1))$Sigma
+  
+  # Generate SD and scale:
+  SD <- runif(nNode + nTemporal, c(rep(mu_SD[1],nNode),rep(init_beta_SD[1],nNode)), c(rep(mu_SD[2],nNode),rep(init_beta_SD[2],nNode)))
+  Omega <- diag(SD) %*%Omega %*% diag(SD)
+  
+  # Generate fixed contemporaneous:
+  if (contemporaneous=="wishart"){
+    # Theta_fixed <- genPositiveDefMat(nNode, "onion", rangeVar = c(1,1))$Sigma
+    Theta_fixed <- cov2cor(solve(diag(nNode)-mlVAR:::simGraph(nNode)))
+    Theta_fixed <- diag(sqrt(thetaVar)) %*% Theta_fixed %*% diag(sqrt(thetaVar))
+    
+    # 2. Generate residual covariance matrices:
+    Theta <- rWishart(nPerson, DF_theta, Theta_fixed/DF_theta)
+  } else {
+    
+    if (contemporaneous == "randomGGM"){
+      Theta <- lapply(1:nPerson,function(x){
+        net <- mlVAR:::simGraph(nNode,GGMsparsity)
+        cov2cor(solve(diag(nNode) - net))
+      })
+      Theta <- do.call(abind,c(Theta,along=3))
+      
+      Theta_fixed <- apply(Theta,1:2,mean)
+    } else {
+      net <- mlVAR:::simGraph(nNode,GGMsparsity)
+      Theta_fixed <- cov2cor(solve(diag(nNode) - net))
+      Theta <- lapply(1:nPerson,function(x)Theta_fixed)
+      Theta <- do.call(abind,c(Theta,along=3))
+    }
+  }
+  
+  
+  
+  # Generate fixed means:
+  mu_fixed <- rnorm(nNode,0,fixedMuSD)
+  # Generate fixed betas:
+  beta_fixed <- rnorm(nTemporal,0)
+  # set weakest beta_sparsity% to zero:
+  beta_fixed[order(abs(beta_fixed))[1:round(nTemporal * beta_sparsity)]] <- 0
+  
+  # Include auto-regressions:
+  mat <- matrix(0,nNode,nNode*lag)
+  diag(mat) <- 1
+  beta_fixed[c(mat)==1] <- runif(sum(c(mat)==1),0,1)
+  
+  # 3. Generate random parameter sets:
+  if (lag > 0){
+    repeat{
+      Pars <- rmvnorm(nPerson, c(mu_fixed,beta_fixed), sigma = Omega)
+      Mus <- Pars[,1:nNode]
+      
+      Betas <- array(c(t(Pars[,-(1:nNode)])), c(nNode,nNode*lag,nPerson))
+      
+      # 4. Construct the matrices:
+      if (lag>1){
+        under <- cbind(diag(nNode*(lag-1)),matrix(0,nNode*(lag-1),nNode))
+        
+        ev <- sapply(seq_len(nPerson),function(i){
+          mat <- rbind(Betas[,,i],under)
+          eigen(mat)$values
+        })
+        
+      } else {
+        
+        ev <- sapply(seq_len(nPerson),function(i){
+          eigen(Betas[,,i])$values
+        })
+        
+      }
+      # 5. Store results:
+      allEV <- c(ev)
+      
+      # 6. Break if all Re(ev)^2 + Im(ev)^2 < 1
+      if (all(Re(ev)^2 + Im(ev)^2 < 1)){
+        
+        # simulate VAR for every person:
+        DataList <- lapply(1:nPerson,function(p){
+          
+          pars <- lapply(seq_len(lag),function(l)array(c(Betas[,,p]),c(nNode,nNode,lag))[,,l])
+          # If lag > 0 simulate VAR:
+          if (lag > 0){
+            res <- mlVAR::simulateVAR(pars, 
+                                      means = Mus[p,], 
+                                      lags = seq_len(lag), 
+                                      Nt = nTime[p],
+                                      init = Mus[p,],
+                                      burnin = 100,
+                                      residuals = Theta[,,p]) 
+          } else {
+            res <- rmvnorm(nTime[p],Mus[p,],Theta[,,p])
+          }
+          colnames(res) <- paste0("V",1:nNode)
+          res$ID <- p
+          res
+        })
+        
+        # Rbind data:
+        Data <- do.call(rbind,DataList)
+        
+        # 10. If any absolute > 100, go to 6a
+        if (!any(abs(Data[,1:nNode]) > 100)){
+          break
+        }
+      } 
+      
+      # Else shrink:
+      beta_fixed <- beta_fixed * shrink_fixed
+      D <- diag(sqrt(diag(Omega)))
+      D[-(1:nNode),-(1:nNode)] <- shrink_deviation * D[-(1:nNode),-(1:nNode)] 
+      Omega <- D %*% cov2cor(Omega) %*% D
+    }
+    
+  } else {
+    Pars <- rmvnorm(nPerson, mu_fixed, sigma = Omega)
+    Mus <- Pars[,1:nNode]
+    Betas <- array(dim = c(0,0,nPerson))
+    
+    # simulate VAR for every person:
+    DataList <- lapply(1:nPerson,function(p){
+      res <- as.data.frame(rmvnorm(nTime[p],Mus[p,],Theta[,,p]))
+      colnames(res) <- paste0("V",1:nNode)
+      res$ID <- p
+      res
+    })
+    
+    # Rbind data:
+    Data <- do.call(rbind,DataList)
+    
+  }
+  
+  
+  # Create the list:
+  model <- list(
+    mu = mlVAR:::modelArray(mean = mu_fixed, 
+                            SD = mu_SD, 
+                            subject = lapply(1:nrow(Mus), function(i)Mus[i,])),
+    Beta = mlVAR:::modelArray(mean = array(beta_fixed,c(nNode,nNode,lag)), 
+                              SD = array(sqrt(diag(Omega[-(1:nNode),-(1:nNode)])),c(nNode,nNode,lag)), 
+                              subject = lapply(1:nPerson, 
+                                               function(p)
+                                                 array(Betas[,,p],c(nNode,nNode,lag)))),
+    Omega_mu = mlVAR:::modelCov(
+      cov = mlVAR:::modelArray(mean = Omega[1:nNode,1:nNode])
+    ),
+    Theta = mlVAR:::modelCov(
+      cov = mlVAR:::modelArray(mean = Theta_fixed, 
+                               subject = lapply(1:nPerson,function(p)Theta[,,p]))
+    ),
+    Omega = mlVAR:::modelCov(
+      cov = mlVAR:::modelArray(mean = Omega)
+    )
+    
+  )
+  
+  
+  # Data generated! Now return in sensible list:
+  Results <- list(
+    Data = Data,
+    #     beta_fixed = array(beta_fixed,c(nNode,nNode,lag)),
+    #     beta_SD = array(sqrt(diag(Omega[-(1:nNode),-(1:nNode)])),c(nNode,nNode,lag)),
+    #     mu_fixed = mu_fixed,
+    #     mu_SD = sqrt(diag(Omega[1:nNode,1:nNode])),
+    #     Theta_fixed = Theta_fixed,
+    #     DF_theta = DF_theta,
+    #     Omega = Omega,
+    #     Omega_mu = Omega[1:nNode,1:nNode],
+    #     Omega_beta = Omega[-(1:nNode),-(1:nNode)],
+    #     Theta = Theta,
+    #     Mus = Mus,
+    #     Betas = Betas,
+    vars = paste0("V",1:nNode),
+    idvar = "ID",
+    lag=lag,
+    model=model
+  )
+  
+  class(Results) <- "mlVARsim"
+  
+  return(Results)
+}
+
+```
+
+
+
+
+# Old Helper functions
+
+```{r}
+# Function to extract correlations from GIMME fit object with VAR = TRUE
+# also enables partial correlations
+gimme_cor_mat_old <- function(gimme_res, 
+                          id, 
+                          n_vars,
+                          pcor = FALSE) {
+  # browser()
+  
+  df_id <- gimme_res |>
+    filter(op == "~~") |>
+    filter(pval < 0.05) |>
+    mutate(file = str_remove(file, "subj")) |>
+    filter(file == id)
+  
+  corr_matrix <- matrix(0, nrow = n_vars, ncol = n_vars)
+  rownames(corr_matrix) <- paste0("V", 1:n_vars)
+  colnames(corr_matrix) <- paste0("V", 1:n_vars)
+  
+  
+  df_id <- df_id |>
+    select(lhs, rhs, beta.std) |>
+    spread(lhs, beta.std) |>
+    column_to_rownames(var = "rhs") |>
+    mutate(across(everything(), ~ replace_na(., 0))) |>
+    as.matrix()
+  
+  # if there is no correlation
+  if (nrow(df_id) == 0) {
+    return(corr_matrix)
+  }
+  else{
+    for (i in rownames(df_id)) {
+      for (j in colnames(df_id)) {
+        corr_matrix[i, j] <- df_id[i, j]
+        corr_matrix[j, i] <- df_id[i, j]
+      }
+    }
+    
+    if(isTRUE(pcor)){
+      corr_matrix <- try(corpcor::cor2pcor(corr_matrix))
+      # if it fails, returns warning
+      if(inherits(corr_matrix, "try-error")){
+        warning("Partial correlation estimation failed. Returning correlation matrix.")
+      }
+    }
+    
+    diag(corr_matrix) <- 0
+    return(corr_matrix)
+  }
+  
+}
+```
+
+
+
+
+# Old sim summarize functions
+
+```{r}
+  
+  
+  rmse_beta_gvar <- summary_calc(results, "gvar", "fit_gvar", "beta", rmse_mean_list)
+  rmse_pcor_gvar <- summary_calc(results, "gvar", "fit_gvar", "pcor", rmse_mean_list)
+  mse_beta_gvar <- summary_calc(results, "gvar", "fit_gvar", "beta", mse_mean_list)
+  mse_pcor_gvar <- summary_calc(results, "gvar", "fit_gvar", "pcor", mse_mean_list)
+  
+  rmse_beta_gimme <- summary_calc(results, "gimme", "fit_gimme", "beta", rmse_mean_list)
+  rmse_pcor_gimme <- summary_calc(results, "gimme", "fit_gimme", "pcor", rmse_mean_list)
+  mse_beta_gimme <- summary_calc(results, "gimme", "fit_gimme", "beta", mse_mean_list)
+  mse_pcor_gimme <- summary_calc(results, "gimme", "fit_gimme", "pcor", mse_mean_list)
+  
+  rmse_beta_mlvar <- summary_calc(results, "mlvar", "fit_mlvar", "beta", rmse_mean_list)
+  rmse_pcor_mlvar <- summary_calc(results, "mlvar", "fit_mlvar", "pcor", rmse_mean_list)
+  mse_beta_mlvar <- summary_calc(results, "mlvar", "fit_mlvar", "beta", mse_mean_list)
+  mse_pcor_mlvar <- summary_calc(results, "mlvar", "fit_mlvar", "pcor", mse_mean_list)
+  
+  rmse_beta_bmlvar <- summary_calc(results, "bmlvar", "fit_bmlvar", "beta", rmse_mean_list)
+  rmse_pcor_bmlvar <- summary_calc(results, "bmlvar", "fit_bmlvar", "pcor", rmse_mean_list)
+  mse_beta_bmlvar <- summary_calc(results, "bmlvar", "fit_bmlvar", "beta", mse_mean_list)
+  mse_pcor_bmlvar <- summary_calc(results, "bmlvar", "fit_bmlvar", "pcor", mse_mean_list)
+  
+  
+  
+  
+  
+  #-- Summary and MCSE
+  # Have to additionally estimate the MSE for the MCSE of the RMSE
+  #- LASSO GVAR
+  rmse_beta_gvar_mean_tmp <- colMeans(apply(as.matrix(rmse_beta_gvar), c(1,2), as.numeric))  
+  rmse_beta_gvar_mean <- mean(rmse_beta_gvar_mean_tmp)
+  rmse_pcor_gvar_mean_tmp <- colMeans(apply(as.matrix(rmse_pcor_gvar), c(1,2), as.numeric))
+  rmse_pcor_gvar_mean <- mean(rmse_pcor_gvar_mean_tmp)
+  mse_beta_gvar_mean_tmp <- colMeans(apply(as.matrix(mse_beta_gvar), c(1,2), as.numeric))
+  mse_beta_gvar_mean <- mean(mse_beta_gvar_mean_tmp)
+  mse_pcor_gvar_mean_tmp <- colMeans(apply(as.matrix(mse_pcor_gvar), c(1,2), as.numeric))
+  mse_pcor_gvar_mean <- mean(mse_pcor_gvar_mean_tmp)
+  
+  rmse_beta_gvar_mcse <- sqrt(stats::var(rmse_beta_gvar_mean_tmp) / (4*n_rep*mse_beta_gvar_mean))
+  rmse_pcor_gvar_mcse <- sqrt(stats::var(rmse_pcor_gvar_mean_tmp) / (4*n_rep*mse_pcor_gvar_mean))
+  mse_beta_gvar_mcse <- sqrt(stats::var(mse_beta_gvar_mean_tmp) / n_rep)
+  mse_pcor_gvar_mcse <- sqrt(stats::var(mse_pcor_gvar_mean_tmp) / n_rep)
+  
+  #- GIMME
+  rmse_beta_gimme_mean_tmp <- colMeans(apply(as.matrix(rmse_beta_gimme), c(1,2), as.numeric))
+  rmse_beta_gimme_mean <- mean(rmse_beta_gimme_mean_tmp)
+  rmse_pcor_gimme_mean_tmp <- colMeans(apply(as.matrix(rmse_pcor_gimme), c(1,2), as.numeric))
+  rmse_pcor_gimme_mean <- mean(rmse_pcor_gimme_mean_tmp)
+  mse_beta_gimme_mean_tmp <- colMeans(apply(as.matrix(mse_beta_gimme), c(1,2), as.numeric))
+  mse_beta_gimme_mean <- mean(mse_beta_gimme_mean_tmp)
+  mse_pcor_gimme_mean_tmp <- colMeans(apply(as.matrix(mse_pcor_gimme), c(1,2), as.numeric))
+  mse_pcor_gimme_mean <- mean(mse_pcor_gimme_mean_tmp)
+  
+  rmse_beta_gimme_mcse <- sqrt(stats::var(rmse_beta_gimme_mean_tmp) / (4*n_rep*mse_beta_gimme_mean))
+  rmse_pcor_gimme_mcse <- sqrt(stats::var(rmse_pcor_gimme_mean_tmp) / (4*n_rep*mse_pcor_gimme_mean))
+  mse_beta_gimme_mcse <- sqrt(stats::var(mse_beta_gimme_mean_tmp) / n_rep)
+  mse_pcor_gimme_mcse <- sqrt(stats::var(mse_pcor_gimme_mean_tmp) / n_rep)
+  
+  #- mlVAR
+  rmse_beta_mlvar_mean_tmp <- colMeans(apply(as.matrix(rmse_beta_mlvar), c(1,2), as.numeric))
+  rmse_beta_mlvar_mean <- mean(rmse_beta_mlvar_mean_tmp)
+  rmse_pcor_mlvar_mean_tmp <- colMeans(apply(as.matrix(rmse_pcor_mlvar), c(1,2), as.numeric))
+  rmse_pcor_mlvar_mean <- mean(rmse_pcor_mlvar_mean_tmp)
+  mse_beta_mlvar_mean_tmp <- colMeans(apply(as.matrix(mse_beta_mlvar), c(1,2), as.numeric))
+  mse_beta_mlvar_mean <- mean(mse_beta_mlvar_mean_tmp)
+  mse_pcor_mlvar_mean_tmp <- colMeans(apply(as.matrix(mse_pcor_mlvar), c(1,2), as.numeric))
+  mse_pcor_mlvar_mean <- mean(mse_pcor_mlvar_mean_tmp)
+  
+  rmse_beta_mlvar_mcse <- sqrt(stats::var(rmse_beta_mlvar_mean_tmp) / (4*n_rep*mse_beta_mlvar_mean))
+  rmse_pcor_mlvar_mcse <- sqrt(stats::var(rmse_pcor_mlvar_mean_tmp) / (4*n_rep*mse_pcor_mlvar_mean))
+  mse_beta_mlvar_mcse <- sqrt(stats::var(mse_beta_mlvar_mean_tmp) / n_rep)
+  mse_pcor_mlvar_mcse <- sqrt(stats::var(mse_pcor_mlvar_mean_tmp) / n_rep)
+  
+  
+  #- BmlVar 
+  rmse_beta_bmlvar_mean_tmp <- colMeans(apply(as.matrix(rmse_beta_bmlvar), c(1,2), as.numeric))
+  rmse_beta_bmlvar_mean <- mean(rmse_beta_bmlvar_mean_tmp)
+  rmse_pcor_bmlvar_mean_tmp <- colMeans(apply(as.matrix(rmse_pcor_bmlvar), c(1,2), as.numeric))
+  rmse_pcor_bmlvar_mean <- mean(rmse_pcor_bmlvar_mean_tmp)
+  mse_beta_bmlvar_mean_tmp <- colMeans(apply(as.matrix(mse_beta_bmlvar), c(1,2), as.numeric))
+  mse_beta_bmlvar_mean <- mean(mse_beta_bmlvar_mean_tmp)
+  mse_pcor_bmlvar_mean_tmp <- colMeans(apply(as.matrix(mse_pcor_bmlvar), c(1,2), as.numeric))
+  mse_pcor_bmlvar_mean <- mean(mse_pcor_bmlvar_mean_tmp)
+  
+  rmse_beta_bmlvar_mcse <- sqrt(stats::var(rmse_beta_bmlvar_mean_tmp) / (4*n_rep*mse_beta_bmlvar_mean))
+  rmse_pcor_bmlvar_mcse <- sqrt(stats::var(rmse_pcor_bmlvar_mean_tmp) / (4*n_rep*mse_pcor_bmlvar_mean))
+  mse_beta_bmlvar_mcse <- sqrt(stats::var(mse_beta_bmlvar_mean_tmp) / n_rep)
+  mse_pcor_bmlvar_mcse <- sqrt(stats::var(mse_pcor_bmlvar_mean_tmp) / n_rep)
+  
+  
+  
+  
+  
+
+  
+
+  #-- Bias
+  #- LASSO GVAR
+  bias_beta_gvar <- summary_calc(results, "gvar", "fit_gvar", "beta", bias_mean_list)
+  bias_pcor_gvar <- summary_calc(results, "gvar", "fit_gvar", "pcor", bias_mean_list)
+  
+  bias_beta_gimme <- summary_calc(results, "gimme", "fit_gimme", "beta", bias_mean_list)
+  bias_pcor_gimme <- summary_calc(results, "gimme", "fit_gimme", "pcor", bias_mean_list)
+  
+  bias_beta_mlvar <- summary_calc(results, "mlvar", "fit_mlvar", "beta", bias_mean_list)
+  bias_pcor_mlvar <- summary_calc(results, "mlvar", "fit_mlvar", "pcor", bias_mean_list)
+  
+  bias_beta_bmlvar <- summary_calc(results, "bmlvar", "fit_bmlvar", "beta", bias_mean_list)
+  bias_pcor_bmlvar <- summary_calc(results, "bmlvar", "fit_bmlvar", "pcor", bias_mean_list)
+  
+    
+  
+  
+  #-- MCSE
+  bias_beta_gvar_mean <- calc_mean(bias_beta_gvar)
+  bias_pcor_gvar_mean <- calc_mean(bias_pcor_gvar)
+  bias_beta_gvar_mcse <- sqrt(stats::var(bias_beta_gvar_mean) / n_rep)
+  bias_pcor_gvar_mcse <- sqrt(stats::var(bias_pcor_gvar_mean) / n_rep)
+  
+  bias_beta_gimme_mean <- calc_mean(bias_beta_gimme)
+  bias_pcor_gimme_mean <- calc_mean(bias_pcor_gimme)
+  bias_beta_gimme_mcse <- sqrt(stats::var(bias_beta_gimme_mean) / n_rep)
+  bias_pcor_gimme_mcse <- sqrt(stats::var(bias_pcor_gimme_mean) / n_rep)
+  
+  bias_beta_mlvar_mean <- calc_mean(bias_beta_mlvar)
+  bias_pcor_mlvar_mean <- calc_mean(bias_pcor_mlvar)
+  bias_beta_mlvar_mcse <- sqrt(stats::var(bias_beta_mlvar_mean) / n_rep)
+  bias_pcor_mlvar_mcse <- sqrt(stats::var(bias_pcor_mlvar_mean) / n_rep)
+  
+  bias_beta_bmlvar_mean <- calc_mean(bias_beta_bmlvar)
+  bias_pcor_bmlvar_mean <- calc_mean(bias_pcor_bmlvar)
+  bias_beta_bmlvar_mcse <- sqrt(stats::var(bias_beta_bmlvar_mean) / n_rep)
+  bias_pcor_bmlvar_mcse <- sqrt(stats::var(bias_pcor_bmlvar_mean) / n_rep)
+  
+  
+  
+  rankcor_beta_gvar <- calc_correlation(results, "gvar", "temp")
+  rankcor_pcor_gvar <- calc_correlation(results, "gvar", "cont")
+  rankcor_beta_gimme <- calc_correlation(results, "gimme", "temp")
+  rankcor_pcor_gimme <- calc_correlation(results, "gimme", "cont")
+  rankcor_beta_mlvar <- calc_correlation(results, "mlvar", "temp")
+  rankcor_pcor_mlvar <- calc_correlation(results, "mlvar", "cont")
+  rankcor_beta_bmlvar <- calc_correlation(results, "bmlvar", "temp")
+  rankcor_pcor_bmlvar <- calc_correlation(results, "bmlvar", "cont")
+  
+  
+
+  rankcor_beta_gvar_mcse <- bootstrap_rankcor(rankcor_beta_gvar, n_rep)
+  rankcor_pcor_gvar_mcse <- bootstrap_rankcor(rankcor_pcor_gvar, n_rep)
+  rankcor_beta_gimme_mcse <- bootstrap_rankcor(rankcor_beta_gimme, n_rep)
+  rankcor_pcor_gimme_mcse <- bootstrap_rankcor(rankcor_pcor_gimme, n_rep)
+  rankcor_beta_mlvar_mcse <- bootstrap_rankcor(rankcor_beta_mlvar, n_rep)
+  rankcor_pcor_mlvar_mcse <- bootstrap_rankcor(rankcor_pcor_mlvar, n_rep)
+  rankcor_beta_bmlvar_mcse <- bootstrap_rankcor(rankcor_beta_bmlvar, n_rep)
+  rankcor_pcor_bmlvar_mcse <- bootstrap_rankcor(rankcor_pcor_bmlvar, n_rep)
+    
+  
+  
+  power_reg_tempdens_gvar <- regression_power(results, "gvar", "tempdens")
+  power_reg_contdens_gvar <- regression_power(results, "gvar", "contdens")
+  power_reg_outstrength_gvar <- regression_power(results, "gvar", "outstrength")
+  
+  power_reg_tempdens_gimme <- regression_power(results, "gimme", "tempdens")
+  power_reg_contdens_gimme <- regression_power(results, "gimme", "contdens")
+  power_reg_outstrength_gimme <- regression_power(results, "gimme", "outstrength")
+  
+  power_reg_tempdens_mlvar <- regression_power(results, "mlvar", "tempdens")
+  power_reg_contdens_mlvar <- regression_power(results, "mlvar", "contdens")
+  power_reg_outstrength_mlvar <- regression_power(results, "mlvar", "outstrength")
+  
+  power_reg_tempdens_bmlvar <- regression_power(results, "bmlvar", "tempdens")
+  power_reg_contdens_bmlvar <- regression_power(results, "bmlvar", "contdens")
+  power_reg_outstrength_bmlvar <- regression_power(results, "bmlvar", "outstrength")
+  
+  
+  #-- MCSE
+  # rowMeans due to the three underlying conditions
+  power_reg_tempdens_gvar_mean <- rowMeans(power_reg_tempdens_gvar)
+  power_reg_contdens_gvar_mean <- rowMeans(power_reg_contdens_gvar)
+  power_reg_outstrength_gvar_mean <- rowMeans(power_reg_outstrength_gvar)
+  power_reg_tempdens_gvar_mcse <- sqrt(power_reg_tempdens_gvar_mean * (1 - power_reg_tempdens_gvar_mean) / n_rep)
+  power_reg_contdens_gvar_mcse <- sqrt(power_reg_contdens_gvar_mean * (1 - power_reg_contdens_gvar_mean) / n_rep)
+  power_reg_outstrength_gvar_mcse <- sqrt(power_reg_outstrength_gvar_mean * (1 - power_reg_outstrength_gvar_mean) / n_rep)
+  
+  power_reg_tempdens_gimme_mean <- rowMeans(power_reg_tempdens_gimme)
+  power_reg_contdens_gimme_mean <- rowMeans(power_reg_contdens_gimme)
+  power_reg_outstrength_gimme_mean <- rowMeans(power_reg_outstrength_gimme)
+  power_reg_tempdens_gimme_mcse <- sqrt(power_reg_tempdens_gimme_mean * (1 - power_reg_tempdens_gimme_mean) / n_rep)
+  power_reg_contdens_gimme_mcse <- sqrt(power_reg_contdens_gimme_mean * (1 - power_reg_contdens_gimme_mean) / n_rep)
+  power_reg_outstrength_gimme_mcse <- sqrt(power_reg_outstrength_gimme_mean * (1 - power_reg_outstrength_gimme_mean) / n_rep)
+
+  power_reg_tempdens_mlvar_mean <- rowMeans(power_reg_tempdens_mlvar)
+  power_reg_contdens_mlvar_mean <- rowMeans(power_reg_contdens_mlvar)
+  power_reg_outstrength_mlvar_mean <- rowMeans(power_reg_outstrength_mlvar)
+  power_reg_tempdens_mlvar_mcse <- sqrt(power_reg_tempdens_mlvar_mean * (1 - power_reg_tempdens_mlvar_mean) / n_rep)
+  power_reg_contdens_mlvar_mcse <- sqrt(power_reg_contdens_mlvar_mean * (1 - power_reg_contdens_mlvar_mean) / n_rep)
+  power_reg_outstrength_mlvar_mcse <- sqrt(power_reg_outstrength_mlvar_mean * (1 - power_reg_outstrength_mlvar_mean) / n_rep)
+
+  power_reg_tempdens_bmlvar_mean <- rowMeans(power_reg_tempdens_bmlvar)
+  power_reg_contdens_bmlvar_mean <- rowMeans(power_reg_contdens_bmlvar)
+  power_reg_outstrength_bmlvar_mean <- rowMeans(power_reg_outstrength_bmlvar)
+  power_reg_tempdens_bmlvar_mcse <- sqrt(power_reg_tempdens_bmlvar_mean * (1 - power_reg_tempdens_bmlvar_mean) / n_rep)
+  power_reg_contdens_bmlvar_mcse <- sqrt(power_reg_contdens_bmlvar_mean * (1 - power_reg_contdens_bmlvar_mean) / n_rep)
+  power_reg_outstrength_bmlvar_mcse <- sqrt(power_reg_outstrength_bmlvar_mean * (1 - power_reg_outstrength_bmlvar_mean) / n_rep)
+
+  
+  
+  
+  
+  mostcent_beta_gvar <- calc_most_cent_ident(results, "gvar", "outstrength")
+  mostcent_pcor_gvar <- calc_most_cent_ident(results, "gvar", "strength")
+  mostcent_beta_gimme <- calc_most_cent_ident(results, "gimme", "outstrength")
+  mostcent_pcor_gimme <- calc_most_cent_ident(results, "gimme", "strength")
+  mostcent_beta_mlvar <- calc_most_cent_ident(results, "mlvar", "outstrength")
+  mostcent_pcor_mlvar <- calc_most_cent_ident(results, "mlvar", "strength")
+  mostcent_beta_bmlvar <- calc_most_cent_ident(results, "bmlvar", "outstrength")
+  mostcent_pcor_bmlvar <- calc_most_cent_ident(results, "bmlvar", "strength")
+
+  #-- Most central MCSE
+  mostcent_beta_gvar_mean <- mean(mostcent_beta_gvar)
+  mostcent_pcor_gvar_mean <- mean(mostcent_pcor_gvar)
+  mostcent_beta_gvar_mcse <- sqrt(mostcent_beta_gvar_mean * (1 - mostcent_beta_gvar_mean) / n_rep)
+  mostcent_pcor_gvar_mcse <- sqrt(mostcent_pcor_gvar_mean * (1 - mostcent_pcor_gvar_mean) / n_rep)
+  mostcent_beta_gimme_mean <- mean(mostcent_beta_gimme)
+  mostcent_pcor_gimme_mean <- mean(mostcent_pcor_gimme)
+  mostcent_beta_gimme_mcse <- sqrt(mostcent_beta_gimme_mean * (1 - mostcent_beta_gimme_mean) / n_rep)
+  mostcent_pcor_gimme_mcse <- sqrt(mostcent_pcor_gimme_mean * (1 - mostcent_pcor_gimme_mean) / n_rep)
+  mostcent_beta_mlvar_mean <- mean(mostcent_beta_mlvar)
+  mostcent_pcor_mlvar_mean <- mean(mostcent_pcor_mlvar)
+  mostcent_beta_mlvar_mcse <- sqrt(mostcent_beta_mlvar_mean * (1 - mostcent_beta_mlvar_mean) / n_rep)
+  mostcent_pcor_mlvar_mcse <- sqrt(mostcent_pcor_mlvar_mean * (1 - mostcent_pcor_mlvar_mean) / n_rep)
+  mostcent_beta_bmlvar_mean <- mean(mostcent_beta_bmlvar)
+  mostcent_pcor_bmlvar_mean <- mean(mostcent_pcor_bmlvar)
+  mostcent_beta_bmlvar_mcse <- sqrt(mostcent_beta_bmlvar_mean * (1 - mostcent_beta_bmlvar_mean) / n_rep)
+  mostcent_pcor_bmlvar_mcse <- sqrt(mostcent_pcor_bmlvar_mean * (1 - mostcent_pcor_bmlvar_mean) / n_rep)
+  
+  
+  
+  
+  
+  
+  
+   #- LASSO GVAR
+  rmse_reg_tempdens_gvar <- regression_rmse(results, "gvar", "tempdens", rmse = TRUE)
+  rmse_reg_contdens_gvar <- regression_rmse(results, "gvar", "contdens", rmse = TRUE)
+  rmse_reg_outstrength_gvar <- regression_rmse(results, "gvar", "outstrength", rmse = TRUE)
+  mse_reg_tempdens_gvar <- regression_rmse(results, "gvar", "tempdens", rmse = FALSE)
+  mse_reg_contdens_gvar <- regression_rmse(results, "gvar", "contdens", rmse = FALSE)
+  mse_reg_outstrength_gvar <- regression_rmse(results, "gvar", "outstrength", rmse = FALSE)
+  
+    
+  #- GIMME
+  rmse_reg_tempdens_gimme <- regression_rmse(results, "gimme", "tempdens", rmse = TRUE)
+  rmse_reg_contdens_gimme <- regression_rmse(results, "gimme", "contdens", rmse = TRUE)
+  rmse_reg_outstrength_gimme <- regression_rmse(results, "gimme", "outstrength", rmse = TRUE)
+  mse_reg_tempdens_gimme <- regression_rmse(results, "gimme", "tempdens", rmse = FALSE)
+  mse_reg_contdens_gimme <- regression_rmse(results, "gimme", "contdens", rmse = FALSE)
+  mse_reg_outstrength_gimme <- regression_rmse(results, "gimme", "outstrength", rmse = FALSE)
+  
+  
+  #- mlVAR
+  rmse_reg_tempdens_mlvar <- regression_rmse(results, "mlvar", "tempdens", rmse = TRUE)
+  rmse_reg_contdens_mlvar <- regression_rmse(results, "mlvar", "contdens", rmse = TRUE)
+  rmse_reg_outstrength_mlvar <- regression_rmse(results, "mlvar", "outstrength", rmse = TRUE)
+  mse_reg_tempdens_mlvar <- regression_rmse(results, "mlvar", "tempdens", rmse = FALSE)
+  mse_reg_contdens_mlvar <- regression_rmse(results, "mlvar", "contdens", rmse = FALSE)
+  mse_reg_outstrength_mlvar <- regression_rmse(results, "mlvar", "outstrength", rmse = FALSE)
+    
+  #- BmlVar
+  rmse_reg_tempdens_bmlvar <- regression_rmse(results, "bmlvar", "tempdens", rmse = TRUE)
+  rmse_reg_contdens_bmlvar <- regression_rmse(results, "bmlvar", "contdens", rmse = TRUE)
+  rmse_reg_outstrength_bmlvar <- regression_rmse(results, "bmlvar", "outstrength", rmse = TRUE)
+  mse_reg_tempdens_bmlvar <- regression_rmse(results, "bmlvar", "tempdens", rmse = FALSE)
+  mse_reg_contdens_bmlvar <- regression_rmse(results, "bmlvar", "contdens", rmse = FALSE)
+  mse_reg_outstrength_bmlvar <- regression_rmse(results, "bmlvar", "outstrength", rmse = FALSE)
+  
+    
+  #-- MCSE
+  #- LASSO GVAR
+  rmse_reg_tempdens_gvar_mean <- rowMeans(rmse_reg_tempdens_gvar, na.rm = TRUE)
+  rmse_reg_contdens_gvar_mean <- rowMeans(rmse_reg_contdens_gvar, na.rm = TRUE)
+  rmse_reg_outstrength_gvar_mean <- rowMeans(rmse_reg_outstrength_gvar, na.rm = TRUE)
+  mse_reg_tempdens_gvar_mean <- rowMeans(mse_reg_tempdens_gvar, na.rm = TRUE)
+  mse_reg_contdens_gvar_mean <- rowMeans(mse_reg_contdens_gvar, na.rm = TRUE)
+  mse_reg_outstrength_gvar_mean <- rowMeans(mse_reg_outstrength_gvar, na.rm = TRUE)
+  
+  rmse_reg_tempdens_gvar_mcse <- sqrt ( apply(rmse_reg_tempdens_gvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_tempdens_gvar_mean))
+  rmse_reg_contdens_gvar_mcse <- sqrt ( apply(rmse_reg_contdens_gvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_contdens_gvar_mean))
+  rmse_reg_outstrength_gvar_mcse <- sqrt ( apply(rmse_reg_outstrength_gvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_outstrength_gvar_mean))
+    
+  #- GIMME
+  rmse_reg_tempdens_gimme_mean <- rowMeans(rmse_reg_tempdens_gimme, na.rm = TRUE)
+  rmse_reg_contdens_gimme_mean <- rowMeans(rmse_reg_contdens_gimme, na.rm = TRUE)
+  rmse_reg_outstrength_gimme_mean <- rowMeans(rmse_reg_outstrength_gimme, na.rm = TRUE)
+  mse_reg_tempdens_gimme_mean <- rowMeans(mse_reg_tempdens_gimme, na.rm = TRUE)
+  mse_reg_contdens_gimme_mean <- rowMeans(mse_reg_contdens_gimme, na.rm = TRUE)
+  mse_reg_outstrength_gimme_mean <- rowMeans(mse_reg_outstrength_gimme, na.rm = TRUE)
+  
+  rmse_reg_tempdens_gimme_mcse <- sqrt ( apply(rmse_reg_tempdens_gimme, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_tempdens_gimme_mean))
+  rmse_reg_contdens_gimme_mcse <- sqrt ( apply(rmse_reg_contdens_gimme, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_contdens_gimme_mean))
+  rmse_reg_outstrength_gimme_mcse <- sqrt ( apply(rmse_reg_outstrength_gimme, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_outstrength_gimme_mean))
+  
+  
+  #- mlVAR
+  rmse_reg_tempdens_mlvar_mean <- rowMeans(rmse_reg_tempdens_mlvar, na.rm = TRUE)
+  rmse_reg_contdens_mlvar_mean <- rowMeans(rmse_reg_contdens_mlvar, na.rm = TRUE)
+  rmse_reg_outstrength_mlvar_mean <- rowMeans(rmse_reg_outstrength_mlvar, na.rm = TRUE)
+  mse_reg_tempdens_mlvar_mean <- rowMeans(mse_reg_tempdens_mlvar, na.rm = TRUE)
+  mse_reg_contdens_mlvar_mean <- rowMeans(mse_reg_contdens_mlvar, na.rm = TRUE)
+  mse_reg_outstrength_mlvar_mean <- rowMeans(mse_reg_outstrength_mlvar, na.rm = TRUE)
+    
+  rmse_reg_tempdens_mlvar_mcse <- sqrt ( apply(rmse_reg_tempdens_mlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_tempdens_mlvar_mean))
+  rmse_reg_contdens_mlvar_mcse <- sqrt ( apply(rmse_reg_contdens_mlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_contdens_mlvar_mean))
+  rmse_reg_outstrength_mlvar_mcse <- sqrt ( apply(rmse_reg_outstrength_mlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_outstrength_mlvar_mean))
+  
+    
+  #- BmlVar
+  rmse_reg_tempdens_bmlvar_mean <- rowMeans(rmse_reg_tempdens_bmlvar, na.rm = TRUE)
+  rmse_reg_contdens_bmlvar_mean <- rowMeans(rmse_reg_contdens_bmlvar, na.rm = TRUE)
+  rmse_reg_outstrength_bmlvar_mean <- rowMeans(rmse_reg_outstrength_bmlvar, na.rm = TRUE)
+  mse_reg_tempdens_bmlvar_mean <- rowMeans(mse_reg_tempdens_bmlvar, na.rm = TRUE)
+  mse_reg_contdens_bmlvar_mean <- rowMeans(mse_reg_contdens_bmlvar, na.rm = TRUE)
+  mse_reg_outstrength_bmlvar_mean <- rowMeans(mse_reg_outstrength_bmlvar, na.rm = TRUE)
+  
+  rmse_reg_tempdens_bmlvar_mcse <- sqrt ( apply(rmse_reg_tempdens_bmlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_tempdens_bmlvar_mean))
+  rmse_reg_contdens_bmlvar_mcse <- sqrt ( apply(rmse_reg_contdens_bmlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_contdens_bmlvar_mean))
+  rmse_reg_outstrength_bmlvar_mcse <- sqrt ( apply(rmse_reg_outstrength_bmlvar, 1, var, na.rm = TRUE) / (4*n_rep*mse_reg_outstrength_bmlvar_mean))
+```
+
+
+
+
+# Old mock simulation
+
+We now temporarily create a mock results data frame which we use to create visualization templates.
+
+```{r mock-results}
+sim_res <- readRDS(here("output/pilot_sim_results.RDS"))
+
+# duplicate the first row of the dataframe multiple times
+sim_res[2:4,] <- sim_res[1,]
+
+# create mock conditions
+sim_res$dgp[2:4] <- c("nonsparse", "sparse", "nonsparse")
+sim_res$heterogeneity[2:4] <- c("high", "high", "low")
+
+# Add some random noise for visualization tests
+# define non-performance columns
+exclude_cols <- c("dgp", "heterogeneity", "REPLICATIONS", "SIM_TIME", "RAM_USED", "SEED", "COMPLETED", "WARNINGS")
+# Define the column strings to exclude from the non-negativity constraint
+exclude_nonneg <- c("mse", "rankcor", "bias")
+noise_cols <- setdiff(colnames(sim_res), exclude_cols)
+
+# Add noise to rows 2-4 for the selected columns
+sim_res[2:4, noise_cols] <- sapply(sim_res[2:4, noise_cols], function(x) x * (1 + runif(length(x), -0.1, 0.3)))
+
+
+nonneg_cols <- noise_cols[!grepl("mse|rankcor|bias", noise_cols)]
+# Apply non-negativity constraint to rows 2-4 for the selected columns
+sim_res[2:4, nonneg_cols] <- sapply(sim_res[2:4, nonneg_cols], function(x) pmax(x, 0))
+
+
+
+```
+
+
+# Old renaming in simulation dataframe
+
+```{r}
+#   # THIS IS TEMPORARY UNTIL A RENAMING OF THE REGRESSION COLUMNS!
+#   # AND UNTIL RENAMING OF THE RANKCOR
+#   # TODO
+#   # TODO
+#   # filter out all rows that contain "mean1", "mean2", "mean3", "mcse1", "mcse2", "mcse3" in "measure"
+#   filter(!str_detect(measure, "mean1|mean2|mean3|mcse1|mcse2|mcse3")) %>%
+#     separate_wider_delim(measure, 
+#                        delim = "_", 
+#                        names = c("pm", "outcome", "method", "summary")) %>%
+#   filter(pm != "rankcor") %>% 
+#   # END TEMPORARY
+```
+
