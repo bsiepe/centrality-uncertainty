@@ -63,7 +63,7 @@ source(here::here("scripts", "00_functions.R"))
 ## Data-Generating Processes
 
 Load DGP based on estimated network structures:  
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
@@ -77,7 +77,7 @@ graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
 We define the conditions and the fixed parameters for the simulation.
 
-```{r params, eval=FALSE}
+```{r params, eval=TRUE}
 dgp <- c("sparse")
 
 # Number of timepoints
@@ -98,8 +98,8 @@ df_design <- SimDesign::createDesign(
   dgp = dgp,
   n_id = n_id,
   heterogeneity = heterogeneity,
-  true_cent_scaling = true_cent_scaling,
-  n_tp = n_tp
+  n_tp = n_tp,
+  true_cent_scaling = true_cent_scaling
   )
 
 # Number of variables
@@ -130,12 +130,12 @@ sim_pars <- list(
 
 
 As we only need to compute the true SD once, we can simply load it from disk to save time. These SDs are no longer correct, as we have changed the data-generating matrix. However, we are not interested in the outcome prediction here, so we can ignore this part. 
-```{r, eval=FALSE}
+```{r, eval=TRUE}
 true_sd <- readRDS(here::here("data", "true_sd_semisparse.RDS"))
 names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
-df_design$strength_sd <- unlist(true_sd$sd_results_strength)
-df_design$outstrength_sd <- unlist(true_sd$sd_results_outstrength)
-df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
+df_design$strength_sd <- rep(unlist(true_sd$sd_results_strength), length(true_cent_scaling))
+df_design$outstrength_sd <- rep(unlist(true_sd$sd_results_outstrength), length(true_cent_scaling))
+df_design$instrength_sd <- rep(unlist(true_sd$sd_results_instrength), length(true_cent_scaling))
 ```
 
 
@@ -143,7 +143,7 @@ df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
 ## Simulating Data
 
 
-```{r generate, eval=FALSE}
+```{r generate, eval=TRUE}
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -158,7 +158,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
                     0.075)
   sigma_sd <- ifelse(condition$heterogeneity == "low",
                     0.005,
-                    0.005)
+                    0.075)
   
   # scale kappa random effects w.r.t diagonal elements
   mean_diag_kappa <- mean(diag(fixed_objects[[dgp_graph]]$kappa)) 
@@ -170,7 +170,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
                      kappa_sd_high)
   
   # multiple edges of first node with scaling factor
-  fixed_objects[[dgp_graph]]$beta[1,] <- fixed_objects[[dgp_graph]]$beta[1,] * condition$true_cent_scaling
+  fixed_objects[[dgp_graph]]$beta[,1] <- fixed_objects[[dgp_graph]]$beta[,1] * condition$true_cent_scaling
   
   
   ml_sim <- sim_gvar_loop(
@@ -280,7 +280,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 
 ## Analysis
 
-```{r data-analysis, eval=FALSE}
+```{r data-analysis, eval=TRUE}
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -313,6 +313,114 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   n_id <- condition$n_id
   
+  #--- graphicalVAR
+  # Fit models
+  fit_gvar <- lapply(dat$data_centered, function(x){
+    tryCatch({suppressMessages(graphicalVAR::graphicalVAR(x, 
+                               nLambda = 50,
+                               verbose = FALSE,
+                               gamma = 0, 
+                               scale = FALSE))}, error = function(e) NA)
+  })
+  
+  if(any(is.na(fit_gvar))){
+    stop("Not all GVAR models converged.")
+  }
+  
+  # Obtain centralities, IDs nested in list
+  cent_gvar <- purrr::transpose(lapply(fit_gvar, function(x){
+    centrality_gvar(x)
+  }))
+
+  
+  dens_temp_gvar <- unlist(cent_gvar$dens_temp)
+  dens_cont_gvar <- unlist(cent_gvar$dens_cont)
+  outstrength_gvar <- lapply(cent_gvar$outstrength, function(x) unname(x))
+  instrength_gvar <- lapply(cent_gvar$instrength, function(x) unname(x))
+  strength_gvar <- lapply(cent_gvar$strength, function(x) unname(x))
+  instrength_gvar_first <- sapply(cent_gvar$instrength, function(x) unname(x[1]))
+  strength_gvar_first <- sapply(cent_gvar$strength, function(x) unname(x[1]))
+  outstrength_gvar_first <- sapply(cent_gvar$outstrength, function(x) unname(x[1]))
+  
+  # Create list of subject-specific estimates
+  beta_gvar <- lapply(fit_gvar, function(x){
+    x$beta[,-1]
+  })
+  pcor_gvar <- lapply(fit_gvar, function(x){
+    x$PCC
+  })
+  
+  # Fit regression
+  reg_gvar_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_gvar_first))
+  reg_gvar_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_gvar_first))
+  reg_gvar_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gvar_first))
+  
+  # remove fit object to save memory
+  rm(fit_gvar)
+  
+  #--- GIMME
+  
+  # Fit model
+  fit_gimme <- tryCatch({gimme::gimme(dat$data_centered,
+                            ar = TRUE,
+                            subgroup = TRUE,
+                            plot = FALSE,
+                            hybrid = FALSE,
+                            groupcutoff = .75,
+                            subcutoff = .75,
+                            VAR = gimme_var_only)}, error = function(e) NA)
+  
+  
+  if(any(is.na(fit_gimme))){
+    stop("GIMME did not converge.")
+  }
+  
+  # for var_only, we need to first extract the contemporaneous matrices
+  if(isTRUE(gimme_var_only)){
+    fit_gimme$contemp_mat <- lapply(1:length(fit_gimme$path_est_mats), function(i){
+      gimme_cor_mat(fit_gimme, id = i, n_vars = n_var, pcor = fixed_objects$gimme_pcor)
+    }
+  )
+  }
+  
+  cent_gimme <- centrality_gimme(fit_gimme,
+                                 var_only = gimme_var_only)
+
+  # Obtain centralities
+  dens_temp_gimme <- unlist(cent_gimme$dens_temp)
+  dens_cont_gimme <- unlist(cent_gimme$dens_cont)
+  outstrength_gimme <- lapply(cent_gimme$outstrength, function(x) unname(x))
+  instrength_gimme <- lapply(cent_gimme$instrength, function(x) unname(x))
+  strength_gimme <- lapply(cent_gimme$strength, function(x) unname(x))
+  outstrength_gimme_first <- sapply(cent_gimme$outstrength, function(x) unname(x[1]))
+  instrength_gimme_first <- sapply(cent_gimme$instrength, function(x) unname(x[1]))
+  strength_gimme_first <- sapply(cent_gimme$strength, function(x) unname(x[1]))
+  
+  # Create list of subject-specific estimates
+  beta_gimme <- lapply(fit_gimme$path_est_mats, function(x){
+    x[,1:n_var]
+  })
+  
+  if(isFALSE(gimme_var_only)){
+      pcor_gimme <- lapply(fit_gimme$path_est_mats, function(x){
+    x[, (n_var+1):(n_var*2)]
+  })
+  }
+  
+  if(isTRUE(gimme_var_only)){
+    pcor_gimme <- lapply(fit_gimme$contemp_mat, function(x){
+      x
+    })
+  }
+
+
+  # Fit regression
+  reg_gimme_in_strength <- lapply(2:4, function(i) lm(dat$covariate_in_strength[, i] ~ instrength_gimme_first))
+  reg_gimme_cont_strength <- lapply(2:4, function(i) lm(dat$covariate_cont_strength[, i] ~ strength_gimme_first))
+  reg_gimme_out_strength <- lapply(2:4, function(i) lm(dat$covariate_out_strength[, i] ~ outstrength_gimme_first))
+
+  rm(fit_gimme)
+  
   
   # #--- frequentist mlVAR
 
@@ -321,8 +429,8 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
                             vars = paste0("V", seq(1:n_var)),
                             idvar = "ID",
                             estimator = "lmer",
-                            contemporaneous = "orthogonal",
-                            temporal = "orthogonal",
+                            contemporaneous = "correlated",
+                            temporal = "correlated",
                             nCores = 1,
                             scale = FALSE)}, error = function(e) NA)
   if(any(is.na(fit_mlvar))){
@@ -384,6 +492,33 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
   #--- Return Results
   # Also return true centralities for comparison later
   ret_results <- list(
+    gvar = list(
+      fit_gvar = list(
+        beta = beta_gvar,
+        pcor = pcor_gvar),
+      dens_temp = dens_temp_gvar,
+      dens_cont = dens_cont_gvar,
+      outstrength = outstrength_gvar,
+      strength = strength_gvar,
+      instrength = instrength_gvar,
+      reg_instrength = reg_gvar_in_strength,
+      reg_strength = reg_gvar_cont_strength,
+      reg_outstrength = reg_gvar_out_strength
+    ),
+    gimme = list(
+      fit_gimme = list(
+        beta = beta_gimme,
+        pcor = pcor_gimme
+      ),
+      dens_temp = dens_temp_gimme,
+      dens_cont = dens_cont_gimme,
+      outstrength = outstrength_gimme,
+      strength = strength_gimme,
+      instrength = instrength_gimme,
+      reg_instrength = reg_gimme_in_strength,
+      reg_strength = reg_gimme_cont_strength,
+      reg_outstrength = reg_gimme_out_strength
+    ),
     mlvar = list(
       fit_mlvar = list(
         beta = beta_mlvar,
@@ -422,7 +557,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 ## Summary
 
 
-```{r summarize, eval=FALSE}
+```{r summarize, eval=TRUE}
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -449,7 +584,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 }
 
   
-  methods <- c("mlvar")
+  methods <- c("gvar", "gimme", "mlvar")
   measures <- c("beta", "pcor")
   funcs <- list("rmse" = rmse_mean_list, 
                 "mse" = mse_mean_list, 
@@ -599,7 +734,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                               res[2,5]
                             } else{
                               res <- summary(x)$coefficients
-                              res[2,4]
+                              tryCatch({res[2,4]}, error = function(e){NA})
                             }})
 
       # Calculate Empirical detection rate/power
@@ -647,7 +782,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   
   # exclude bmlvar because of its different data structure
-  methods <- c("mlvar")
+  methods <- c("gvar", "gimme", "mlvar")
   measures <- c("instrength", "outstrength", "strength")
   summaries <- c("rmse", "bias", "mse")
   
@@ -760,19 +895,18 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 ## Executing Simulation
 
-```{r run-sim, eval=FALSE}
-n_rep <- 5
-future::plan(multisession, workers = n_rep)
+```{r run-sim, eval=TRUE}
+n_rep <- 100
+future::plan(multisession, workers = 30)
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design[c(3,4),], 
+                                    design = df_design[c(3,7,11),], 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
                                     summarise = sim_summarise,
                                     fixed_objects = sim_pars,
                                     parallel = "future",
-                                    # parallel = TRUE,
                                     max_errors = 2,
                                     packages = c("tidyverse", 
                                                  "gimme",
@@ -781,17 +915,44 @@ sim_results <- SimDesign::runSimulation(
                                                  "lm.beta",
                                                  "bayestestR",
                                                  "posterior",
-                                                 "rstan",
+                                                 # "rstan",
                                                  "corpcor",
                                                  "Rcpp"),
                                     save_results = TRUE,
-                                    # debug = "generate",
+                                    # debug = "analyse",
                                     filename = "most_central_exploration"
-                                    # save_seeds = TRUE
                                     )
 
 plan(sequential)
-
-
-
 ```
+
+Re-import the results
+```{r load-res}
+sim_results <- readRDS(here::here("output", "most_central_exploration.rds"))
+```
+
+Display how the selection of the most central node changed based on the increased true centrality: 
+
+```{r}
+sim_results |> 
+  dplyr::select(true_cent_scaling, contains("mostcent_beta")) |> 
+  pivot_longer(!true_cent_scaling) |> 
+  mutate(name = str_remove(name, "mostcent_beta_")) |> 
+  separate_wider_delim(cols = "name", delim = "_", names = c("method", "param")) |> 
+  pivot_wider(id_cols = c(true_cent_scaling, method), names_from = param)
+```
+
+
+
+
+# Write to standard R script
+
+To run the simulation on the server, it can be easier to just execute an R script.
+
+```{r, eval = FALSE}
+knitr::purl(here::here("scripts", "07_exploratory_simulations.qmd"), 
+            output = here::here("scripts", "07_exploratory_simulations.R"),
+            documentation = 2)
+```
+
+
