@@ -1067,6 +1067,68 @@ generate_heatmaps(sim_res_4$results[[1]]$beta, sim_res_4$results[[1]]$mlvar$fit_
 
 
 
+## Compare estimate correlations
+
+We can additionally compare the correlation between different edge estimates between BmlVAR and mLVAR to understand if the univariate estimation by mlVAR leads to striking differences here. We observe no large differences.
+
+```{r}
+# extract beta estimates
+mlvar_betas <- lapply(sim_res_4$results, function(x){
+  lapply(x$mlvar$fit_mlvar$beta, function(y){
+    as.vector(y)
+  })
+}) |> 
+    unlist(recursive = FALSE)
+
+df_mlvar_betas <- as.data.frame(do.call(rbind, mlvar_betas)) |> 
+  mutate(method = "mlvar") |> 
+  mutate(sim_iter = rep(1:200, each = 200))
+
+bmlvar_betas <- lapply(sim_res_4$results, function(x){
+  lapply(x$bmlvar$fit_bmlvar$beta, function(y){
+    as.vector(y)
+  })
+}) |> 
+    unlist(recursive = FALSE)
+
+df_bmlvar_betas <- as.data.frame(do.call(rbind, bmlvar_betas)) |> 
+  mutate(method = "bmlvar") |> 
+  mutate(sim_iter = rep(1:200, each = 200))
+
+df_betas <- bind_rows(df_mlvar_betas, df_bmlvar_betas)
+
+
+df_split <- df_betas |> 
+  split(list(.$sim_iter, .$method), drop = TRUE)
+
+cor_matrices <- map(df_split, ~ cor(select(.x, starts_with("V")), use = "pairwise.complete.obs"))
+
+
+cor_df <- tibble(
+  sim_iter = as.integer(str_extract(names(cor_matrices), "^\\d+")),  # Extract iteration number
+  method = str_extract(names(cor_matrices), "(mlvar|bmlvar)"),       # Extract method name
+  cor_matrix = cor_matrices                                          # Store correlation matrix
+)
+
+# compute average absolute non-diagonal correlation
+mean_abs_nondiag_cor <- function(x){
+  x[x = 1] <- 0
+  x <- x[!is.na(x)]
+  mean(abs(unlist(x)))
+}
+
+cor_df |> 
+  mutate(mean_cor = as.numeric(map(cor_matrix, mean_abs_nondiag_cor))) |> 
+  dplyr::group_by(method) |> 
+  dplyr::summarize(mean_abs_cor = mean(mean_cor), 
+            sd_abs_cor = sd(mean_cor)) |> 
+  knitr::kable()
+
+```
+
+
+
+
 
 # Idea 4: Different DGP, long time series
 Here, we don't simulate any external outcome, but rather simulate from a single DGP with a very long time series to check random effects recovery in this somewhat idealized situation. This implicitly also checks whether our simulation setup might be at fault for the poor performance. 
@@ -1074,7 +1136,7 @@ Here, we don't simulate any external outcome, but rather simulate from a single 
 
 ## New DGP
 
-We use a grpah obtained by estimating mlVAR models on data by Fried et al. (2022). More information on the fitting process can be found in the file `04_dgps.qmd`. 
+We use a graph obtained by estimating mlVAR models on data by Fried et al. (2022). More information on the fitting process can be found in the file `04_dgps.qmd`. 
 
 Load the graph:
 ```{r}
