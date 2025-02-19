@@ -1236,15 +1236,30 @@ df_data <- dplyr::bind_rows(purrr::map(ml_sim$data, dplyr::as_tibble)
     mutate(tp = row_number()) |> 
     ungroup()
 
+
+# simulate data from a different simulation function
+mlvar_sim <- mlVAR::mlVARsim(nPerson = 60, 
+                nNode = 5, 
+                nTime = 60, 
+                lag = 1)
+df_data <- mlvar_sim$Data |> 
+  mutate(ID = as.factor(ID)) |> 
+  group_by(ID) |> 
+  mutate(tp = row_number()) |>
+  ungroup()
+
+
+
 nlme_fit <- mlVAR_nlme(
                        data = df_data,
                        id = "ID",
                        time = "tp",
-                       vars = c("V1", "V2", "V3", "V4", "V5", "V6"),
-                       center = TRUE,
-                       scale = FALSE, 
-                       random_intercepts = TRUE, 
-                       random_slopes = TRUE
+                       vars = c("V1", "V2", "V3", "V4", "V5"),
+                       center = FALSE,
+                       scale = TRUE, 
+                       random_intercepts = FALSE, 
+                       random_slopes = TRUE,
+                       likelihood_method = "ML" 
 )
 
 

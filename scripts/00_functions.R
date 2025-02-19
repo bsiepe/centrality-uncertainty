@@ -889,7 +889,8 @@ mlVAR_nlme <- function(data,
                        random_intercepts = TRUE,
                        random_slopes = TRUE,
                        center = FALSE,
-                       scale = FALSE) {
+                       scale = FALSE,
+                       likelihood_method = "REML") {
   
   
   data <- data |>
@@ -963,8 +964,12 @@ mlVAR_nlme <- function(data,
       fixed = formula_obj,
       data = data_fit,
       random = rand_formula,
-      method = "REML",
-      control = nlme::lmeControl(opt = "optim", msMaxIter = 50, msVerbose = TRUE)
+      method = "ML",
+      control = nlme::lmeControl(opt = "nlminb", 
+                                 msMaxIter = 200,
+                                 msMaxEval = 200,
+                                 tolerance = 1e-6,
+                                 msVerbose = TRUE)
     )
     
     model_list[[outcome]] <- model
