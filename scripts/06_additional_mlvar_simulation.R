@@ -44,7 +44,7 @@
 #' This script contains the `SimDesign` code for an additional simulation investigation into `mlVAR`, where we try various different things to investigate why mlVARs performance for random effects was poor. 
 #' 
 #' We first load all relevant packages: 
-## ----packages----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -54,34 +54,91 @@ library(here)
 library(future)
 library(corpcor)
 library(gridExtra)
+library(nlme)
 source(here::here("scripts", "00_functions.R"))
 
-#' 
-#' 
-#' 
-#' 
-#' # Idea 1: Different Simulation
-#' 
-#' We have tried various different simulation settings (different random effects variance, different number of time points), but none of them really improved the performance of mlVAR for outcome prediction with centrality indices. Here, we showcase results with a low innovation variance. Note that the association with the outcome must be off here (because we did not resimulate the true standard deviation for the centralities), but the rank order of centrality should still be recovered if mlVAR worked well. 
-#' 
-#' ## Data-Generating Processes
-#' 
-#' Load DGP based on estimated network structures:  
-## ----eval=FALSE--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# non-sparse Graph to simulate from
-graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
-# sparse DGP
-graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
+#' 
+#' 
+#' 
+#' 
+#' ## Idea 1.2.: Sparser DGP
+#' 
+#' ### Data-Generating Processes
+#' 
+#' Create a pretty sparse DGP, considerably sparser than that used in the simulation: 
+## ----create-var-sparse-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' var_mat <- create_var_matrix(6, 
+#'                           sparse = TRUE,
+#'                           sparsity_proportion = 0.5,
+#'                           boost_factor = 1.25)
+#' 
+#' # set some additional elements to zero
+#' var_mat[3,1] <- 0
+#' var_mat[5,1] <- 0
+#' var_mat[1,3] <- 0
+#' var_mat[1,5] <- 0
+#' 
+#' # colSums(var_mat)                            
+#' # rowSums(var_mat)
+#' 
+#' arr_to_latex(var_mat)
+#' 
+#' #' 
+#' #' 
+#' #' Then we can create the corresponding innovation covariance matrix:
+#' ## ----create-cov-sparse-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' cov_mat <- create_cov_matrix(6, 
+#'                              off_diag_val = .15,
+#'                               sparse = TRUE, 
+#'                               sparsity_proportion = 0.7,
+#'                               boost_factor = 1.25)
+#' 
+#' cov_mat[3,1] <- 0
+#' cov_mat[5,1] <- 0
+#' cov_mat[1,3] <- 0
+#' cov_mat[1,5] <- 0
+#' 
+#' # colSums(cov_mat)
+#' # rowSums(cov_mat)
+#' arr_to_latex(cov_mat)
 
-#'
-#'
-#'
-#' ## Setting parameters
-#'
+#' 
+#' Create the corresponding pcor matrix:
+## ----eval = FALSE------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# pcor_mat <- -stats::cov2cor(solve(cov_mat))
+
+#' 
+#' And the corresponding precision matrix: 
+## ----eval = FALSE------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# kappa_mat <- solve(cov_mat)
+
+#' 
+#' 
+#' Save the DGP:
+## ----eval = FALSE------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# graph_sparse_synth_additional_sim <- list(beta = var_mat,
+#                     sigma = cov_mat,
+#                     kappa = kappa_mat,
+#                     pcor = pcor_mat)
+# 
+# saveRDS(graph_sparse_synth_additional_sim , here::here("data", "graph_sparse_synth_additional_sim.RDS"))
+
+#' 
+#' Reload it: 
+#' 
+## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+graph_nonsparse <- readRDS(here::here("data", "graph_nonsparse.RDS"))
+graph_sparse_synth_additional_sim <- readRDS(here::here("data", "graph_sparse_synth_additional_sim.RDS"))
+
+#' 
+#' 
+#' ### Setting parameters
+#' 
 #' We define the conditions and the fixed parameters for the simulation.
-#'
-## ----params, eval=FALSE------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' 
+## ----params-sparse, eval=FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------
 dgp <- c("sparse")
 
 # Number of timepoints
@@ -121,28 +178,91 @@ sim_pars <- list(
   n_var = n_var,
   reg_error_sd = reg_error_sd,
   graph_nonsparse = graph_nonsparse,
-  graph_sparse = graph_sparse,
+  graph_sparse = graph_sparse_synth_additional_sim,
   gimme_var_only = gimme_var_only,
   mean_center = mean_center
 )
 
-#'
-#'
-#' As we only need to compute the true SD once, we can simply load it from disk to save time:
-## ----eval=FALSE--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-true_sd <- readRDS(here::here("data", "true_sd_semisparse.RDS"))
+#' 
+#' 
+#' We recompute the true SD: 
+#' 
+## ----eval = FALSE------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# # number of simulations to obtain sd
+# n_sim_sd <- 30000
+# sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
+# 
+# for(i in 1:nrow(df_design)){
+#   condition <- df_design[i,]
+# 
+#   dgp_graph <- ifelse(condition$dgp == "sparse",
+#                       "graph_sparse",
+#                       "graph_nonsparse")
+#   beta_sd <- ifelse(condition$heterogeneity == "low",
+#                     0.05,
+#                     0.075)
+#   sigma_sd <- ifelse(condition$heterogeneity == "low",
+#                     0.05,
+#                     0.075)
+#   ml_sim <- sim_gvar_loop(
+#                      graph = sim_pars[[dgp_graph]],
+#                      beta_sd = beta_sd,
+#                      kappa_sd = kappa_sd,
+#                      sigma_sd = sigma_sd,
+#                      n_person = n_sim_sd,
+#                      n_time = condition$n_tp,
+#                      n_node = sim_pars$n_var,
+#                      max_try = 1000,
+#                      verbose = FALSE,
+#                      listify = TRUE,
+#                      sim_pkg = "mlVAR",
+#                      sparse_sim = TRUE,
+#                      most_cent_diff_temp = TRUE,
+#                      most_cent_diff_temp_min = 0.05,
+#                      most_cent_diff_cont = TRUE,
+#                      most_cent_diff_cont_min = 0.05,
+#                      innov_var_fixed_sigma = TRUE)
+# 
+#   # Obtain true centralities
+#   true_cent <- centrality_mlvar_sim(ml_sim,
+#                                   sim_fn = "sim_gvar_loop")
+# 
+#   strength <- sapply(true_cent$strength, `[`, 1)
+#   outstrength <- sapply(true_cent$outstrength, `[`, 1)
+#   instrength <- sapply(true_cent$instrength, `[`, 1)
+#   strength_sd <- sd(strength)
+#   outstrength_sd <- sd(outstrength)
+#   instrength_sd <- sd(instrength)
+#   sd_results_strength[[i]] <- strength_sd
+#   sd_results_outstrength[[i]] <- outstrength_sd
+#   sd_results_instrength[[i]] <- instrength_sd
+# }
+# 
+# 
+# sd_results <- list(sd_results_strength, sd_results_outstrength, sd_results_instrength)
+# names(sd_results) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
+# 
+# 
+# saveRDS(sd_results, here::here("data", "true_sd_sparse_additional_sim.RDS"))
+# 
+
+#' 
+#' As we only need to compute the true SD once, we can simply load it from disk to save time: 
+## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+true_sd <- readRDS(here::here("data", "true_sd_sparse_additional_sim.RDS"))
 names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 df_design$strength_sd <- unlist(true_sd$sd_results_strength)
 df_design$outstrength_sd <- unlist(true_sd$sd_results_outstrength)
 df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
 
-#'
-#'
-#'
-#' ## Simulating Data
-#'
-#'
-## ----generate, eval=FALSE----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' 
+#' 
+#' 
+#' 
+#' ### Simulating Data
+#' 
+#' 
+## ----generate-sparse, eval=FALSE---------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -268,14 +388,14 @@ sim_generate <- function(condition, fixed_objects = NULL){
 
 }
 
-#'
-#'
-#'
-#'
-#'
-#' ## Analysis
-#'
-## ----data-analysis, eval=FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' 
+#' 
+#' 
+#' 
+#' 
+#' ### Analysis
+#' 
+## ----data-analysis-sparse, eval=FALSE----------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
 
   #--- Preparation
@@ -411,13 +531,13 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 }
 
 
-#'
-#'
-#'
-#' ## Summary
-#'
-#'
-## ----summarize, eval=FALSE---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' 
+#' 
+#' 
+#' ### Summary
+#' 
+#' 
+## ----summarize-sparse, eval=FALSE--------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
 
   #--- Preparation
@@ -751,16 +871,16 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 
 
-#'
-#'
-#' ## Executing Simulation
-#'
-## ----run-sim, eval=FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-n_rep <- 5
+#' 
+#' 
+#' ### Executing Simulation
+#' 
+## ----run-sim-sparse, eval=FALSE----------------------------------------------------------------------------------------------------------------------------------------------------------------
+n_rep <- 20
 future::plan(multisession, workers = n_rep)
 
 sim_results <- SimDesign::runSimulation(
-                                    design = df_design[c(3,4),],
+                                    design = df_design,
                                     replications = n_rep,
                                     generate = sim_generate,
                                     analyse = sim_analyse,
@@ -781,382 +901,10 @@ sim_results <- SimDesign::runSimulation(
                                                  "Rcpp"),
                                     save_results = TRUE,
                                     # debug = "generate",
-                                    filename = "low_kappa_sd_mlvar"
+                                    filename = "additional_sparser_dgp"
                                     # save_seeds = TRUE
                                     )
 
 plan(sequential)
 
 
-
-
-#'
-#' 
-#' Investigate the results: 
-## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-#' 
-#' 
-#' 
-#' 
-#' # Idea 2: Investigate Centrality Estimates in More Detail
-#' 
-#' Load the results of the full simulation, specifically the condition with $n = 200$ and $tp = 120$:
-## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' sim_res_4 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-4.rds")
-#' 
-#' #' 
-#' #' 
-#' #' ## Plot Centrality Recovery
-#' #' 
-#' #' Plot correlation of centrality estimates with true centrality: 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' centrality_list_mlvar <- list()
-#' 
-#' for (i in seq_along(sim_res_4$results)) {
-#'   df_temp <- data.frame(
-#'     mlvar_outstrength = sapply(sim_res_4$results[[i]]$mlvar$outstrength, function(x) x[[1]]),
-#'     mlvar_instrength = sapply(sim_res_4$results[[i]]$mlvar$instrength, function(x) x[[1]]),
-#'     mlvar_strength = sapply(sim_res_4$results[[i]]$mlvar$strength, function(x) x[[1]]),
-#'     true_outstrength = sapply(sim_res_4$results[[i]]$true_cent$outstrength, function(x) x[[1]]),
-#'     true_instrength = sapply(sim_res_4$results[[i]]$true_cent$instrength, function(x) x[[1]]),
-#'     true_strength = sapply(sim_res_4$results[[i]]$true_cent$strength, function(x) x[[1]])
-#'   )
-#'   
-#'   centrality_list_mlvar[[i]] <- df_temp
-#' }
-#' 
-#' df_centrality_mlvar <- do.call(rbind, centrality_list_mlvar)
-#' 
-#' # add an identifier column to track which element each row came from
-#' df_centrality_mlvar$sim_rep <- rep(seq_along(sim_res_4$results), sapply(centrality_list_mlvar, nrow))
-#' 
-#' 
-#' 
-#' df_centrality_mlvar |> 
-#'   ggplot(aes(x = true_outstrength, y = mlvar_outstrength)) + 
-#'   geom_point() + 
-#'   geom_smooth() + 
-#'   theme_centrality()+
-#'   labs(x = "True Outstrength",
-#'        y = "mlVAR Outstrength")
-#' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' ## Potential extraction errors
-#' #' One possible reason for a surprisingly bad performance of a method in a simulation study could be errors in the simulation code or, more specifically, some extraction function. In this section, we work with the results of our full simulation study. We checked this explanation multiple times and could not find any errors that would explain the results. 
-#' #' 
-#' #' ### Transposing
-#' #' One potential error could be wrong transposing, which would mean that instrength and outstrength are confused with one another.
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' df_centrality_mlvar |> 
-#'   ggplot(aes(x = true_outstrength, y = mlvar_instrength)) + 
-#'   geom_point() + 
-#'   geom_smooth() + 
-#'   theme_centrality()+
-#'   labs(x = "True Outstrength",
-#'        y = "mlVAR Instrength")
-#' 
-#' #' 
-#' #' Obviously, the results don't change much, so this is an unlikely issue. 
-#' #' 
-#' #' 
-#' #' ### Overregularization
-#' #' 
-#' #' Compare the true and estimated variability of centrality estimates: 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' df_centrality_mlvar |> 
-#'   group_by(sim_rep) |> 
-#'   summarize(across(everything(),list(mean = mean, sd = sd))) |> 
-#'   ungroup() |> 
-#'   pivot_longer(cols = !sim_rep) |> 
-#'   separate_wider_delim(cols = name, delim = "_", names = c("est", "centrality", "summary")) |> 
-#'   pivot_wider(id_cols = c(sim_rep, est, centrality), names_from = summary, values_from = value) |> 
-#'   group_by(est, centrality) |> 
-#'   summarize(average_mean = mean(mean),
-#'             average_sd = mean(sd)) |> 
-#'   knitr::kable()
-#' 
-#' #' mlVAR slightly underestimates the variability of temporal centrality coefficients, but severely underestimates the variabli
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' # Idea 3: Investigate Recovery of Raw Random Effects
-#' #' 
-#' #' Create plots showing recovery for each of the coefficients in the first column, i.e., for the outgoing edges from variable 1: 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' all_results <- lapply(seq_along(sim_res_4[["results"]]), function(i) {
-#'   
-#'   col_1_true <- lapply(sim_res_4[["results"]][[i]][["beta"]], function(x) x[,1])
-#'   
-#'   df_true <- do.call(rbind, col_1_true) |> 
-#'     as.data.frame() |> 
-#'     mutate(param = "true_est", id = row_number(), iteration = i)
-#'   
-#'   col_1_mlvar <- lapply(sim_res_4[["results"]][[i]][["mlvar"]][["fit_mlvar"]][["beta"]], function(x) x[,1])
-#'   
-#'   df_mlvar <- do.call(rbind, col_1_mlvar) |> 
-#'     as.data.frame() |> 
-#'     mutate(param = "mlvar_est", id = row_number(), iteration = i)
-#'   
-#'   col_1_bmlvar <- lapply(sim_res_4[["results"]][[i]][["bmlvar"]][["fit_bmlvar"]][["beta"]], function(x) x[,1])
-#'   
-#'   df_bmlvar <- do.call(rbind, col_1_bmlvar) |> 
-#'     as.data.frame() |> 
-#'     mutate(param = "bmlvar_est", id = row_number(), iteration = i)
-#'   
-#'   df_all <- rbind(df_true, df_mlvar, df_bmlvar)
-#'   
-#'   df_all_wide <- df_all |> 
-#'     pivot_wider(id_cols = c(id, iteration), names_from = param, values_from = c(V1, V2, V3, V4, V5, V6)) |> 
-#'     mutate(
-#'       across(starts_with("V"), 
-#'              .fns = list(mlvar_bias = ~ get(sub("true_est", "mlvar_est", cur_column())) - ., 
-#'                          bmlvar_bias = ~ get(sub("true_est", "bmlvar_est", cur_column())) - .), 
-#'              .names = "{.col}_{.fn}")
-#'     )
-#'   
-#'   return(df_all_wide)
-#' })
-#' 
-#' df_combined <- all_results |> 
-#'     bind_rows() |> 
-#'     select(!contains("mlvar_bias")) |> 
-#'     select(!contains("bmlvar_bias")) 
-#' 
-#' df_combined_2 <- rename_with(df_combined, ~gsub("_est", "", .x))
-#' df_ests <- df_combined_2 |>   
-#'   pivot_longer(
-#'     cols = !c(id, iteration), 
-#'     names_to = c("variable", "method"), 
-#'     names_sep = "_", 
-#'     values_to = "est"
-#'   ) |> 
-#'   pivot_wider(
-#'     id_cols = c(id, iteration, variable),
-#'     names_from = method, 
-#'     values_from = est
-#'   )
-#' 
-#' df_ests |> 
-#'   ggplot(aes(y = mlvar, x = true))+
-#'   geom_point()+
-#'   geom_smooth()+
-#'   facet_grid(~variable) + 
-#'   theme_centrality()+
-#'   labs(x = "True Estimate",
-#'        y = "mlVAR Estimate")
-#' 
-#' 
-#' #' 
-#' #' That's how the results look for the Bayesian mlVAR approach: 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' df_ests |> 
-#'   ggplot(aes(y = bmlvar, x = true))+
-#'   geom_point()+
-#'   geom_smooth()+
-#'   facet_grid(~variable) + 
-#'   theme_centrality()+
-#'   labs(x = "True Estimate",
-#'        y = "BmlVAR Estimate")
-#' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' We can additionally create heatmaps indicating the bias for each estimate for each individual. We do not show the output here, as it is a long PDF - but we found no systematic issues in these investigations. 
-#' #' 
-#' #' 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' generate_heatmaps <- function(true_matrices, estimated_matrices, output_file, n_ind) {
-#'   
-#'   if (length(true_matrices) != length(estimated_matrices)) {
-#'     stop("The lists of matrices must have the same length.")
-#'   }
-#'   
-#'   pdf(file = output_file, width = 8, height = 10)
-#'   
-#'   # loop over each pair
-#'   for (i in 1:n_ind) {
-#'     
-#'     diff_matrix <- true_matrices[[i]] - estimated_matrices[[i]]
-#'     
-#'     # convert the difference matrix to a data frame for ggplot
-#'     diff_df <- reshape2::melt(diff_matrix)
-#'     
-#'     p <- ggplot(diff_df, aes(x = Var1, y = Var2, fill = value)) +
-#'       geom_tile() +
-#'       scale_fill_gradient2(low = "darkblue", mid = "white", high = "darkred", midpoint = 0) +
-#'       # plot the numerical value
-#'       geom_text(aes(label = round(value, 2)), color = "black", size = 3) +
-#'       labs(title = paste("Difference Matrix for Individual", i),
-#'            x = "",
-#'            y = "",
-#'            fill = "Difference") +
-#'       theme_minimal()
-#'     
-#'     print(p)
-#'   }
-#'   
-#'   dev.off()
-#' }
-#' 
-#' 
-#' generate_heatmaps(sim_res_4$results[[1]]$beta, sim_res_4$results[[1]]$mlvar$fit_mlvar$beta, "heatmaps.pdf", n_ind = 200)
-#' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' # Idea 4: Different DGP, long time series
-#' #' Here, we don't simulate any external outcome, but rather simulate from a single DGP with a very long time series to check random effects recovery in this somewhat idealized situation. This implicitly also checks whether our simulation setup might be at fault for the poor performance. 
-#' #' 
-#' #' 
-#' #' ## New DGP
-#' #' 
-#' #' We use a grpah obtained by estimating mlVAR models on data by Fried et al. (2022). More information on the fitting process can be found in the file `04_dgps.qmd`. 
-#' #' 
-#' #' Load the graph:
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' graph_sparse <- readRDS(here("data", "graph_sparse.RDS"))
-#' 
-#' # compute Sigma (covariance matrix)
-#' graph_sparse$sigma <- solve(graph_sparse$kappa)
-#' 
-#' 
-#' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' ## Simulate Data
-#' #' 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' sim_data <- sim_gvar_loop(
-#'                      graph = graph_sparse,
-#'                      beta_sd = .075,
-#'                      kappa_sd = NA,
-#'                      sigma_sd = .075, 
-#'                      n_person = 200,
-#'                      n_time = 1000,
-#'                      n_node = 6,
-#'                      max_try = 10000,
-#'                      listify = TRUE,
-#'                      sim_pkg = "mlVAR",
-#'                      sparse_sim = TRUE,
-#'                      most_cent_diff_temp = FALSE,
-#'                      most_cent_diff_cont = FALSE,
-#'                      innov_var_fixed_sigma = FALSE)
-#' 
-#' #' 
-#' #' ## Estimate
-#' #' 
-#' ## ----message=FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' df_data <- dplyr::bind_rows(purrr::map(sim_data$data, dplyr::as_tibble)
-#'                               , .id = "ID") |> 
-#'     dplyr::mutate(ID = as.factor(ID))
-#' 
-#' fit_mlvar <- mlVAR(df_data,
-#'                    vars = paste0("V", seq(1:6)),
-#'                    idvar = "ID",
-#'                    estimator = "lmer",
-#'                    contemporaneous = "correlated",
-#'                    temporal = "correlated",
-#'                    nCores = 4,
-#'                    scale = TRUE)
-#' 
-#' #' 
-#' #' 
-#' #' ## Check Recovery
-#' #' 
-#' #' Compare estimates: 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' mlvar_beta <- lapply(fit_mlvar$results$Beta$subject, function(x) x[,,1])
-#' true_beta <- sim_data$beta_l
-#' 
-#' #' 
-#' #' Compare them individually:
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' bias_list <- mapply(`-`, mlvar_beta, true_beta, SIMPLIFY = FALSE)
-#' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' Plot recovery for each variable: 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' agg_data <- do.call(rbind, lapply(1:200, function(i) {
-#'   data.frame(True = c(true_beta[[i]]), Estimate = c(mlvar_beta[[i]]),
-#'              Variable = rep(1:36, each = 1))
-#' }))
-#' 
-#' plot_list <- lapply(1:36, function(var) {
-#'   data <- subset(agg_data, Variable == var)
-#'   ggplot(data, aes(x = True, y = Estimate)) +
-#'     geom_point(alpha = 0.5) +
-#'     geom_smooth(formula = y ~ x, method = loess)+
-#'     theme_minimal() +
-#'     ggtitle(paste("Variable", var))
-#' })
-#' 
-#' 
-#' gridExtra::grid.arrange(grobs = plot_list, ncol = 6)
-#' 
-#' 
-#' plot_list[[3]]
-#' 
-#' #' 
-#' #' Sanity check: What happens if I transpose the matrix:
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' mlvar_beta_transposed <- lapply(mlvar_beta, t)
-#' 
-#' agg_data <- do.call(rbind, lapply(1:200, function(i) {
-#'   data.frame(True = c(true_beta[[i]]), Estimate = c(mlvar_beta_transposed[[i]]),
-#'              Variable = rep(1:36, each = 1))
-#' }))
-#' 
-#' plot_list_transposed <- lapply(1:36, function(var) {
-#'   data <- subset(agg_data, Variable == var)
-#'   ggplot(data, aes(x = True, y = Estimate)) +
-#'     geom_point(alpha = 0.5) +
-#'     geom_smooth()+
-#'     theme_minimal() +
-#'     ggtitle(paste("Variable", var))
-#' })
-#' 
-#' gridExtra::grid.arrange(grobs = plot_list_transposed, ncol = 6)
-#' 
-#' #' Nothing else.
-#' #' 
-#' #' 
-#' #' We can additionally calculate the within-matrix correlation of true and estimates effects for each individual: 
-#' ## ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' beta_cors <- sapply(1:200, function(i) {
-#'   cor(c(true_beta[[i]]), c(mlvar_beta[[i]]))
-#' })
-#' hist(beta_cors)
-#' 
-#' #' 
-#' #' This means that for each individual, the estimated betas show good recovery, but not across individuals. That also explains why recovery of the most central edge works alright, but relating it to an outcome does not work. 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' 
-#' #' # Write to standard R script
-#' #' 
-#' #' To run the simulation on the server, it can be easier to just execute an R script.
-#' #' 
-#' ## ----eval = FALSE------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-#' # knitr::purl(here::here("scripts", "06_additional_mlvar_simulation.qmd"),
-#' #             output = here::here("scripts", "06_additional_mlvar_simulation.R"),
-#' #             documentation = 2)
-#' 
-#' #' 
