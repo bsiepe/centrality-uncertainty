@@ -36,7 +36,7 @@ Contains the scripts used in our project:
 | `06_additional_mlvar_simulations.qmd` | additional simulations for the mlVAR model |
 | `07_exploratory_simulations.qmd` | exploratory simulations |
 
-
+Some of these scripts have rendered `.html` versions. 
 
 #### `\scripts\models\`
 Contains the Stan models used in our project.
