@@ -570,28 +570,67 @@ For the Bayesian approach, we perform network estimation and regression in one s
 ### Network & Regression
 
 We first need to compile the model, and then estimate it with similar settings as in the simulation study. For the unscaled data, we perform the mean-centering within the model.
+
+Specifically, we need the following input: 
+
+    - The number of variables (K)
+    - The number of individuals (I)
+    - The number of regression outcomes (P)
+    - The total number of observations (N_total)
+    - The number of time points (n_t)
+    - The number of partial correlations (n_pc)
+    - The indicators for the upper triangle of the partial correlations (idx_rho)
+    - The scaled data (Y)
+    - The regression predictors (reg_covariate)
+    - The setting for the sparsity prior (sparsity): 
+
+
+For the sparsity prior on the temporal network, we implemented three different options: 
+
+`    if(sparsity == 1){
+      // lowest sparsity level
+      // wide normal prior on Beta means
+      Beta[i] = mu_Beta + sigma_Beta .* Beta_raw[i]; 
+    }
+    if(sparsity == 2){
+      // medium sparsity level
+      // narrow, fat-tailed prior on Beta means
+      Beta[i] = 0.05 * mu_Beta + sigma_Beta .* Beta_raw[i]; 
+    }
+    if(sparsity == 3){
+      // high sparsity level
+      // Beta means are fixed to zero
+      // doubled variance of random effects to compensate fixed means
+      Beta[i] = 0 + 2 .* sigma_Beta .* Beta_raw[i]; 
+    }
+`
+
 ```{r stan_data}
+# Provide the number of variables
 n_var <- 6
 
-# indicators for partial correlations
+# We find the indicators for the upper triangle for the partial correlations
 idx_rho <- upper.tri(matrix(1, n_var, n_var, byrow = F)) |>  
       c() |>  
       which()
   
-# repeat the outcome because we have two single-predictor regressions
+# As we use two predictors, we need to duplicate the outcome vector
 reg_data <- cbind(
     neuroticism_vec_scaled,
     neuroticism_vec_scaled
   )
+
+# We provide the scaled data in matrix form
 Y_scaled <- df_data_scaled |> 
     dplyr::select(-c("subj_id")) |>  
     as.matrix()
 
+# We provide the unscaled data in matrix form
 Y <- df_data |> 
     dplyr::select(-c("subj_id")) |>  
     as.matrix()
 
-# obtain number of time points per person 
+# We obtain the number of time points 
 n_tp <- data_bringmann_imputed |> 
   group_by(subj_id) |> 
   count() |> 
@@ -601,16 +640,27 @@ n_id <- length(unique(data_bringmann_imputed$subj_id))
   
 # Prepare stan data
 stan_data_scaled <- list(
+    # number of variables
     K = n_var,
+    # number of individuals
     I = n_id,
-    P = 2,   # number of regression outcomes
+    # number of regression outcomes
+    P = 2,   
+    # total number of observations
     N_total = nrow(data_bringmann_imputed),
+    # number of time points
     n_t = n_tp,
+    # number of partial correlations
     n_pc = n_var * (n_var - 1) / 2,
+    # indicators for the upper triangle of the partial correlations
     idx_rho = array(idx_rho, dim = length(idx_rho)),
+    # scaled data
     Y = Y_scaled,
+    # regression predictors
     reg_covariate = reg_data,
+    # setting for the sparsity prior
     sparsity = 2,
+    # should mean-centering be performed or not?
     mean_center = 0
   )
 
@@ -682,6 +732,7 @@ saveRDS(fit_bmlvar_centered, here::here("output", "empirical_example", "fit_bmlv
 
 Centrality estimates are sampled automatically:
 ```{r centrality-bmlvar}
+#| eval: !expr params$rerun
 fit_bmlvar_scaled <- readRDS(here::here("output", "empirical_example", "fit_bmlvar_empirical_scaled.rds"))
 fit_bmlvar_centered <- readRDS(here::here("output", "empirical_example", "fit_bmlvar_empirical_centered.rds"))
 # Transpose beta matrices for later summaries
@@ -708,6 +759,7 @@ ests_bmlvar_centered <- extract_all_estimates(fit_bmlvar_centered,
 
 Obtain the posterior samples of the regressions: 
 ```{r reg-bmlvar}
+#| eval: !expr params$rerun
 # scaled
 # centrality outcomes
 tempdens_bmlvar_scaled <- ests_bmlvar_scaled$tempdens_est
@@ -749,6 +801,7 @@ bmlvar_centered_reg_standardized <- summary_bmlvar_centered |>
 Save all regression results in one object: 
 
 ```{r regression-results}
+#| eval: !expr params$rerun
 # scaled
 df_regression_scaled <- list(
   gvar = list(reg_dens = reg_gvar_scaled_dens,
