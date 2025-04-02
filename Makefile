@@ -21,4 +21,6 @@ docker: dbuild
 	-v $(CURDIR)/scripts:/home/rstudio/scripts \
 	-v $(CURDIR)/data:/home/rstudio/data \
 	-v $(CURDIR)/output:/home/rstudio/output \
+	-v $(CURDIR)/figures:/home/rstudio/figures \
+	-v $(CURDIR)/scripts/simulation_viz_figures:/home/rstudio/scripts/simulation_viz_figures \
 	$(FILE)
