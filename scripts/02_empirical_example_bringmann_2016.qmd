@@ -587,21 +587,21 @@ Specifically, we need the following input:
 
 For the sparsity prior on the temporal network, we implemented three different options: 
 
-`    if(sparsity == 1){
-      // lowest sparsity level
-      // wide normal prior on Beta means
-      Beta[i] = mu_Beta + sigma_Beta .* Beta_raw[i]; 
+`    if(sparsity == 1){  
+      // lowest sparsity level  
+      // wide normal prior on Beta means  
+      Beta[i] = mu_Beta + sigma_Beta .* Beta_raw[i];  
     }
-    if(sparsity == 2){
-      // medium sparsity level
-      // narrow, fat-tailed prior on Beta means
-      Beta[i] = 0.05 * mu_Beta + sigma_Beta .* Beta_raw[i]; 
+    if(sparsity == 2){  
+      // medium sparsity level  
+      // narrow, fat-tailed prior on Beta means  
+      Beta[i] = 0.05 * mu_Beta + sigma_Beta .* Beta_raw[i];   
     }
-    if(sparsity == 3){
-      // high sparsity level
-      // Beta means are fixed to zero
-      // doubled variance of random effects to compensate fixed means
-      Beta[i] = 0 + 2 .* sigma_Beta .* Beta_raw[i]; 
+    if(sparsity == 3){  
+      // high sparsity level  
+      // Beta means are fixed to zero  
+      // doubled variance of random effects to compensate fixed means  
+      Beta[i] = 0 + 2 .* sigma_Beta .* Beta_raw[i];   
     }
 `
 
@@ -982,6 +982,7 @@ We combine the results for different network features and network estimation met
 
 
 ```{r collect-estimates}
+#| eval: !expr params$rerun
 methods <- c("GVAR", "mlVAR", "GIMME", "BmlVAR")
 outcomes <- c("Density", "Outstrength")
 
@@ -1046,6 +1047,7 @@ df_estimates_scaled <- df_estimates_scaled |>
 
 
 ```{r prepare-table}
+#| eval: !expr params$rerun
 # set color palette 
 color_palette <- MetBrewer::met.brewer("Hiroshige")[c(1:5, 8:10)]
 min_val_est <- min(df_estimates_scaled$Density_Point_Estimate, df_estimates_scaled$Outstrength_Point_Estimate)
@@ -1150,6 +1152,7 @@ We observed `r divtrans_bmlvar` divergent transitions.
 ### Proportion of most central node
 For each individual, we can simply count number of sampling iterations in which any node was the most central node to obtain an uncertainty statistic. 
 ```{r extract-outstrength}
+#| eval: !expr params$rerun
 # Variable names
 var_names <- colnames(data_bringmann_imputed |> select(!c(subj_id, neuroticism)))
 
@@ -1176,6 +1179,7 @@ outstrength_long <- outstrength_draws  |>
 
 We now calculate the proportion of having the highest outstrength for each variable: 
 ```{r prop-highest-centrality}
+#| eval: !expr params$rerun
 highest_outstrength <- outstrength_long |>
   group_by(iteration, id) |> 
   filter(outstrength == max(outstrength)) |> 
@@ -1212,6 +1216,7 @@ proportions <- complete_counts |>
 We find two participants, one for which the most central node has a lower uncertainty, and one for which it is higher: 
 
 ```{r two-examples-centrality}
+#| eval: !expr params$rerun
 outstrength_bmlvar <- ests_bmlvar_scaled$outstrength_est
 
 max_outstrength <- sapply(outstrength_bmlvar$median, which.max)
@@ -1277,6 +1282,7 @@ proportion_title <- proportion_labels |>
 We then create uncertainty plots for their proportions: 
 
 ```{r}
+#| eval: !expr params$rerun
 # add information about most central node
 extreme_props <- extreme_props |> 
   as.data.frame() |> 
@@ -1348,7 +1354,7 @@ ggsave(here::here("figures", "empirical_example", "most_central_example_plot.pdf
 
 ## Posterior Predictive
 
-An additional advantage of Bayesian inference is the use of posterior predictive simulations, where we can compare predictive simulations from the posterior with the true observed data patterns. 
+An additional advantage of Bayesian inference is the use of posterior predictive simulations, where we can compare predictive simulations from the posterior with the true observed data patterns. Here, this indicates that we did not accurately capture the observed data pattern. 
 ```{r bmlvar-postpred}
 y_rep_draws <- rstan::extract(fit_bmlvar, "Y_rep")
 
@@ -1393,7 +1399,8 @@ samples_list[[2]] |>
   geom_line()+
   theme_centrality()+
   labs(x = "Time Point",
-       y = "Happiness")
+       y = "Happiness")+
+  theme(text = element_text(size = 15))
 
 
 ```
