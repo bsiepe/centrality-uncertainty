@@ -1055,6 +1055,10 @@ mlVAR_nlme <- function(data,
 
 
 
+
+
+
+
 #------------------------------------------------------------------------------>
 # Simulation Helper Functions
 #------------------------------------------------------------------------------>
@@ -1218,8 +1222,12 @@ theme_centrality <- function(){
   # use showtext
   showtext::showtext_auto()
   
+  base_size = 11
+  ink = "black"
+  paper = "white"
+  
   # theme
-  ggplot2::theme_minimal(base_family = "news") +
+  ggplot2::theme_bw(base_family = "news") +
     ggplot2::theme(
       # remove minor grid
       panel.grid.minor = ggplot2::element_blank(),
@@ -1229,6 +1237,23 @@ theme_centrality <- function(){
                                          hjust = 0.5),
       plot.subtitle = ggplot2::element_text(size = 16,
                                             hjust = 0.5),
+      
+      #-- settings from theme_minimal
+      axis.ticks.x = element_blank(),
+      # make y axis ticks transparent but not blank
+      # hacky way to fix the issue that we cannot use element_blank
+      axis.ticks.y = element_line(colour = NA),
+      axis.text.x.bottom = element_text(margin = margin(t = 0.45 * base_size)),
+      axis.text.x.top    = element_text(margin = margin(b = 0.45 * base_size)),
+      axis.text.y.left   = element_text(margin = margin(r = 0.45 * base_size)),
+      axis.text.y.right  = element_text(margin = margin(l = 0.45 * base_size)),
+      legend.background = element_blank(),
+      legend.key        = element_blank(),
+      panel.background  = element_blank(),
+      panel.border      = element_blank(),
+      plot.background   = element_rect(fill = paper, colour = NA),
+      # --
+      
       axis.text.x = ggplot2::element_text(face = "plain", size = 18),
       axis.title.x = ggplot2::element_text(face = "plain", size = 18),
       axis.text.y = ggplot2::element_text(face = "plain", size = 18),

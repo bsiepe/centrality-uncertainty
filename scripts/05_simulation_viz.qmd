@@ -51,9 +51,14 @@ library(tidyverse)
 library(SimDesign)
 library(here)
 library(cowplot)
+library(showtext)
+library(sysfonts)
+library(ggokabeito)
+library(janitor)
 library(ggh4x)
 library(pander)
 library(MetBrewer)
+
 source(here::here("scripts", "00_functions.R"))
 ```
 
@@ -193,7 +198,7 @@ plot_mse <- sr_edit |>
   scale_x_discrete(guide = guide_axis(angle = 90))+
   scale_y_continuous(expand = c(0, 0), limits = c(0,0.03)) +
   scale_color_manual(values = meth_colors) +
-  theme_centrality() +
+  theme_centrality()+
   theme(legend.position = "none",
         text = element_text(size = 22))+
   labs(title = "",
