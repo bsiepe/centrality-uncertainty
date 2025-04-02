@@ -587,7 +587,8 @@ Specifically, we need the following input:
 
 For the sparsity prior on the temporal network, we implemented three different options: 
 
-`    if(sparsity == 1){  
+```stan
+    if(sparsity == 1){  
       // lowest sparsity level  
       // wide normal prior on Beta means  
       Beta[i] = mu_Beta + sigma_Beta .* Beta_raw[i];  
@@ -603,7 +604,7 @@ For the sparsity prior on the temporal network, we implemented three different o
       // doubled variance of random effects to compensate fixed means  
       Beta[i] = 0 + 2 .* sigma_Beta .* Beta_raw[i];   
     }
-`
+``` 
 
 ```{r stan_data}
 # Provide the number of variables
