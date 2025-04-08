@@ -634,7 +634,7 @@ Y <- df_data |>
 # We obtain the number of time points 
 n_tp <- data_bringmann_imputed |> 
   group_by(subj_id) |> 
-  count() |> 
+  dplyr::count() |> 
   pull(n)
 
 n_id <- length(unique(data_bringmann_imputed$subj_id))
@@ -946,7 +946,7 @@ ggsave(here::here("figures/empirical_example/outstrength_distribution.pdf"), wid
 
 ```{r network-density}
 df_density <- data.frame(
-  method = rep(c("GVAR", "mlVAR", "GIMME", "BmlVAR"), each = n_id),
+  method = rep(c("GVAR", "GIMME", "mlVAR", "BmlVAR"), each = n_id),
   est_dens = c(
     df_regression_scaled$gvar$est_dens,
     df_regression_scaled$mlvar$est_dens,
@@ -984,7 +984,7 @@ We combine the results for different network features and network estimation met
 
 ```{r collect-estimates}
 #| eval: !expr params$rerun
-methods <- c("GVAR", "mlVAR", "GIMME", "BmlVAR")
+methods <- c("GVAR", "GIMME", "mlVAR", "BmlVAR")
 outcomes <- c("Density", "Outstrength")
 
 
@@ -1010,32 +1010,32 @@ df_estimates_scaled <- data.frame(
   Outcome = rep(outcomes, each = 4),
   Point_Estimate = c(
     get_standardized_estimate(reg_gvar_scaled_dens, "estimate"),
-    get_standardized_estimate(reg_mlvar_scaled_dens, "estimate"),
     get_standardized_estimate(reg_gimme_scaled_dens, "estimate"),
+    get_standardized_estimate(reg_mlvar_scaled_dens, "estimate"),
     bmlvar_scaled_reg_standardized[2,]$summary.mean,
     get_standardized_estimate(reg_gvar_scaled_outstrength, "estimate"),
-    get_standardized_estimate(reg_mlvar_scaled_outstrength, "estimate"),
     get_standardized_estimate(reg_gimme_scaled_outstrength, "estimate"),
+    get_standardized_estimate(reg_mlvar_scaled_outstrength, "estimate"),
     bmlvar_scaled_reg_standardized[1,]$summary.mean
   ),
   Lower_Limit = c(
     get_standardized_estimate(reg_gvar_scaled_dens, "lower_ci"),
-    get_standardized_estimate(reg_mlvar_scaled_dens, "lower_ci"),
     get_standardized_estimate(reg_gimme_scaled_dens, "lower_ci"),
+    get_standardized_estimate(reg_mlvar_scaled_dens, "lower_ci"),
     bmlvar_scaled_reg_standardized[2,]$summary.2.5.,
     get_standardized_estimate(reg_gvar_scaled_outstrength, "lower_ci"),
-    get_standardized_estimate(reg_mlvar_scaled_outstrength, "lower_ci"),
     get_standardized_estimate(reg_gimme_scaled_outstrength, "lower_ci"),
+    get_standardized_estimate(reg_mlvar_scaled_outstrength, "lower_ci"),
     bmlvar_scaled_reg_standardized[1,]$summary.2.5.
   ),
   Upper_Limit = c(
     get_standardized_estimate(reg_gvar_scaled_dens, "upper_ci"),
-    get_standardized_estimate(reg_mlvar_scaled_dens, "upper_ci"),
     get_standardized_estimate(reg_gimme_scaled_dens, "upper_ci"),
+    get_standardized_estimate(reg_mlvar_scaled_dens, "upper_ci"),
     bmlvar_scaled_reg_standardized[2,]$summary.97.5.,
     get_standardized_estimate(reg_gvar_scaled_outstrength, "upper_ci"),
-    get_standardized_estimate(reg_mlvar_scaled_outstrength, "upper_ci"),
     get_standardized_estimate(reg_gimme_scaled_outstrength, "upper_ci"),
+    get_standardized_estimate(reg_mlvar_scaled_outstrength, "upper_ci"),
     bmlvar_scaled_reg_standardized[1,]$summary.97.5.
   )
 )
