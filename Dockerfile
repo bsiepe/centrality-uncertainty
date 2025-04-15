@@ -15,5 +15,5 @@ COPY output/sim_full.rds /home/rstudio/output/
 ## install R packages from CRAN the last day of the specified R version
 ## ncpus set to -1 (all available cores)
 RUN install2.r --error --skipinstalled --ncpus -1 \
-    tidyverse SimDesign here cowplot ggh4x pander MetBrewer sysfonts showtext ggokabeito janitor svglite rmarkdown knitr
+    tidyverse SimDesign here cowplot ggh4x pander MetBrewer sysfonts showtext ggokabeito janitor svglite rmarkdown knitr lm.beta
 

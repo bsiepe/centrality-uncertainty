@@ -37,6 +37,8 @@ Contains the scripts used in our project:
 | `07_exploratory_simulations.qmd` | exploratory simulations |
 
 Some of these scripts have rendered `.html` versions. 
+`05_simulation_viz.html` also contains information about the data-generating matrices and deviations from the preregistration.
+`02_empirical_example_bringmann_2016.html` contains instructions on how to fit BmlVAR to data.
 
 #### `\scripts\models\`
 Contains the Stan models used in our project.
