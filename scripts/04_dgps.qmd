@@ -1,7 +1,44 @@
 ---
-title: "Centrality Uncertainty"
+title: "Using features of dynamic networks to guide treatment selection and outcome prediction"
 subtitle: "Data-Generating Processes"
-format: html
+author: 
+ - name: Björn S. Siepe
+   orcid: 0000-0002-9558-4648
+   affiliations: University of Marburg
+ - name: Matthias Kloft
+   orcid: 0000-0003-1845-6957
+   affiliations: University of Marburg  
+ - name: Fridtjof Petersen
+   orcid: 0000-0002-4913-8532
+   affiliations: University of Groningen
+ - name: Yong Zhang
+   orcid: 0000-0002-6313-2575
+   affiliations: University of Groningen
+ - name: Laura F. Bringmann
+   orcid: 0000-0002-8091-9935
+   affiliations: University of Groningen
+ - name: Daniel W. Heck
+   orcid: 0000-0002-6302-9252
+   affiliations: University of Marburg
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+    code-fold: true
+    code-tools: true
+    code-summary: "Show the code"
+    fig-width: 7
+    fig-height: 4.5
+    fig-align: "center"
+    embed-resources: true
+execute:
+  message: false
+  warning: false
+  eval: false
+params:
+  rerun: false  # define parameter if all large analyses should be rerun
 ---
 
 # Preparation
@@ -11,7 +48,6 @@ library(tidyverse)
 library(lme4)
 library(mlVAR)
 library(lm.beta)
-# library(mnet)  # for the Koval data
 library(here)
 set.seed(35037)
 ```

@@ -1,6 +1,5 @@
 ---
-title: "Uncertainty is central for reliable inferences: 
-        Using dynamic network features as predictors"
+title: "Using features of dynamic networks to guide treatment selection and outcome prediction"
 subtitle: "Investigations into mlVAR performance"
 author: 
  - name: Björn S. Siepe
@@ -37,7 +36,7 @@ format:
 execute:
   message: false
   warning: false
-  eval: true # only show code
+  eval: true # only show code?
 ---
 
 # Background

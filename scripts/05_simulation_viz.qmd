@@ -1,5 +1,5 @@
 ---
-title: "Uncertainty is central to reliable inference"
+title: "Using features of dynamic networks to guide treatment selection and outcome prediction"
 subtitle: "Simulation Study Visualizations"
 author: 
  - name: Björn S. Siepe
@@ -36,11 +36,14 @@ format:
 execute:
   message: false
   warning: false
+params:
+  rerun: false  # define parameter if all large analyses should be rerun
 ---
 
 # Background
 
 This document contains code to reproduce the visualizations of the simulation study in the manuscript. It also contains additional results not shown in the main manuscript.
+
 
 # Preparation
 
@@ -49,7 +52,6 @@ Load relevant packages:
 ```{r}
 library(tidyverse)
 library(SimDesign)
-library(here)
 library(cowplot)
 library(showtext)
 library(sysfonts)
@@ -58,6 +60,8 @@ library(janitor)
 library(ggh4x)
 library(pander)
 library(MetBrewer)
+library(here)
+library(lm.beta)
 
 source(here::here("scripts", "00_functions.R"))
 ```
@@ -65,7 +69,7 @@ source(here::here("scripts", "00_functions.R"))
 Load the simulation results:
 
 ```{r}
-sim_results <- readRDS(here("output", "sim_results.RDS"))
+sim_results <- readRDS(here::here("output", "sim_results.RDS"))
 
 # Create a cut version of the simulation results without MCMC diagnostics
 sim_res_cut <- sim_results |>
@@ -73,7 +77,51 @@ sim_res_cut <- sim_results |>
   select(-contains("divtrans"))
 ```
 
-## Data Wrangling
+
+# Data-Generating Processes
+These are the data generating matrices that we used for our fixed effects: 
+
+VAR matrix:
+\quad
+\begin{bmatrix} 
+0.41 & 0.105 & 0.105 & 0.105 & 0.105 & 0.105 \\ 
+0.105 & 0.35 & 0.075 & 0 & 0.075 & 0.075 \\ 
+0.105 & 0 & 0.35 & 0.075 & 0 & 0.075 \\ 
+0.105 & 0.075 & 0.075 & 0.35 & 0 & 0.075 \\ 
+0.105 & 0.075 & 0.075 & 0.075 & 0.35 & 0 \\ 
+0.105 & 0.075 & 0.075 & 0.075 & 0.075 & 0.35 
+\end{bmatrix}
+\quad\quad
+
+Innovation covariance matrix: 
+\quad
+\begin{bmatrix} 
+1 & 0.188 & 0.188 & 0.188 & 0.188 & 0.188 \\ 
+0.188 & 1 & 0.15 & 0.15 & 0 & 0.15 \\ 
+0.188 & 0.15 & 1 & 0.15 & 0.15 & 0.15 \\ 
+0.188 & 0.15 & 0.15 & 1 & 0.15 & 0.15 \\ 
+0.188 & 0 & 0.15 & 0.15 & 1 & 0 \\ 
+0.188 & 0.15 & 0.15 & 0.15 & 0 & 1 
+\end{bmatrix}
+
+
+
+# Deviations from Preregistration
+We had multiple minor deviations from our preregistration, which mostly occurred due to errors on our side. We do not think that any of these decreases the informativeness of our study. 
+
+### Deviations from Preregistration
+
+| Deviation | Explanation |
+|-----------|-------------|
+| Updated BmlVAR formula to fix subscripts and notation | The preregistered model formula omitted some necessary subscripts and used inconsistent distributional notation. These were corrected for clarity and correctness in the final version. |
+| Renamed centrality predictor from `d` to `c` | The label `c` was chosen for clarity. |
+| Incorrect prior notation for second step regression residual variance | We accidentally noted a t-prior on $log(sigma)$, but a half-t prior on $\sigma$ was used in both steps for consistency across models and had already been implemented in the code. We fixed the notation to align with our actual implementation |
+| Omitted sum over individuals in centrality selection accuracy formula | The preregistered formula did not include a summation over individuals, which is necessary for the proportion. |
+| 200 instead of 100 simulation repetitions | As we explained in the manuscript, we accidentally calculated that we needed 200 instead of the actual 100 simulation repetitions to achieve the desired worst-case MCSE. We kept the 200 repetitions as they are informative and increase precision.|
+
+
+
+# Data Wrangling
 
 Prepare dataframe for visualization by giving proper names, removing unnecessary columns, and pivoting longer:
 
@@ -752,6 +800,84 @@ generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined.pd
 
 
 
+## Variability of Point Estimates
+
+Here, we investigate the variability of point estimates in specific simulation conditions, for which we need the raw results - this part is therefore not reproducible. 
+```{r}
+#| eval: !expr params$rerun
+r3 <- ("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-3.rds")
+```
+
+For easier interpretation, we plot the raw estimates instead of the bias:
+```{r variability-estimates}
+#| eval: !expr params$rerun
+# extract regression slope for a given method and repetition
+extract_coef <- function(res_list, method) {
+  map_dfr(res_list, function(x) {
+    if (!is.null(x[[method]])) {
+      if (method == "bmlvar") {
+        tmp <- x[[method]]$reg_bmlvar$regression_slope$median
+        tibble(
+          `0.0` = tmp[4],
+          `0.2` = tmp[5],
+          `0.4` = tmp[6],
+          method = "BmlVAR"
+        )
+      } else {
+        tibble(
+          `0.0` = tryCatch(summary(x[[method]]$reg_outstrength[[1]])$coefficients[2], error = function(e) NA),
+          `0.2` = tryCatch(summary(x[[method]]$reg_outstrength[[2]])$coefficients[2], error = function(e) NA),
+          `0.4` = tryCatch(summary(x[[method]]$reg_outstrength[[3]])$coefficients[2], error = function(e) NA),
+          method = method
+        )
+      }
+    } else {
+      NULL
+    }
+  })
+}
+
+
+methods <- c("mlvar", "gimme", "gvar", "bmlvar")
+df_all <- map_dfr(methods, ~ extract_coef(r3$results, .x))
+
+
+df_all <- df_all |>
+  mutate(method = recode(method,
+                         "mlvar" = "mlVAR",
+                         "gimme" = "GIMME",
+                         "gvar" = "GVAR"))
+
+# Plot
+df_all |>
+  pivot_longer(cols = c("0.0", "0.2", "0.4"), names_to = "reg_coef") |> 
+  mutate(
+    reg_coef = as.factor(reg_coef),
+    method = factor(method, levels = names(meth_colors))
+  ) |> 
+  ggplot(aes(x = reg_coef, y = value, fill = method, color = method)) + 
+  geom_point(position = position_jitterdodge(jitter.width = 0.35, 
+                                              dodge.width = 0.8, 
+                                              jitter.height = 0),
+             size = 1.5,
+             alpha = 0.4) +
+  geom_boxplot(position = position_dodge(width = 0.8), 
+               outlier.shape = NA, alpha = 0.7) + 
+  labs(x = "True Regression Slope",
+       y = "Estimated Regression Slope", 
+       color = "",
+       fill = "") +
+  theme_centrality() +
+  theme(text = element_text(size = 21)) +
+  scale_fill_manual(values = meth_colors) +
+  scale_color_manual(values = meth_colors) + 
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 3, 1))
+
+
+```
+
+
+
 
 # MCMC Diagnostics
 
@@ -779,6 +905,7 @@ sim_results |>
 
 # Session Info
 
+Please note that the visualizations were redone in an updated R version, but the computations of the simulation were run in a previous R version as indicated in the Dockerfile. 
 ```{r session-info}
 pander::pander(sessionInfo())
 ```

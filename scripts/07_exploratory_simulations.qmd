@@ -1,7 +1,6 @@
 ---
-title: "Uncertainty is central for reliable inferences: 
-        Using dynamic network features as predictors"
-subtitle: "Additional partial simulationst"
+title: "Using features of dynamic networks to guide treatment selection and outcome prediction"
+subtitle: "Additional exploratory simulations"
 author: 
  - name: Björn S. Siepe
    orcid: 0000-0002-9558-4648
@@ -37,14 +36,14 @@ format:
 execute:
   message: false
   warning: false
-  eval: true # only show code
+  eval: false # only show code
 ---
 # Background
 
 In this document, we provide some additional small-scale simulations to understand particular results better. Specifically, we want to understand how much the recovery of the most central node improves when we increase its true centrality.
 
 We first load all relevant packages: 
-```{r packages}
+```{r packages, eval=TRUE}
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -895,7 +894,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 
 ## Executing Simulation
 
-```{r run-sim, eval=TRUE}
+```{r run-sim, eval=FALSE}
 n_rep <- 100
 future::plan(multisession, workers = 30)
 
@@ -927,13 +926,13 @@ plan(sequential)
 ```
 
 Re-import the results
-```{r load-res}
+```{r load-res, eval=TRUE}
 sim_results <- readRDS(here::here("output", "most_central_exploration.rds"))
 ```
 
 Display how the selection of the most central node changed based on the increased true centrality: 
 
-```{r}
+```{r, eval=TRUE}
 sim_results |> 
   dplyr::select(true_cent_scaling, contains("mostcent_beta")) |> 
   pivot_longer(!true_cent_scaling) |> 
@@ -949,7 +948,7 @@ sim_results |>
 
 To run the simulation on the server, it can be easier to just execute an R script.
 
-```{r, eval = FALSE}
+```{r, eval=FALSE}
 knitr::purl(here::here("scripts", "07_exploratory_simulations.qmd"), 
             output = here::here("scripts", "07_exploratory_simulations.R"),
             documentation = 2)
