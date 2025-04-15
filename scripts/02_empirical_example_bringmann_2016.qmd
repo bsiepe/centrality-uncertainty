@@ -1,6 +1,5 @@
 ---
-title: "Uncertainty is central for reliable inferences: 
-        Using dynamic network features as predictors"
+title: "Using features of dynamic networks to guide treatment selection and outcome prediction"
 subtitle: "Empirical Example"
 author: 
  - name: Björn S. Siepe
@@ -60,7 +59,6 @@ library(gt)
 library(bayesplot)
 library(broom)
 library(MetBrewer)
-library(betaDelta)  # double check
 library(ggdist)
 library(ggh4x)
 library(sysfonts)
@@ -897,20 +895,20 @@ df_outstrength <- data.frame(
 
 y_limit <- 0.16
 outliers <- df_outstrength |> 
-  filter(est_outstrength > y_limit) |> 
-  mutate(method = factor(method,
+  dplyr::filter(est_outstrength > y_limit) |> 
+  dplyr::mutate(method = factor(method,
                          levels = c("GVAR",  "GIMME", "mlVAR", "BmlVAR"))) |> 
-  group_by(method) |> 
-  summarize(outlier_values = paste0(round(est_outstrength, 3), collapse = ", "),
+  dplyr::group_by(method) |> 
+  dplyr::summarize(outlier_values = paste0(round(est_outstrength, 3), collapse = ", "),
             max_outlier = max(est_outstrength)) |> 
-  mutate(outlier_values = if_else(method == "GVAR", 
+  dplyr::mutate(outlier_values = if_else(method == "GVAR", 
                                   paste0("Large value (", outlier_values, ")\nremoved"), 
                                   paste0("Large value (", outlier_values, ")\nremoved")))
 
 outstrength_dist <- df_outstrength |> 
-  mutate(method = factor(method,
+  dplyr::mutate(method = factor(method,
                          levels = c("GVAR",  "GIMME", "mlVAR", "BmlVAR"))) |> 
-  mutate(id = as.factor(id)) |> 
+  dplyr::mutate(id = as.factor(id)) |> 
   ggplot(aes(x = method, y = est_outstrength, fill = method, col = method)) +
   geom_line(aes(group = id), alpha = 0.25)+
   ggdist::geom_dots(scale = 0.9, stackratio = 0.2,  layout = "swarm", linewidth = .15)+
@@ -933,7 +931,7 @@ outstrength_dist <- df_outstrength |>
                arrow = arrow(length = unit(0.2, "cm")),
                color = "grey30")+
   geom_text(data = outliers,
-            aes(x = as.numeric(method) + .05, 
+            aes(x = as.numeric(method) + .09, 
                 y = y_limit * 0.925, label = outlier_values),
             color = "grey30", size = 4, inherit.aes = FALSE, hjust = 0)
 
