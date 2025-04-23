@@ -1,8 +1,9 @@
 
 fits/
 fits/mlvar_fit.rds
-scripts/graveyard.qmd
+scripts/99_graveyard.qmd
 output/empirical_example/
+scripts/archive
 
 .Rproj.user
 .Rhistory
