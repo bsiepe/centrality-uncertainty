@@ -805,7 +805,7 @@ generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined.pd
 Here, we investigate the variability of point estimates in specific simulation conditions, for which we need the raw results - this part is therefore not reproducible. 
 ```{r}
 #| eval: !expr params$rerun
-r3 <- ("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-3.rds")
+r3 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-3.rds")
 ```
 
 For easier interpretation, we plot the raw estimates instead of the bias:
@@ -838,7 +838,7 @@ extract_coef <- function(res_list, method) {
 }
 
 
-methods <- c("mlvar", "gimme", "gvar", "bmlvar")
+methods <- c("gvar", "gimme", "mlvar", "bmlvar")
 df_all <- map_dfr(methods, ~ extract_coef(r3$results, .x))
 
 
@@ -846,14 +846,15 @@ df_all <- df_all |>
   mutate(method = recode(method,
                          "mlvar" = "mlVAR",
                          "gimme" = "GIMME",
-                         "gvar" = "GVAR"))
+                         "gvar" = "GVAR")) |> 
+  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR")))
 
 # Plot
-df_all |>
+est_variability_plot <- df_all |>
   pivot_longer(cols = c("0.0", "0.2", "0.4"), names_to = "reg_coef") |> 
   mutate(
-    reg_coef = as.factor(reg_coef),
-    method = factor(method, levels = names(meth_colors))
+    reg_coef = as.factor(reg_coef)
+    # method = factor(method, levels = names(meth_colors))
   ) |> 
   ggplot(aes(x = reg_coef, y = value, fill = method, color = method)) + 
   geom_point(position = position_jitterdodge(jitter.width = 0.35, 
@@ -871,8 +872,12 @@ df_all |>
   theme(text = element_text(size = 21)) +
   scale_fill_manual(values = meth_colors) +
   scale_color_manual(values = meth_colors) + 
+  scale_y_continuous(breaks = round(seq(-0.6, 1, by = .2), 1))+
   geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 3, 1))
 
+ggsave("est_variability_plot.pdf", plot = est_variability_plot, 
+       height = 6, width = 9,
+       path = here::here("figures/"), device = "pdf")
 
 ```
 
