@@ -247,7 +247,7 @@ generated quantities{
   
   reg_slope_density_z[7] = reg_slope_density[7] * sd(Rho_strength[,1]);
   reg_slope_density_z[8] = reg_slope_density[8] * sd(Rho_strength[,1]);
-  reg_slope_density_z[9] = reg_slope_density[8] * sd(Rho_strength[,1]);
+  reg_slope_density_z[9] = reg_slope_density[9] * sd(Rho_strength[,1]);
   
 
   

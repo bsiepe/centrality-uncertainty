@@ -109,7 +109,9 @@ Innovation covariance matrix:
 # Deviations from Preregistration
 We had multiple minor deviations from our preregistration, which mostly occurred due to errors on our side. We do not think that any of these decreases the informativeness of our study. 
 
-### Deviations from Preregistration
+Also, after running the simulation study, we realized that our Stan code had an error in one line, where we standardized `reg_slope_density_z[9]` with `reg_slope_density[8]`. We corrected this error, and did not use this output anyway.
+
+## Overview Table
 
 | Deviation | Explanation |
 |-----------|-------------|
