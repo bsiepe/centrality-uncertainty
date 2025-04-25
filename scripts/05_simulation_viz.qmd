@@ -220,9 +220,11 @@ sim_warnings |>
 
 Unfortunately, we removed warnings from `mlVAR` during our simulation. However, in our additional simulations in `06_additional_mlvar_simulation.qmd`, we noticed that warning messages from mlVAR were only related to the renaming of certain variables, so we assume that we did not miss any substantial warnings.
 
+The warnings from the Rothman algorithm in `graphicalVAR` are substantial in quantity, but they also occured regulary in simulations where the point estimates were relatively accurate. We therefore did not use them to exclude any interations.
+
 # Point Estimates
 
-Plot point estimate recovery (RMSE), helpful to understand the overall performance of the different methods.
+Plot point estimate recovery as mean squared error (MSE) which is helpful to understand the overall performance of the different methods.
 
 ```{r viz-point-estimates}
 plot_mse <- sr_edit |> 
