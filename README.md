@@ -2,7 +2,7 @@
 
 This repository contains files for the manuscript:  
 
-> Siepe, B. S., Kloft, M., Zhang, Y., Petersen, F., Bringmann, L. F., & Heck, D. W. (2025). Using features of dynamic networks to guide treatment selection and outcome prediction: The central role of uncertainty. PsyArXiv.
+> Siepe, B. S., Kloft, M., Zhang, Y., Petersen, F., Bringmann, L. F., & Heck, D. W. (2025). Using features of dynamic networks to guide treatment selection and outcome prediction: The central role of uncertainty. PsyArXiv. https://doi.org/10.31234/osf.io/2c8xf_v1 
 
 
 Please cite the associated preprint as: 
@@ -11,7 +11,7 @@ Please cite the associated preprint as:
 @article{Siepe2025,
   title={Using features of dynamic networks to guide treatment selection and outcome prediction: The central role of uncertainty},
   author={Siepe, Bj{\"o}rn S. and Kloft, Matthias and Zhang, Yong and Petersen, Fridtjof and Bringmann, Laura F. and Heck, Daniel W.},
-  url={TODO},
+  url={https://doi.org/10.31234/osf.io/2c8xf_v1},
   year={2025},
   note={PsyArXiv preprint}
 }
