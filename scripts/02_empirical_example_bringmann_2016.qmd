@@ -1163,7 +1163,7 @@ outstrength_draws <-
 
 # convert to long
 outstrength_long <- outstrength_draws  |> 
-  mutate(iteration = row_number()) |>  
+  dplyr::mutate(iteration = row_number()) |>  
   pivot_longer(
     cols = starts_with("Beta_out_strength"),
     names_to = c("id", "variable"),
@@ -1185,12 +1185,12 @@ highest_outstrength <- outstrength_long |>
   ungroup()
 
 variable_counts <- highest_outstrength |>
-  group_by(id, variable) |>
-  summarise(count = n(), .groups = "drop")
+  dplyr::group_by(id, variable) |>
+  dplyr::summarise(count = n(), .groups = "drop")
 
 total_iterations <- outstrength_long |>
-  group_by(id) |>
-  summarise(total = n_distinct(iteration), .groups = "drop") 
+  dplyr::group_by(id) |>
+  dplyr::summarise(total = n_distinct(iteration), .groups = "drop") 
 
 all_combinations <- expand.grid(
   id = unique(outstrength_long$id),
@@ -1199,12 +1199,12 @@ all_combinations <- expand.grid(
 
 complete_counts <- all_combinations |>
   left_join(variable_counts, by = c("id", "variable")) |>
-  mutate(count = replace_na(count, 0)) # Replace NA counts with 0
+  dplyr::mutate(count = replace_na(count, 0)) # Replace NA counts with 0
 
 proportions <- complete_counts |>
   left_join(total_iterations, by = "id") |>
-  mutate(proportion = count / total) |>
-  select(id, variable, proportion)
+  dplyr::mutate(proportion = count / total) |>
+  dplyr::select(id, variable, proportion)
 
 
 ```
@@ -1226,17 +1226,17 @@ outstrength_df <- data.frame(
 
 # attach the proportions (in an ugly manner, I know)
 extreme_props <- outstrength_df |> 
-  mutate(id = as.factor(id),
+  dplyr::mutate(id = as.factor(id),
          most_cent = as.factor(most_cent)) |> 
   left_join(proportions, by = c("id" = "id", "most_cent" = "variable")) |> 
   arrange(proportion) |> 
-  mutate(
+  dplyr::mutate(
   lowest = min(proportion),
   highest = max(proportion)
   ) |> 
   filter(proportion == lowest | proportion == highest) |> 
-  mutate(most_cent = as.numeric(most_cent)) |> 
-  mutate(most_cent = case_match(most_cent, 
+  dplyr::mutate(most_cent = as.numeric(most_cent)) |> 
+  dplyr::mutate(most_cent = case_match(most_cent, 
     1 ~ var_names[1],
     2 ~ var_names[2],
     3 ~ var_names[3],
@@ -1249,14 +1249,14 @@ extreme_ids <- as.numeric(unique(extreme_props$id))
 
 proportion_labels <- proportions |> 
   filter(id %in% extreme_ids) |> 
-  mutate(id = paste0("Participant ", id)) |> 
-  mutate(proportion = sub("^(-?)0.", "\\1.",sprintf("%.2f", proportion))) |> 
-  mutate(variable = factor(variable, levels = 1:6, labels = var_names))
+  dplyr::mutate(id = paste0("Participant ", id)) |> 
+  dplyr::mutate(proportion = sub("^(-?)0.", "\\1.",sprintf("%.2f", proportion))) |> 
+  dplyr::mutate(variable = factor(variable, levels = 1:6, labels = var_names))
 
 # change alpha based on most cent
 proportion_labels <- proportion_labels |>
-  mutate(id = as.character(id)) |>
-  mutate(variable = as.character(variable)) |>
+  dplyr::mutate(id = as.character(id)) |>
+  dplyr::mutate(variable = as.character(variable)) |>
   left_join(extreme_props |>
                select(id, most_cent) |>
               mutate(id = as.character(id),
@@ -1264,17 +1264,17 @@ proportion_labels <- proportion_labels |>
               mutate(id = paste0("Participant ", id)),
             by = "id") |>
   # change alpha based on most cent
-  mutate(cent_alpha = if_else(variable == most_cent, 
+  dplyr::mutate(cent_alpha = if_else(variable == most_cent, 
                          1, 0.9))
 
 
 # for each participant, add the string "p(c_p = c_max)" to the plot above the first row
 # and evaluate the text as formula
 proportion_title <- proportion_labels |> 
-  group_by(id) |> 
-  mutate(proportion_title = "p(c[p] == c[max])") |> 
+  dplyr::group_by(id) |> 
+  dplyr::mutate(proportion_title = "p(c[p] == c[max])") |> 
   distinct(id, proportion_title) |> 
-  mutate(x = 0.19, y = 6.5)
+  dplyr::mutate(x = 0.19, y = 6.5)
  
 ```
 
@@ -1285,12 +1285,12 @@ We then create uncertainty plots for their proportions:
 # add information about most central node
 extreme_props <- extreme_props |> 
   as.data.frame() |> 
-  mutate(most_cent = as.character(most_cent)) |> 
-  mutate(id = as.character(id))
+  dplyr::mutate(most_cent = as.character(most_cent)) |> 
+  dplyr::mutate(id = as.character(id))
 
 outstrength_long_labeled <- outstrength_long |> 
-  mutate(variable = as.character(variable)) |> 
-  mutate(variable = case_match(variable, 
+  dplyr::mutate(variable = as.character(variable)) |> 
+  dplyr::mutate(variable = case_match(variable, 
     "1" ~ var_names[1],
     "2" ~ var_names[2],
     "3" ~ var_names[3],
@@ -1298,15 +1298,15 @@ outstrength_long_labeled <- outstrength_long |>
     "5" ~ var_names[5],
     "6" ~ var_names[6]
   )) |> 
-  mutate(id = as.character(id)) |> 
+  dplyr::mutate(id = as.character(id)) |> 
   filter(id %in% extreme_ids) |> 
   left_join(extreme_props |> select(id, most_cent), by = "id") |> 
-  mutate(cent_alpha = if_else(variable == most_cent, 1, 0.60))  
+  dplyr::mutate(cent_alpha = if_else(variable == most_cent, 1, 0.60))  
 
 
 proportions <- proportions |> 
-  mutate(variable = as.character(variable)) |> 
-  mutate(variable = case_match(variable, 
+  dplyr::mutate(variable = as.character(variable)) |> 
+  dplyr::mutate(variable = case_match(variable, 
     "1" ~ var_names[1],
     "2" ~ var_names[2],
     "3" ~ var_names[3],
@@ -1317,8 +1317,8 @@ proportions <- proportions |>
 
 most_central_example_plot <- outstrength_long_labeled |> 
   left_join(proportions, by = c("id" = "id", "variable" = "variable")) |> 
-  mutate(id = paste0("Participant ", id)) |> 
-  mutate(variable = factor(variable)) |> 
+  dplyr::mutate(id = paste0("Participant ", id)) |> 
+  dplyr::mutate(variable = factor(variable)) |> 
   ggplot(aes(x = outstrength, y = variable, alpha = cent_alpha)) + 
   ggdist::stat_halfeye(.width = c(.66, .95), 
                        fill = cond_colors[4],
@@ -1340,13 +1340,15 @@ most_central_example_plot <- outstrength_long_labeled |>
   theme_centrality() +
   theme(axis.text.y = element_text(size = 14),
         axis.text.x = element_text(size = 14),
-        strip.text.x.top = element_text(18)) +
-  labs(y = "", x = "Outstrength") +
+        strip.text.x.top = element_text(size = 17),
+        plot.title = element_text(size = 21)) +
+  labs(y = "", x = "Outstrength",
+       title = "We can quantify the uncertainty of node centrality") +
   guides(alpha = "none")
 
 most_central_example_plot
 
-ggsave(here::here("figures", "empirical_example", "most_central_example_plot.pdf"), width = 9 * 0.9, height = 6 * 0.9)
+ggsave(here::here("figures", "empirical_example", "most_central_example_plot_presentation.pdf"), width = 9 * 0.9, height = 6 * 0.9)
 ```
 
 

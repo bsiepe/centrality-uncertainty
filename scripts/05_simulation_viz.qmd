@@ -345,10 +345,10 @@ plot_mostcentral <- sr_edit |>
   scale_color_manual(values = meth_colors) +
   theme_centrality() +
   theme(legend.position = "bottom",
-        text = element_text(size = 24),
-        
+        title = element_text(size = 27)
         )+
-  labs(title = "",
+  # Remove title for paper, keep title for poster/presentations
+  labs(title = "All models struggle to identify the most central node in realistic settings",
        x = "Time Points",
        colour = "",
        y = "Proportion of Correct Central Nodes")
@@ -627,6 +627,68 @@ ggsave("plot_power_bias_outstrength.pdf",
        path = here::here("figures/"))
 
 ```
+
+Plot subset of conditions for presentation:
+```{r plot-power-bias-outstrength-presentation}
+plot_power_bias_outstrength <- power_bias_reg_combined_df |>
+  filter(true_effect == "True Effect: .2") |> 
+  ggplot(aes(x = n_tp, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method))+
+  geom_errorbar(aes(ymin = mean - 1 * mcse,
+                      ymax = mean + 1 * mcse),
+                  width = 0.5,
+                  position = position_dodge(0.8),
+                  show.legend = FALSE) +
+    # add vertical
+    geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+    geom_point(position = position_dodge(0.8), 
+               size = 1.4) +
+    # add mean without leading zero
+    geom_text(aes(label = sub("^(-?)0.", "\\1.",sprintf("%.2f", mean))),
+              position = position_dodge(0.8),
+              vjust = -0.6,
+              size = 5,
+              show.legend = FALSE) +
+    ggh4x::facet_nested(true_effect + n_id ~ pm,
+                        axes = "all",
+                        scales = "free_y",
+                        independent = "y") +
+    facetted_pos_scales(
+      y = list(pm == "Bias" ~ scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)),
+               pm == "Detection Rate" ~ scale_y_continuous(expand = c(0, 0), limits = c(-0.1, 1.1)))
+    )+
+    labs(
+      title = "It is difficult to predict a distal outcome with centrality",
+      x = "Time Points",
+      colour = "",
+      fill = "",
+      group = "",
+      y = ""
+    ) +
+    scale_color_manual(values = meth_colors) +
+    theme_centrality() +
+    theme(legend.position = "bottom",
+          ggh4x.facet.nestline = element_line(colour = "#6d6d6e"),
+          axis.text.x = element_text(size = 22),
+          axis.text.y = element_text(size = 22),
+          axis.title.x = element_text(size = 24),
+          # increase all legend element size
+          legend.text = element_text(size = 24),
+          legend.title = element_text(size = 24),
+          legend.key.size = unit(1.6, "lines"),
+          strip.text = ggplot2::element_text(size = 24),
+          strip.text.x.top = ggplot2::element_text(size = 24),
+          plot.title = ggplot2::element_text(size = 30)
+          )
+
+ggsave("plot_power_bias_outstrength_presentation.pdf", 
+       plot_power_bias_outstrength, height = 16 * 0.6 * 0.9, width = 16 * 0.8 *0.9,
+       path = here::here("figures/"))
+```
+
 
 
 ## Power and Bias for Contemporaneous Strength
