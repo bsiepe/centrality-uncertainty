@@ -345,7 +345,6 @@ sim_generate <- function(condition, fixed_objects = NULL){
     covariate_out_strength = covariate_out_strength,
     covariate_in_strength = covariate_in_strength,
     true_cent = true_cent,
-    # TODO delete these
     cor_strength = cor_strength,
     cor_instrength = cor_instrength,
     cor_outstrength = cor_outstrength
@@ -1336,24 +1335,6 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 # Executing Simulation
 
 ```{r run-sim}
-# For testing
-# df_design_test <- df_design[3,]
-# df_design_test$n_id <- 200
-# df_design_test$n_var <- 4
-# sim_pars$n_id <- 200
-# sim_pars$n_var <- 4
-# n_var <- 4
-# n_id <- 200
-# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
-# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
-# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
-# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
-# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
-# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
-# sim_pars$graph_sparse$sigma <- sim_pars$graph_sparse$sigma[1:4,1:4]
-# sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
-
-
 n_rep <- 200
 n_workers <- 
 future::plan(multisession, workers = 60)
@@ -1382,8 +1363,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "corpcor",
                                                  "Rcpp"),
                                     save_results = TRUE,
-                                    filename = "sim_full.rds"
-                                    # save_seeds = TRUE
+                                    filename = "sim_full_rev1.rds"
                                     )
 
 plan(sequential)
@@ -1431,5 +1411,19 @@ saveRDS(object = sim_res, here::here("output", "sim_results.RDS"))
 ```
 
 
+# Putting together individual files for revision
+
+During the first revision of the paper, we spread the computation above across multiple machines. We thus need to put back together the results: 
+
+```{r}
+cond1 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond1.rds"))
+cond2 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond2.rds"))
+cond3 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond3.rds"))
+cond4 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond4.rds"))
+
+sim_full_rev1 <- rbind(cond1, cond2, cond3, cond4)
+
+saveRDS(sim_full_rev1, here::here("output", "rev1", "sim_full_rev1.rds"))
+```
 
 
