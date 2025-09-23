@@ -1301,7 +1301,8 @@ outstrength_long_labeled <- outstrength_long |>
   dplyr::mutate(id = as.character(id)) |> 
   filter(id %in% extreme_ids) |> 
   left_join(extreme_props |> select(id, most_cent), by = "id") |> 
-  dplyr::mutate(cent_alpha = if_else(variable == most_cent, 1, 0.60))  
+  dplyr::mutate(cent_alpha = if_else(variable == most_cent, 1, 0.60)) |> 
+  dplyr::mutate(interval_color = if_else(variable == most_cent, "grey70", "grey10"))
 
 
 proportions <- proportions |> 
@@ -1315,40 +1316,62 @@ proportions <- proportions |>
     "6" ~ var_names[6]
   ))
 
-most_central_example_plot <- outstrength_long_labeled |> 
+most_central_data <- outstrength_long_labeled |> 
   left_join(proportions, by = c("id" = "id", "variable" = "variable")) |> 
   dplyr::mutate(id = paste0("Participant ", id)) |> 
   dplyr::mutate(variable = factor(variable)) |> 
-  ggplot(aes(x = outstrength, y = variable, alpha = cent_alpha)) + 
-  ggdist::stat_halfeye(.width = c(.66, .95), 
+  filter(variable == most_cent)
+
+other_data <- outstrength_long_labeled |> 
+  left_join(proportions, by = c("id" = "id", "variable" = "variable")) |> 
+  dplyr::mutate(id = paste0("Participant ", id)) |> 
+  dplyr::mutate(variable = factor(variable)) |> 
+  filter(variable != most_cent)
+
+most_central_example_plot <- ggplot() + 
+  # non-most central variables
+  ggdist::stat_halfeye(data = other_data,
+                       aes(x = outstrength, y = variable, slab_alpha = cent_alpha),
+                       .width = c(.66, .95), 
                        fill = cond_colors[4],
-                       aes(slab_alpha = cent_alpha),
+                       color = "grey10",
+                       point_fill = "grey10",
+                       point_color = "grey10",
+                       point_alpha = 1,
+                       interval_alpha = 1,
+                       scale = 0.95,
+                       show.legend = FALSE) +
+  # most central variables  
+  ggdist::stat_halfeye(data = most_central_data,
+                       aes(x = outstrength, y = variable, slab_alpha = cent_alpha),
+                       .width = c(.66, .95), 
+                       fill = cond_colors[4],
+                       color = "grey70",
                        point_fill = "grey70",
                        point_color = "grey70",
-                       color = "grey70",
                        point_alpha = 1,
                        interval_alpha = 1,
                        scale = 0.95,
                        show.legend = FALSE) +
   geom_text(data = proportion_labels,
-            aes(x = 0.19, y = variable, label = proportion, alpha = 1),
+            aes(x = 0.19, y = variable, label = proportion),
             hjust = 0, vjust = -0.8, size = 4, color = "#6d6d6e") +
   geom_text(data = proportion_title,
-            aes(x = x, y = y, label = proportion_title, alpha = 1),
+            aes(x = x, y = y, label = proportion_title),
             hjust = 0.4, vjust = 0, size = 4, parse = TRUE, color = "#6d6d6e") +
-  facet_wrap2(~id, axes = "all") +
+  facet_wrap(~id, axes = "all") +
   theme_centrality() +
   theme(axis.text.y = element_text(size = 14),
         axis.text.x = element_text(size = 14),
         strip.text.x.top = element_text(size = 17),
-        plot.title = element_text(size = 21)) +
-  labs(y = "", x = "Outstrength",
-       title = "We can quantify the uncertainty of node centrality") +
+        plot.title = element_text(size = 22),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank()) +
+  labs(y = "", x = "Outstrength") +
   guides(alpha = "none")
-
 most_central_example_plot
 
-ggsave(here::here("figures", "empirical_example", "most_central_example_plot_presentation.pdf"), width = 9 * 0.9, height = 6 * 0.9)
+ggsave(here::here("figures", "empirical_example", "most_central_example_plot.pdf"), width = 9 * 0.9, height = 6 * 0.9)
 ```
 
 
