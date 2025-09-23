@@ -1,0 +1,155 @@
+---
+title: "Using features of dynamic networks to guide treatment selection and outcome prediction"
+subtitle: "Centrality values exploration"
+author: 
+ - name: Björn S. Siepe
+   orcid: 0000-0002-9558-4648
+   affiliations: University of Marburg
+ - name: Matthias Kloft
+   orcid: 0000-0003-1845-6957
+   affiliations: University of Marburg  
+ - name: Fridtjof Petersen
+   orcid: 0000-0002-4913-8532
+   affiliations: University of Groningen
+ - name: Yong Zhang
+   orcid: 0000-0002-6313-2575
+   affiliations: University of Groningen
+ - name: Laura F. Bringmann
+   orcid: 0000-0002-8091-9935
+   affiliations: University of Groningen
+ - name: Daniel W. Heck
+   orcid: 0000-0002-6302-9252
+   affiliations: University of Marburg
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    number-sections: true
+    theme: cosmo
+    code-fold: true
+    code-tools: true
+    code-summary: "Show the code"
+    fig-width: 7
+    fig-height: 4.5
+    fig-align: "center"
+    embed-resources: true
+execute:
+  message: false
+  warning: false
+  eval: false # only show code
+---
+
+# Background
+
+In this script, we explore centrality values across simulation repetitions in more detail. 
+
+```{r}
+#| label: load-pkgs
+library(tidyverse)
+```
+
+
+```{r}
+sim_res_4 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-4.rds")
+```
+
+
+Extract all centrality values and look at their ranks:
+```{r}
+true_cent <- lapply(sim_res_4$results, function(x){
+  x$true_cent$outstrength
+})
+
+# compute ranks in each repetition
+rank_centrality <- lapply(true_cent, function(x) {
+  vapply(x, function(y) {
+    7 - rank(y)
+  }, FUN.VALUE = numeric(6))
+})
+
+all_ranks <- abind::abind(rank_centrality, along = 3)
+
+rank_counts <- apply(all_ranks, c(1, 2), function(x) {
+  table(factor(x, levels = 1:6))
+})
+
+
+final_counts <- as.data.frame.table(rank_counts) |> 
+  setNames(c("Rank", "Variable", "Repetition", "Count"))
+
+
+aggregated_counts <- final_counts |>
+  dplyr::group_by(Variable, Rank) |>
+  dplyr::summarise(Total_Count = sum(Count)) |>
+  tidyr::pivot_wider(names_from = Rank, values_from = Total_Count) |> 
+  dplyr::ungroup()
+
+
+# add percentages 
+aggregated_counts |> 
+  dplyr::ungroup() |> 
+  dplyr::mutate(across(where(is.numeric), ~ .x / sum(.x, na.rm = TRUE) * 100))
+```
+
+
+Investigate summary statistics of centrality for each rank:
+```{r}
+rank_summaries <- lapply(seq_along(true_cent), function(rep_idx) {
+ centralities <- true_cent[[rep_idx]]
+ lapply(centralities, function(person_cent) {
+   ranks <- 7 - rank(person_cent)
+   data.frame(
+     variable = 1:6,
+     centrality = person_cent,
+     rank = ranks
+   )
+ }) |> 
+   do.call(rbind, args = _)
+}) |> 
+ do.call(rbind, args = _)
+
+rank_stats <- rank_summaries |>
+ dplyr::group_by(variable, rank) |>
+ dplyr::summarise(
+   mean = mean(centrality),
+   min = min(centrality),
+   max = max(centrality),
+   sd = sd(centrality)
+ ) |> 
+ dplyr::ungroup()
+```
+
+
+
+Look at differences between most central and second most central: 
+```{r}
+true_cent_df <- map2_dfr(true_cent, 1:length(true_cent), ~{
+  .x |>
+    map_dfr(~ as_tibble(t(as.matrix(.x)), .name_repair = ~ paste0("V", 1:6))) |>
+    mutate(repetition = .y, .before = 1)
+}) |>
+  rowid_to_column("individual")
+
+
+centrality_diff <- true_cent_df |> 
+    rowwise() |>
+  mutate(
+    most_central = max(across(starts_with("V"))),
+    second_most_central = sort(c_across(starts_with("V")), decreasing = TRUE)[2],
+    absolute_difference = most_central - second_most_central,
+    relative_difference = absolute_difference / most_central
+  ) |>
+  ungroup()
+
+summary(centrality_diff$relative_difference)
+```
+
+
+We can visualize these differences as percentages:
+```{r}
+centrality_diff |> 
+  ggplot(aes(x = relative_difference))+
+  geom_density()
+
+```
+
