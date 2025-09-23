@@ -37,7 +37,7 @@ execute:
   message: false
   warning: false
 params:
-  rerun: false  # define parameter if all large analyses should be rerun
+  rerun: true  # define parameter if all large analyses should be rerun
 ---
 
 # Background
@@ -66,10 +66,23 @@ library(lm.beta)
 source(here::here("scripts", "00_functions.R"))
 ```
 
+To separate original results from our first revision, we add the subscript "rev1" to all new results: 
+```{r}
+revision <- "rev1"
+use_rev1 <- TRUE
+```
+
+
+
 Load the simulation results:
 
 ```{r}
-sim_results <- readRDS(here::here("output", "sim_results.RDS"))
+if(isTRUE(use_rev1)){
+  sim_results <- readRDS(here::here("output", "sim_results_rev1.rds"))
+} else {
+  sim_results <- readRDS(here::here("output", "sim_results.RDS"))
+}
+
 
 # Create a cut version of the simulation results without MCMC diagnostics
 sim_res_cut <- sim_results |>
@@ -189,7 +202,12 @@ Check if any errors that led to non-convergence occurred:
 
 ```{r sim-errors}
 # load results before resummarization, which contain potential error messages
-sim_full_pre_resum <- readRDS(here("output", "sim_full.rds"))
+# for the first revision data, this is irrelevant
+if(isTRUE(use_rev1)){
+  sim_full_pre_resum <- readRDS(here("output", "sim_results_rev1.rds"))
+} else {
+  sim_full_pre_resum <- readRDS(here("output", "sim_full.rds"))
+}
 
 sim_errors <- SimExtract(sim_full_pre_resum, "errors")
 
@@ -204,7 +222,21 @@ We extract all warnings and rename them properly:
 ```{r sim-warnings}
 sim_warnings <- SimExtract(sim_full_pre_resum, what = "warnings")
 
-sim_warnings |> 
+if(isTRUE(use_rev1)){
+  sim_warnings |> 
+  select(!c(heterogeneity, strength_sd, outstrength_sd, instrength_sd)) |> 
+  rename("Deprecated dplyr function" = "WARNING:  c(\"Warning in NULL : `funs()` was deprecated in dplyr 0.8.0.\", \"Warning in NULL : Please use a list of either functions or lambdas: \\n\\n  # Simple nam",
+         "Bulk ESSlow" = "WARNING:  Warning in NULL : Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.\nRunning the chains for more i",
+         "Potential Stan sampling problems" = "WARNING:  Warning in NULL : Examine the pairs() plot to diagnose sampling problems\n",
+         "Tail ESS low" = "WARNING:  Warning in NULL : Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.\nRunning the chains",
+         "NA R-hat" = "WARNING:  Warning in NULL : The largest R-hat is NA, indicating chains have not mixed.\nRunning the chains for more iterations may help. See\nhttps://mc-stan.org/mi",
+         "Divergent transition" = "WARNING:  Warning in NULL : There were 1 divergent transitions after warmup. See\nhttps://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup\nto find",
+         "Exceeded maximum treedepth" = "WARNING:  Warning in NULL : There were 498 transitions after warmup that exceeded the maximum treedepth. Increase max_treedepth above 10. See\nhttps://mc-stan.org",
+         "Rothman algorithm warning" = "WARNING:  Warning in Rothmana(data_l, data_c, lambdas$beta[i], lambdas$kappa[i], regularize_mat_beta = regularize_mat_beta,     regularize_mat_kappa = regulariz",
+         "Variable naming warning" = "WARNING:  Warning in validityMethod(object) : The following variables have undefined values:  reg_intercept_z[1],The following variables have undefined values: ") |> 
+  knitr::kable()
+} else {
+  sim_warnings |> 
   select(!c(heterogeneity, strength_sd, outstrength_sd, instrength_sd)) |> 
   rename("Deprecated dplyr function" = "WARNING:  c(\"Warning in NULL : `funs()` was deprecated in dplyr 0.8.0.\", \"Warning in NULL : Please use a list of either functions or lambdas: \\n\\n  # Simple nam",
          "Bulk ESSlow" = "WARNING:  Warning in NULL : Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.\nRunning the chains for more i",
@@ -216,6 +248,8 @@ sim_warnings |>
          "Rothman algorithm warning" = "WARNING:  Warning in Rothmana(data_l, data_c, lambdas$beta[i], lambdas$kappa[i], regularize_mat_beta = regularize_mat_beta,     regularize_mat_kappa = regulariz",
          "Variable naming warning" = "WARNING:  Warning in validityMethod(object) : The following variables have undefined values:  reg_intercept_z[1],The following variables have undefined values: ") |> 
   knitr::kable()
+}
+
 ```
 
 Unfortunately, we removed warnings from `mlVAR` during our simulation. However, in our additional simulations in `06_additional_mlvar_simulation.qmd`, we noticed that warning messages from mlVAR were only related to the renaming of certain variables, so we assume that we did not miss any substantial warnings.
@@ -352,7 +386,7 @@ plot_mostcentral <- sr_edit |>
        colour = "",
        y = "Proportion of Correct Central Nodes")
 
-ggsave("plot_mostcentral.pdf", plot_mostcentral, height = 6 * 1.1, width = 9 * 1.1,
+ggsave_rev("plot_mostcentral.pdf", plot_mostcentral, height = 6 * 1.1, width = 9 * 1.1,
        path = here::here("figures/"), device = "pdf")
 
 plot_mostcentral
@@ -419,7 +453,7 @@ plot_mostcentral_presentation <- sr_edit |>
        colour = "",
        y = "Proportion of Correct Central Nodes")
 
-ggsave("plot_mostcentral_presentation.pdf", plot_mostcentral_presentation, height = 6 * 1.2, width = 9 * 1.2,
+ggsave_rev("plot_mostcentral_presentation.pdf", plot_mostcentral_presentation, height = 6 * 1.2, width = 9 * 1.2,
        path = here::here("figures/"), device = "pdf")
 
 plot_mostcentral_presentation
@@ -471,7 +505,7 @@ plot_rankcor <- sr_edit |>
        y = "Centrality Rank Correlation")
 
 
-ggsave("plot_rankcor.pdf", plot_rankcor, height = 12, width = 16,
+ggsave_rev("plot_rankcor.pdf", plot_rankcor, height = 12, width = 16,
        path = here::here("figures/"), device = "pdf")
 
 plot_rankcor
@@ -554,6 +588,7 @@ power_plot <- function(df) {
 Create the plots and combine them with patchwork
 
 ```{r viz-regression-power-combined}
+#| output: false
 plot_power_list <- lapply(power_list, power_plot)
 
 # add legend to the third plot
@@ -565,7 +600,6 @@ plot_3_legend <- plot_power_list[[3]] +
 legend <- cowplot::get_plot_component(plot_3_legend, 'guide-box-bottom', return_all = TRUE)
 
 # add legend to cowplot
-
 plot_power_combined <- cowplot::plot_grid(plot_power_list[[1]],
                                           plot_power_list[[2]],
                                           plot_power_list[[3]],
@@ -583,9 +617,9 @@ plot_power_combined <- cowplot::plot_grid(plot_power_list[[1]],
 
 
 
-ggsave("plot_power_combined.pdf", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
+ggsave_rev("plot_power_combined.pdf", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
        path = here::here("figures/"))
-ggsave("plot_power_combined.svg", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
+ggsave_rev("plot_power_combined.svg", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
        path = here::here("scripts", "simulation_viz_figures"))
 
 
@@ -688,7 +722,7 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
           strip.text.x.top = ggplot2::element_text(size = 24)
           )
 
-ggsave("plot_power_bias_outstrength.pdf", 
+ggsave_rev("plot_power_bias_outstrength.pdf", 
        plot_power_bias_outstrength, height = 16* 0.95, width = 16* 0.8,
        path = here::here("figures/"))
 
@@ -750,7 +784,7 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
           plot.title = ggplot2::element_text(size = 30)
           )
 
-ggsave("plot_power_bias_outstrength_presentation.pdf", 
+ggsave_rev("plot_power_bias_outstrength_presentation.pdf", 
        plot_power_bias_outstrength, height = 16 * 0.6 * 0.9, width = 16 * 0.8 *0.9,
        path = here::here("figures/"))
 ```
@@ -833,10 +867,10 @@ plot_power_bias_strength <- power_bias_reg_strength_df |>
           strip.text.x.top = ggplot2::element_text(size = 24)
           )
 
-ggsave("plot_power_bias_strength.pdf", 
+ggsave_rev("plot_power_bias_strength.pdf", 
        plot_power_bias_strength, height = 16* 0.95, width = 16* 0.8,
        path = here::here("figures/"))
-ggsave("plot_power_bias_strength.svg", 
+ggsave_rev("plot_power_bias_strength.svg", 
        plot_power_bias_strength, height = 16* 0.95, width = 16* 0.8,
        path = here::here("scripts", "simulation_viz_figures"), device = "svg")
 ```
@@ -917,7 +951,7 @@ generate_regression_plots <- function(data, summary, y_label, file_name) {
     ncol = 1,
     labels = c("True Effect: 0", "True Effect: 0.2", "True Effect: 0.4")
   )
-  ggsave(file_name, combined_plot, height = 16 * 0.95, width = 16 * 0.8, 
+  ggsave_rev(file_name, combined_plot, height = 16 * 0.95, width = 16 * 0.8, 
          path = here::here("figures/"))
 }
 
@@ -937,7 +971,12 @@ generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined.pd
 Here, we investigate the variability of point estimates in specific simulation conditions, for which we need the raw results - this part is therefore not reproducible. 
 ```{r}
 #| eval: !expr params$rerun
-r3 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-3.rds")
+if(isTRUE(use_rev1)){
+  r3 <- readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond3.rds-results_pc04669/results-row.rds")
+} else {
+  r3 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-3.rds")
+}
+
 ```
 
 For easier interpretation, we plot the raw estimates instead of the bias:
@@ -1007,12 +1046,18 @@ est_variability_plot <- df_all |>
   scale_y_continuous(breaks = round(seq(-0.6, 1, by = .2), 1))+
   geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 3, 1))
 
-ggsave("est_variability_plot.pdf", plot = est_variability_plot, 
+ggsave_rev("est_variability_plot.pdf", plot = est_variability_plot, 
        height = 6, width = 9,
        path = here::here("figures/"), device = "pdf")
 
 ```
 
+```{r}
+#| echo: false
+#| fig-width: 9
+#| fig-height: 6
+est_variability_plot
+```
 
 
 

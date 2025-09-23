@@ -1,3 +1,28 @@
+# Revision Function -------------------------------------------------------
+ggsave_rev <- function(filename, plot, path = here::here("figures/"), ...) {
+  # extract file extension
+  file_parts <- tools::file_path_sans_ext(filename)
+  file_ext <- tools::file_ext(filename)
+  
+  # add revision to filename
+  if (use_rev1) {
+    new_filename <- paste0(file_parts, "_", revision, ".", file_ext)
+    new_path <- file.path(path, revision)
+  } else {
+    new_filename <- filename
+    new_path <- path
+  }
+  
+  # create directory if it doesn't exist
+  dir.create(new_path, recursive = TRUE, showWarnings = FALSE)
+  
+  # call ggsave with modified parameters
+  ggsave(new_filename, plot, path = new_path, ...)
+}
+
+
+
+
 # DGP Functions -----------------------------------------------------------
 
 # Write to LaTeX ----------------------------------------------------------
@@ -199,7 +224,7 @@ sim_gvar_loop <- function(graph,
       
       # if minimum centrality difference is required
       if(isTRUE(most_cent_diff_temp)){
-        cent_check <- check_centrality_diff(matrix = beta[, , i],
+        cent_check <- check_node1_most_central(matrix = beta[, , i],
                                             n_node = n_node,
                                             min_diff = most_cent_diff_temp_min)
         # if not, try again
@@ -233,7 +258,7 @@ sim_gvar_loop <- function(graph,
     # use kappa if no covariance matrix is provided
     if(is.null(graph$sigma)){
     repeat {
-      kappa_counter <- counter + 1
+      kappa_counter <- kappa_counter + 1
       if (kappa_counter > max_try)
         stop(
           "Exceeded maximum number of attempts to generate semi-positive definite kappa matrix."
@@ -287,7 +312,7 @@ sim_gvar_loop <- function(graph,
       }
     # if minimum centrality difference is required
       if(isTRUE(most_cent_diff_cont)){
-        cent_check <- check_centrality_diff(matrix = pcor[, , i],
+        cent_check <- check_node1_most_central(matrix = pcor[, , i],
                                             n_node = n_node,
                                             min_diff = most_cent_diff_cont_min)
         # if not, try again
@@ -309,7 +334,7 @@ sim_gvar_loop <- function(graph,
     # if covariance matrix is provided
     if(!is.null(graph$sigma)){
       repeat{
-        sigma_counter <- counter + 1
+        sigma_counter <- sigma_counter + 1
         if (sigma_counter > max_try)
           stop(
             "Exceeded maximum number of attempts to generate semi-positive definite sigma matrix."
@@ -361,7 +386,7 @@ sim_gvar_loop <- function(graph,
         }
       # if minimum centrality difference is required
         if(isTRUE(most_cent_diff_cont)){
-          cent_check <- check_centrality_diff(matrix = pcor[, , i],
+          cent_check <- check_node1_most_central(matrix = pcor[, , i],
                                               n_node = n_node,
                                               min_diff = most_cent_diff_cont_min)
           # if not, try again
@@ -479,7 +504,20 @@ check_centrality_diff <- function(matrix, n_node, min_diff) {
   return(diff_check)
 }
 
-
+# Function to check centrality diff and the first node being most central
+check_node1_most_central <- function(matrix, n_node, min_diff) {
+  matrix_tmp <- matrix
+  diag(matrix_tmp) <- 0
+  centralities <- colSums(abs(matrix_tmp)) / (n_node - 1)
+  
+  node1_most_central <- which.max(centralities) == 1
+  if (!node1_most_central) return(FALSE)
+  
+  sorted_cent <- sort(centralities, decreasing = TRUE)
+  min_diff_met <- sorted_cent[1] - sorted_cent[2] > min_diff * sorted_cent[1]
+  
+  return(min_diff_met)
+}
 
 
 

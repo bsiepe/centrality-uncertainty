@@ -1,6 +1,5 @@
 #' ---
-#' title: "Uncertainty is central for reliable inferences: 
-#'         Using dynamic network features as predictors"
+#' title: "Using features of dynamic networks to guide treatment selection and outcome prediction"
 #' subtitle: "Simulation Code"
 #' author: 
 #'  - name: Björn S. Siepe
@@ -33,7 +32,7 @@
 #'     fig-width: 7
 #'     fig-height: 4.5
 #'     fig-align: "center"
-#'     embded-resouces: true
+#'     embed-resouces: true
 #' execute:
 #'   message: false
 #'   warning: false
@@ -44,7 +43,7 @@
 #' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `05_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages--------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -64,7 +63,7 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## --------------------------------------------------------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # non-sparse Graph to simulate from
 graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
@@ -78,7 +77,7 @@ graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params----------------------------------------------------------------------------------------------------------------------------------------------
+## ----params-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 dgp <- c("sparse")
 
 # Number of timepoints
@@ -136,7 +135,7 @@ sim_pars <- list(
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile------------------------------------------------------------------------------------------------------------------------------------------
+## ----precompile-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -151,69 +150,69 @@ sim_pars$mlvar_model <-
 #' To simulate data with a specific correlation, we need to obtain the true standard deviation of the different centrality measures. For the temporal network, this is easy to compute, as it just follows from the random effects of the VAR matrix. 
 #' For the partial correlations, this is a bit more complicated, as we simulate from the true covariance matrix, but calculate the centrality based on the partial correlation matrix. Therefore, we just simulate a large number of partial correlation matrices for the data-generating process of each condition and then calculate the implied standard deviation of the centrality measure.
 #' 
-## ----true-strength-sd, eval = FALSE----------------------------------------------------------------------------------------------------------------------
-## # number of simulations to obtain sd
-## n_sim_sd <- 30000
-## sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
-## 
-## for(i in 1:nrow(df_design)){
-##   condition <- df_design[i,]
-## 
-##   dgp_graph <- ifelse(condition$dgp == "sparse",
-##                       "graph_sparse",
-##                       "graph_nonsparse")
-##   beta_sd <- ifelse(condition$heterogeneity == "low",
-##                     0.05,
-##                     0.075)
-##   sigma_sd <- ifelse(condition$heterogeneity == "low",
-##                     0.05,
-##                     0.075)
-##   ml_sim <- sim_gvar_loop(
-##                      graph = sim_pars[[dgp_graph]],
-##                      beta_sd = beta_sd,
-##                      kappa_sd = kappa_sd,
-##                      sigma_sd = sigma_sd,
-##                      n_person = n_sim_sd,
-##                      n_time = condition$n_tp,
-##                      n_node = sim_pars$n_var,
-##                      max_try = 1000,
-##                      verbose = FALSE,
-##                      listify = TRUE,
-##                      sim_pkg = "mlVAR",
-##                      sparse_sim = TRUE,
-##                      most_cent_diff_temp = TRUE,
-##                      most_cent_diff_temp_min = 0.05,
-##                      most_cent_diff_cont = TRUE,
-##                      most_cent_diff_cont_min = 0.05,
-##                      innov_var_fixed_sigma = TRUE)
-## 
-##   # Obtain true centralities
-##   true_cent <- centrality_mlvar_sim(ml_sim,
-##                                   sim_fn = "sim_gvar_loop")
-## 
-##   strength <- sapply(true_cent$strength, `[`, 1)
-##   outstrength <- sapply(true_cent$outstrength, `[`, 1)
-##   instrength <- sapply(true_cent$instrength, `[`, 1)
-##   strength_sd <- sd(strength)
-##   outstrength_sd <- sd(outstrength)
-##   instrength_sd <- sd(instrength)
-##   sd_results_strength[[i]] <- strength_sd
-##   sd_results_outstrength[[i]] <- outstrength_sd
-##   sd_results_instrength[[i]] <- instrength_sd
-## }
-## 
-## 
-## sd_results <- list(sd_results_strength, sd_results_outstrength, sd_results_instrength)
-## names(sd_results) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
-## 
-## 
-## saveRDS(sd_results, here::here("data", "true_sd_semisparse.RDS"))
-## 
+## ----true-strength-sd, eval = FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------
+# # number of simulations to obtain sd
+# n_sim_sd <- 30000
+# sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
+# 
+# for(i in 1:nrow(df_design)){
+#   condition <- df_design[i,]
+# 
+#   dgp_graph <- ifelse(condition$dgp == "sparse",
+#                       "graph_sparse",
+#                       "graph_nonsparse")
+#   beta_sd <- ifelse(condition$heterogeneity == "low",
+#                     0.05,
+#                     0.075)
+#   sigma_sd <- ifelse(condition$heterogeneity == "low",
+#                     0.05,
+#                     0.075)
+#   ml_sim <- sim_gvar_loop(
+#                      graph = sim_pars[[dgp_graph]],
+#                      beta_sd = beta_sd,
+#                      kappa_sd = kappa_sd,
+#                      sigma_sd = sigma_sd,
+#                      n_person = n_sim_sd,
+#                      n_time = condition$n_tp,
+#                      n_node = sim_pars$n_var,
+#                      max_try = 1000,
+#                      verbose = FALSE,
+#                      listify = TRUE,
+#                      sim_pkg = "mlVAR",
+#                      sparse_sim = TRUE,
+#                      most_cent_diff_temp = TRUE,
+#                      most_cent_diff_temp_min = 0.05,
+#                      most_cent_diff_cont = TRUE,
+#                      most_cent_diff_cont_min = 0.05,
+#                      innov_var_fixed_sigma = TRUE)
+# 
+#   # Obtain true centralities
+#   true_cent <- centrality_mlvar_sim(ml_sim,
+#                                   sim_fn = "sim_gvar_loop")
+# 
+#   strength <- sapply(true_cent$strength, `[`, 1)
+#   outstrength <- sapply(true_cent$outstrength, `[`, 1)
+#   instrength <- sapply(true_cent$instrength, `[`, 1)
+#   strength_sd <- sd(strength)
+#   outstrength_sd <- sd(outstrength)
+#   instrength_sd <- sd(instrength)
+#   sd_results_strength[[i]] <- strength_sd
+#   sd_results_outstrength[[i]] <- outstrength_sd
+#   sd_results_instrength[[i]] <- instrength_sd
+# }
+# 
+# 
+# sd_results <- list(sd_results_strength, sd_results_outstrength, sd_results_instrength)
+# names(sd_results) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
+# 
+# 
+# saveRDS(sd_results, here::here("data", "true_sd_semisparse_rev1.RDS"))
+# 
 
 #' 
 #' As we only need to compute the true SD once, we can simply load it from disk to save time: 
-## --------------------------------------------------------------------------------------------------------------------------------------------------------
-true_sd <- readRDS(here::here("data", "true_sd_semisparse.RDS"))
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+true_sd <- readRDS(here::here("data", "true_sd_semisparse_rev1.RDS"))
 names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 df_design$strength_sd <- unlist(true_sd$sd_results_strength)
 df_design$outstrength_sd <- unlist(true_sd$sd_results_outstrength)
@@ -225,7 +224,7 @@ df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
 #' ## Simulating Data
 #' 
 #' 
-## ----generate--------------------------------------------------------------------------------------------------------------------------------------------
+## ----generate---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -346,7 +345,6 @@ sim_generate <- function(condition, fixed_objects = NULL){
     covariate_out_strength = covariate_out_strength,
     covariate_in_strength = covariate_in_strength,
     true_cent = true_cent,
-    # TODO delete these
     cor_strength = cor_strength,
     cor_instrength = cor_instrength,
     cor_outstrength = cor_outstrength
@@ -364,7 +362,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 #' 
 #' # Analysis
 #' 
-## ----data-analysis---------------------------------------------------------------------------------------------------------------------------------------
+## ----data-analysis----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -769,7 +767,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize-------------------------------------------------------------------------------------------------------------------------------------------
+## ----summarize--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -902,7 +900,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     })
   }
   
-  measures <- c("outstrength", "strength", "instrength")
+  measures <- c("instrength", "outstrength", "strength")
   
   for(method in methods){
     for(measure in measures){
@@ -956,14 +954,14 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   }
 
 
-  #-- RMSE
+  #-- Summary
   true_coef <- c(0, .2, .4)
-  regression_rmse <- function(results, 
+  regression_summary <- function(results, 
                               method, 
                               measure,
                               true_coef = c(0,.2,.4),
                               lm_beta = use_lm_beta,
-                              rmse = TRUE) {
+                              summary = "rmse") {
   sapply(seq_along(results), function(i){
     if(is.null(results[[i]][[method]][[paste0("reg_", measure)]])){
       return(NA)
@@ -977,33 +975,38 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                               x$coefficients
                             }})[2,]   # 2nd row -> beta coef
       # Calculate RMSE
-      if(isTRUE(rmse)){
+      if(summary == "rmse"){
         sqrt( (reg_coefs - true_coef )^2 )
-      } else{
+      } else if(summary == "mse"){
         (reg_coefs - true_coef)^2
+      } else if(summary == "bias"){
+        reg_coefs - true_coef
       }
+        
       
       }
   })
   }
   
+
+  
   
   # exclude bmlvar because of its different data structure
   methods <- c("gvar", "mlvar", "gimme")
   measures <- c("instrength", "outstrength", "strength")
-  summaries <- c("rmse", "mse")
+  summaries <- c("rmse", "bias", "mse")
   
 
   for (method in methods) {
       for (measure in measures) {
         for (summary in summaries) {
-          # Calculate RMSE/MSE
-          result_name_rmse <- paste(summary, "reg", measure, method, sep = "_")
-          calc_list <- regression_rmse(
+          # Calculate summary
+          result_name_summary <- paste(summary, "reg", measure, method, sep = "_")
+          calc_list <- regression_summary(
             results = results, 
             method = method, 
             measure = measure,
-            rmse = ifelse(summary == "rmse", TRUE, FALSE))
+            summary = summary)
           mean_tmp <- rowMeans(calc_list, na.rm = TRUE)
           # bit of a hack to add the names for the different correlation
           # levels
@@ -1015,23 +1018,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_",
                                    method,
                                    "_mean")
-          ret[[paste0(result_name_rmse, "_mean")]] <- mean_tmp
+          ret[[paste0(result_name_summary, "_mean")]] <- mean_tmp
           if(summary == "rmse"){
             # calculate MSE
-            mse_tmp <- regression_rmse(
+            mse_tmp <- regression_summary(
             results, 
             method, 
             measure,
-            rmse = FALSE)
+            summary = "mse")
             mse_mean_tmp <- rowMeans(mse_tmp, na.rm = TRUE)
-            # names(mean_tmp) <- paste0(summary, 
-            #                        "_reg",
-            #                        c(0, 2, 4),
-            #                        "_",
-            #                        measure,
-            #                        "_",
-            #                        method,
-            #                        "_mean")
             mcse_tmp <- sqrt (apply(calc_list, 1, var, na.rm = TRUE) / (4*n_rep*mse_mean_tmp))
             names(mcse_tmp) <- paste0(summary, 
                                    "_reg",
@@ -1041,9 +1036,8 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_",
                                    method,
                                    "_mcse")
-            ret[[paste0(result_name_rmse, "_mcse")]] <- mcse_tmp
-          }
-          else if(summary == "mse"){
+            ret[[paste0(result_name_summary, "_mcse")]] <- mcse_tmp
+          } else if(summary == "mse"){
             mcse_tmp <- sqrt(
               apply(calc_list, 1, var, na.rm = TRUE) / n_rep)
             names(mcse_tmp) <- paste0(summary, 
@@ -1054,7 +1048,20 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                                    "_",
                                    method,
                                    "_mcse")
-            ret[[paste0(result_name_rmse, "_mcse")]] <- mcse_tmp
+            ret[[paste0(result_name_summary, "_mcse")]] <- mcse_tmp
+          } else if(summary == "bias"){
+            mcse_bias <- sqrt(
+              apply(calc_list, 1, var, na.rm = TRUE) / n_rep
+            )
+            names(mcse_bias) <- paste0(summary, 
+                                   "_reg",
+                                   c(0, 2, 4),
+                                   "_",
+                                   measure,
+                                   "_",
+                                   method,
+                                   "_mcse")
+            ret[[paste0(result_name_summary, "_mcse")]] <- mcse_bias
           }
           # Calculate Power
           result_name_power <- paste("power", "reg", measure, method, sep = "_")
@@ -1116,6 +1123,30 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   })
   }
   
+  regression_bias_bmlvar <- function(
+                              results, 
+                              method = "bmlvar", 
+                              true_coef = c(0,.2,.4)
+                              # lm_beta = TRUE
+                              )
+                              {
+  sapply(seq_along(results), function(i){
+    if(is.null(results[[i]][[method]][["reg_bmlvar"]])){
+      return(NA)
+    } 
+    else{
+      reg_coefs <- results[[i]][[method]][["reg_bmlvar"]][["regression_slope"]][["median"]]
+      # Have them all in one vector
+      # thus need to repeat the true_coefs 
+      true_coef_all <- rep(true_coef, 3)
+
+      # Calculate Bias
+      reg_coefs - true_coef
+      
+      }
+  })
+  }
+  
   regression_power_bmlvar <- function(
                               results, 
                               method = "bmlvar", 
@@ -1143,6 +1174,10 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
     results = results, 
     method = "bmlvar", 
     rmse = TRUE)
+  calc_bias <- regression_bias_bmlvar(
+    results = results, 
+    method = "bmlvar"
+  )
   calc_mse <- regression_rmse_bmlvar(
     results = results, 
     method = "bmlvar", 
@@ -1159,6 +1194,15 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
   # Calculate mean
   mean_rmse <- rowMeans(calc_rmse, na.rm = TRUE)
   names(mean_rmse) <- paste0("rmse", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             rep(measures, each = 3),
+                             "_",
+                             "bmlvar",
+                             "_mean")
+  mean_bias <- rowMeans(calc_bias, na.rm = TRUE)
+  names(mean_bias) <- paste0("bias", 
                              "_reg",
                              c(0, 2, 4),
                              "_",
@@ -1194,13 +1238,18 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "bmlvar",
                              "_mean")
   ret[["mean_rmse"]] <- mean_rmse
+  ret[["mean_bias"]] <- mean_bias
   ret[["mean_mse"]] <- mean_mse
   ret[["mean_pwroneside"]] <- mean_pwroneside
   ret[["mean_pwrtwoside"]] <- mean_pwrtwoside
   
   # calculate mcse
+  # mcse_rmse <- sqrt(
+  #   mean_rmse * (1 - mean_rmse) / n_rep)
+  var_rmse <- apply(calc_rmse, 1, stats::var)
   mcse_rmse <- sqrt(
-    mean_rmse * (1 - mean_rmse) / n_rep)
+    var_rmse/(4 * n_rep * mean_mse)
+  )
   names(mcse_rmse) <- paste0("rmse", 
                              "_reg",
                              c(0, 2, 4),
@@ -1209,6 +1258,19 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "_",
                              "bmlvar",
                              "_mcse")
+  var_bias <- apply(calc_bias, 1, stats::var)
+  mcse_bias <- sqrt(
+    var_bias/n_rep
+  )
+  names(mcse_bias) <- paste0("bias", 
+                             "_reg",
+                             c(0, 2, 4),
+                             "_",
+                             rep(measures, each = 3),
+                             "_",
+                             "bmlvar",
+                             "_mcse")
+  
   mcse_mse <- sqrt(
     mean_mse * (1 - mean_mse) / n_rep)
   names(mcse_mse) <- paste0("mse", 
@@ -1240,6 +1302,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
                              "bmlvar",
                              "_mcse")
   ret[["mcse_rmse"]] <- mcse_rmse
+  ret[["mcse_bias"]] <- mcse_bias
   ret[["mcse_mse"]] <- mcse_mse
   ret[["mcse_pwroneside"]] <- mcse_pwroneside
   ret[["mcse_pwrtwoside"]] <- mcse_pwrtwoside
@@ -1271,7 +1334,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim---------------------------------------------------------------------------------------------------------------------------------------------
+## ----run-sim----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # For testing
 # df_design_test <- df_design[3,]
 # df_design_test$n_id <- 200
@@ -1297,8 +1360,8 @@ future::plan(multisession, workers = 60)
 # started 2024-08-13 ~08:35
 # df_design_test <- df_design[c(4),]
 
-sim_results <- SimDesign::runSimulation(
-                                    design = df_design, 
+sim_results_4 <- SimDesign::runSimulation(
+                                    design = df_design[c(4),], 
                                     replications = n_rep, 
                                     generate = sim_generate, 
                                     analyse = sim_analyse, 
@@ -1318,7 +1381,7 @@ sim_results <- SimDesign::runSimulation(
                                                  "corpcor",
                                                  "Rcpp"),
                                     save_results = TRUE,
-                                    filename = "sim_full.rds"
+                                    filename = "sim_full_rev1_cond4.rds"
                                     # save_seeds = TRUE
                                     )
 
@@ -1336,9 +1399,36 @@ plan(sequential)
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## ----eval = FALSE----------------------------------------------------------------------------------------------------------------------------------------
-## knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"),
-##             output = here::here("scripts", "01_centrality_simulation.R"),
-##             documentation = 2)
+## ----eval = FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"),
+#             output = here::here("scripts", "01_centrality_simulation.R"),
+#             documentation = 2)
 
+#' 
+#' # Resummarize after fixing details in summary function
+#' 
+## ----resummarize, eval = FALSE----------------------------------------------------------------------------------------------------------------------------------------------------------------
+# sim_res_resum <- SimDesign::reSummarise(summarise = sim_summarise,
+#                                         dir = here("sim_full.rds-results_pc04798"))
+# saveRDS(object = sim_res_resum, here::here("output", "sim_results.RDS"))
+
+#' 
+#' 
+#' Add the run information (seed, time, etc.) from the previous output to the resummarized results object:
+#' 
+## ----results-info, eval = FALSE---------------------------------------------------------------------------------------------------------------------------------------------------------------
+# sim_res_old <- readRDS(here("output", "sim_full.RDS"))
+# 
+# sim_res_resum <- readRDS(here("output", "sim_results.RDS"))
+# 
+# sim_info <- sim_res_old |>
+#   select(REPLICATIONS, SIM_TIME, RAM_USED, SEED, COMPLETED, WARNINGS)
+# 
+# sim_res <- bind_cols(sim_res_resum, sim_info)
+# 
+# saveRDS(object = sim_res, here::here("output", "sim_results.RDS"))
+
+#' 
+#' 
+#' 
 #' 

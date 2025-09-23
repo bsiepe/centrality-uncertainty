@@ -32,7 +32,7 @@ format:
     fig-width: 7
     fig-height: 4.5
     fig-align: "center"
-    embed-resouces: true
+    embed-resources: true
 execute:
   message: false
   warning: false
@@ -1423,7 +1423,7 @@ cond4 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond4.rds"))
 
 sim_full_rev1 <- rbind(cond1, cond2, cond3, cond4)
 
-saveRDS(sim_full_rev1, here::here("output", "rev1", "sim_full_rev1.rds"))
+saveRDS(sim_full_rev1, here::here("output", "sim_results_rev1.rds"))
 ```
 
 
