@@ -266,6 +266,3 @@ generated quantities{
   reg_intercept_z[9] = reg_intercept[9] + (reg_slope_density_z[9] * mean(Rho_strength[,1])) / sd(Rho_strength[,1]);
   
 } // end generated quantities
-
-
-  
