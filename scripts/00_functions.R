@@ -142,7 +142,10 @@ sim_gvar_loop <- function(graph,
                           # either graphicalVAR or mlVAR
                           sim_pkg = "graphicalVAR",
                           max_try = 1000,
+                          # should simulation be sparse?
                           sparse_sim = FALSE,
+                          # should pcors inherit zeroes from sigma?
+                          sparse_sim_sigma = TRUE,
                           failsafe = FALSE,
                           # if listify is TRUE, convert 3D-Array to list
                           listify = FALSE,
@@ -155,6 +158,8 @@ sim_gvar_loop <- function(graph,
                           # same for the contemporaneous network
                           most_cent_diff_cont = FALSE,
                           most_cent_diff_cont_min = 0.1, 
+                          # should there be homogeneity in which node is the most central one? 
+                          homogeneity_central = TRUE,
                           # do we induce differences in the density of the temporal network
                           change_density = FALSE,
                           # if change_density is TRUE, these are the minimum and 
@@ -224,9 +229,16 @@ sim_gvar_loop <- function(graph,
       
       # if minimum centrality difference is required
       if(isTRUE(most_cent_diff_temp)){
-        cent_check <- check_node1_most_central(matrix = beta[, , i],
-                                            n_node = n_node,
-                                            min_diff = most_cent_diff_temp_min)
+        if(isTRUE(homogeneity_central)){
+          cent_check <- check_node1_most_central(matrix = beta[, , i],
+                                                 n_node = n_node,
+                                                 min_diff = most_cent_diff_temp_min)
+        } else {
+          cent_check <- check_centrality_diff(matrix = beta[, , i],
+                                                 n_node = n_node,
+                                                 min_diff = most_cent_diff_temp_min)
+        }
+
         # if not, try again
         if(!isTRUE(cent_check)){
           if(isTRUE(verbose)){
@@ -312,9 +324,16 @@ sim_gvar_loop <- function(graph,
       }
     # if minimum centrality difference is required
       if(isTRUE(most_cent_diff_cont)){
-        cent_check <- check_node1_most_central(matrix = pcor[, , i],
-                                            n_node = n_node,
-                                            min_diff = most_cent_diff_cont_min)
+        if(isTRUE(homogeneity_central)){
+          cent_check <- check_node1_most_central(matrix = pcor[, , i],
+                                                 n_node = n_node,
+                                                 min_diff = most_cent_diff_cont_min)
+        } else {
+          cent_check <- check_centrality_diff(matrix = pcor[, , i],
+                                                 n_node = n_node,
+                                                 min_diff = most_cent_diff_cont_min)
+        }
+
         # if not, try again
         if(!isTRUE(cent_check)){
           if(isTRUE(verbose)){
@@ -374,6 +393,13 @@ sim_gvar_loop <- function(graph,
           kappa[, , i] <- solve(sigma[, , i])
           pcor[, , i] <- -stats::cov2cor(kappa[, , i])
           diag(pcor[, , i]) <- 0
+          
+          if(isTRUE(sparse_sim)){
+            if(isTRUE(sparse_sim_sigma)){
+              pcor[, , i][zeros_sigma] <- 0
+            }
+          }
+          
           if(!any(is.na(pcor[,,i]))){
             break
           }
@@ -386,9 +412,16 @@ sim_gvar_loop <- function(graph,
         }
       # if minimum centrality difference is required
         if(isTRUE(most_cent_diff_cont)){
-          cent_check <- check_node1_most_central(matrix = pcor[, , i],
-                                              n_node = n_node,
-                                              min_diff = most_cent_diff_cont_min)
+          if(isTRUE(homogeneity_central)){
+            cent_check <- check_node1_most_central(matrix = pcor[, , i],
+                                                   n_node = n_node,
+                                                   min_diff = most_cent_diff_cont_min)
+          } else {
+            cent_check <- check_centrality_diff(matrix = pcor[, , i],
+                                                   n_node = n_node,
+                                                   min_diff = most_cent_diff_cont_min)
+          }
+
           # if not, try again
           if(!isTRUE(cent_check)){
             if(isTRUE(verbose)){
@@ -504,7 +537,7 @@ check_centrality_diff <- function(matrix, n_node, min_diff) {
   return(diff_check)
 }
 
-# Function to check centrality diff and the first node being most central
+# function to check centrality diff and the first node being most central
 check_node1_most_central <- function(matrix, n_node, min_diff) {
   matrix_tmp <- matrix
   diag(matrix_tmp) <- 0
