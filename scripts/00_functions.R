@@ -199,7 +199,7 @@ sim_gvar_loop <- function(graph,
   }
   
   
-  # Simulate data for each person
+  # simulate data for each person
   for (i in seq_len(n_person)) {
     counter <- 0
     beta_counter <- 0
@@ -242,9 +242,8 @@ sim_gvar_loop <- function(graph,
         # if not, try again
         if(!isTRUE(cent_check)){
           if(isTRUE(verbose)){
-            print(paste0("Centrality difference too small, trying again. Difference: ", 
-                         max(centralities) - sort(centralities, decreasing = TRUE)[2],
-                         "Individual:", i))
+            print(paste0("Centrality difference too small, trying again. 
+                         Individual:", i))
           }
           next
         }
@@ -290,9 +289,10 @@ sim_gvar_loop <- function(graph,
       if(isTRUE(sparse_sim)){
         if(is.null(graph$sigma)){
           kappa[ , , i][zeros_kappa] <- 0
-        } else {
-          kappa[ , , i][zeros_sigma] <- 0
         }
+        # else {
+        #   kappa[ , , i][zeros_sigma] <- 0
+        # }
       }
     
       
@@ -313,6 +313,28 @@ sim_gvar_loop <- function(graph,
           
         }
         if(!any(is.na(pcor[,,i]))){
+          # if minimum centrality difference is required
+          if(isTRUE(most_cent_diff_cont)){
+            if(isTRUE(homogeneity_central)){
+              cent_check <- check_node1_most_central(matrix = pcor[, , i],
+                                                     n_node = n_node,
+                                                     min_diff = most_cent_diff_cont_min)
+            } else {
+              cent_check <- check_centrality_diff(matrix = pcor[, , i],
+                                                  n_node = n_node,
+                                                  min_diff = most_cent_diff_cont_min)
+            }
+            
+            # if not, try again
+            if(!isTRUE(cent_check)){
+              if(isTRUE(verbose)){
+                print(paste0("Centrality difference too small, trying again.
+                             Individual:", i))
+              }
+              next
+            }
+          }
+          
           break
         }
         
@@ -322,29 +344,7 @@ sim_gvar_loop <- function(graph,
           print("Kappa matrix not semi-positive definite, trying again.")
         }
       }
-    # if minimum centrality difference is required
-      if(isTRUE(most_cent_diff_cont)){
-        if(isTRUE(homogeneity_central)){
-          cent_check <- check_node1_most_central(matrix = pcor[, , i],
-                                                 n_node = n_node,
-                                                 min_diff = most_cent_diff_cont_min)
-        } else {
-          cent_check <- check_centrality_diff(matrix = pcor[, , i],
-                                                 n_node = n_node,
-                                                 min_diff = most_cent_diff_cont_min)
-        }
 
-        # if not, try again
-        if(!isTRUE(cent_check)){
-          if(isTRUE(verbose)){
-            print(paste0("Centrality difference too small, trying again. Difference: ", 
-                         max(centralities) - sort(centralities, decreasing = TRUE)[2],
-                         "Individual:", i))
-          }
-          next
-        }
-        
-      }
       
       
     } # end repeat statement
@@ -401,6 +401,28 @@ sim_gvar_loop <- function(graph,
           }
           
           if(!any(is.na(pcor[,,i]))){
+            # if minimum centrality difference is required
+            if(isTRUE(most_cent_diff_cont)){
+              if(isTRUE(homogeneity_central)){
+                cent_check <- check_node1_most_central(matrix = pcor[, , i],
+                                                       n_node = n_node,
+                                                       min_diff = most_cent_diff_cont_min)
+              } else {
+                cent_check <- check_centrality_diff(matrix = pcor[, , i],
+                                                    n_node = n_node,
+                                                    min_diff = most_cent_diff_cont_min)
+              }
+              
+              # if not, try again
+              if(!isTRUE(cent_check)){
+                if(isTRUE(verbose)){
+                  print(paste0("Centrality difference too small, trying again. 
+                               Individual:", i))
+                }
+                next
+              }
+              
+            }  
             break
           }
           
@@ -410,29 +432,7 @@ sim_gvar_loop <- function(graph,
             print("Sigma matrix not semi-positive definite, trying again.")
           }
         }
-      # if minimum centrality difference is required
-        if(isTRUE(most_cent_diff_cont)){
-          if(isTRUE(homogeneity_central)){
-            cent_check <- check_node1_most_central(matrix = pcor[, , i],
-                                                   n_node = n_node,
-                                                   min_diff = most_cent_diff_cont_min)
-          } else {
-            cent_check <- check_centrality_diff(matrix = pcor[, , i],
-                                                   n_node = n_node,
-                                                   min_diff = most_cent_diff_cont_min)
-          }
 
-          # if not, try again
-          if(!isTRUE(cent_check)){
-            if(isTRUE(verbose)){
-              print(paste0("Centrality difference too small, trying again. Difference: ", 
-                           max(centralities) - sort(centralities, decreasing = TRUE)[2],
-                           "Individual:", i))
-            }
-            next
-          }
-          
-        }  
 
       }  # end repeat statement
       
@@ -469,7 +469,7 @@ sim_gvar_loop <- function(graph,
         data[[i]] <-
           tryCatch({
             if(!is.null(graph$sigma)){
-              resid_cov = graph$sigma
+              resid_cov = sigma[,,i]
             } else {
               resid_cov = solve(kappa[,,i])
             }
@@ -485,7 +485,7 @@ sim_gvar_loop <- function(graph,
         repeat{
           counter <- counter + 1
           if(!is.null(graph$sigma)){
-            resid_cov = graph$sigma
+            resid_cov = sigma[,,i]
           } else {
             resid_cov = solve(kappa[,,i])
           }

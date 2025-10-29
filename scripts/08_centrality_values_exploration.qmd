@@ -41,115 +41,182 @@ execute:
 
 # Background
 
-In this script, we explore centrality values across simulation repetitions in more detail. 
+In this script, we explore outstrength centrality values across simulation repetitions in more detail. 
 
 ```{r}
 #| label: load-pkgs
 library(tidyverse)
+library(pander)
+library(flextable)
+
+source(here::here("scripts", "00_functions.R"))
 ```
 
 
+
+## Homogeneous Conditions
+
+We load all condition specific results: 
+
 ```{r}
-sim_res_4 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-4.rds")
+sim_conditions <- list(
+  cond1 = readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond14.rds-results_pc04798/results-row-1.rds"),
+  cond2 = readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond23.rds-results_pc04669/results-row-1.rds"),
+  cond3 = readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond23.rds-results_pc04669/results-row-2.rds"),
+  cond4 = readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond14.rds-results_pc04798/results-row-2.rds")
+)
+
 ```
 
 
 Extract all centrality values and look at their ranks:
+
 ```{r}
-true_cent <- lapply(sim_res_4$results, function(x){
-  x$true_cent$outstrength
-})
+# function to analyze centrality differences for a condition
+analyze_condition <- function(sim_res, condition_name) {
+  true_cent <- lapply(sim_res$results, function(x) x$true_cent$outstrength)
+  
+  # compute ranks (we have 6 nodes, hence the 7)
+  rank_centrality <- lapply(true_cent, function(x) {
+    vapply(x, function(y) 7 - rank(y), FUN.VALUE = numeric(6))
+  })
+  
+  all_ranks <- abind::abind(rank_centrality, along = 3)
+  rank_counts <- apply(all_ranks, c(1, 2), function(x) {
+    table(factor(x, levels = 1:6))
+  })
+  
+  aggregated_counts <- as.data.frame.table(rank_counts) |>
+    setNames(c("Rank", "Variable", "Repetition", "Count")) |>
+    group_by(Variable, Rank) |>
+    summarise(Total_Count = sum(Count), .groups = "drop") |>
+    pivot_wider(names_from = Rank, values_from = Total_Count) |>
+    mutate(across(where(is.numeric), ~ .x / sum(.x, na.rm = TRUE) * 100),
+           condition = condition_name, .before = 1)
+  
+  # rank summary stats
+  rank_summaries <- lapply(seq_along(true_cent), function(rep_idx) {
+    centralities <- true_cent[[rep_idx]]
+    lapply(centralities, function(person_cent) {
+      ranks <- 7 - rank(person_cent)
+      data.frame(
+        variable = 1:6,
+        centrality = person_cent,
+        rank = ranks
+      )
+    }) |>
+      do.call(rbind, args = _)
+  }) |>
+    do.call(rbind, args = _)
+  
+  rank_stats <- rank_summaries |>
+    group_by(variable, rank) |>
+    summarise(
+      mean = mean(centrality),
+      min = min(centrality),
+      max = max(centrality),
+      sd = sd(centrality)
+    ) |>
+    ungroup() |> 
+    mutate(condition = condition_name, .before = 1)
+  
+  # Relative differences
+  true_cent_df <- map2_dfr(true_cent, seq_along(true_cent), ~{
+    .x |>
+      map_dfr(~ as_tibble(t(as.matrix(.x)), .name_repair = ~ paste0("V", 1:6))) |>
+      mutate(repetition = .y, .before = 1)
+  }) |>
+    rowid_to_column("individual")
+  
+  centrality_diff <- true_cent_df |>
+    rowwise() |>
+    mutate(
+      most_central = max(across(starts_with("V"))),
+      second_most_central = sort(c_across(starts_with("V")), decreasing = TRUE)[2],
+      absolute_difference = most_central - second_most_central,
+      relative_difference = absolute_difference / most_central,
+      condition = condition_name
+    ) |>
+    ungroup()
+  
+  list(
+    rank_percentages = aggregated_counts,
+    rank_stats = rank_stats,
+    centrality_diff = centrality_diff
+  )
+}
 
-# compute ranks in each repetition
-rank_centrality <- lapply(true_cent, function(x) {
-  vapply(x, function(y) {
-    7 - rank(y)
-  }, FUN.VALUE = numeric(6))
-})
+# analyze all conditions
+results <- map2(sim_conditions, names(sim_conditions), analyze_condition)
 
-all_ranks <- abind::abind(rank_centrality, along = 3)
-
-rank_counts <- apply(all_ranks, c(1, 2), function(x) {
-  table(factor(x, levels = 1:6))
-})
+# percentages and ranked results
+all_rank_percentages <- map_dfr(results, "rank_percentages")
+all_rank_stats <- map_dfr(results, "rank_stats")
+all_diffs <- map_dfr(results, "centrality_diff")
 
 
-final_counts <- as.data.frame.table(rank_counts) |> 
-  setNames(c("Rank", "Variable", "Repetition", "Count"))
 
-
-aggregated_counts <- final_counts |>
-  dplyr::group_by(Variable, Rank) |>
-  dplyr::summarise(Total_Count = sum(Count)) |>
-  tidyr::pivot_wider(names_from = Rank, values_from = Total_Count) |> 
-  dplyr::ungroup()
-
-
-# add percentages 
-aggregated_counts |> 
-  dplyr::ungroup() |> 
-  dplyr::mutate(across(where(is.numeric), ~ .x / sum(.x, na.rm = TRUE) * 100))
 ```
 
 
 Investigate summary statistics of centrality for each rank:
 ```{r}
-rank_summaries <- lapply(seq_along(true_cent), function(rep_idx) {
- centralities <- true_cent[[rep_idx]]
- lapply(centralities, function(person_cent) {
-   ranks <- 7 - rank(person_cent)
-   data.frame(
-     variable = 1:6,
-     centrality = person_cent,
-     rank = ranks
-   )
- }) |> 
-   do.call(rbind, args = _)
-}) |> 
- do.call(rbind, args = _)
-
-rank_stats <- rank_summaries |>
- dplyr::group_by(variable, rank) |>
- dplyr::summarise(
-   mean = mean(centrality),
-   min = min(centrality),
-   max = max(centrality),
-   sd = sd(centrality)
- ) |> 
- dplyr::ungroup()
+print("Rank Percentages:")
+all_rank_percentages |> 
+  flextable::flextable()
 ```
 
 
 
 Look at differences between most central and second most central: 
 ```{r}
-true_cent_df <- map2_dfr(true_cent, 1:length(true_cent), ~{
-  .x |>
-    map_dfr(~ as_tibble(t(as.matrix(.x)), .name_repair = ~ paste0("V", 1:6))) |>
-    mutate(repetition = .y, .before = 1)
-}) |>
-  rowid_to_column("individual")
-
-
-centrality_diff <- true_cent_df |> 
-    rowwise() |>
-  mutate(
-    most_central = max(across(starts_with("V"))),
-    second_most_central = sort(c_across(starts_with("V")), decreasing = TRUE)[2],
-    absolute_difference = most_central - second_most_central,
-    relative_difference = absolute_difference / most_central
-  ) |>
-  ungroup()
-
-summary(centrality_diff$relative_difference)
+all_diffs |>
+  group_by(condition) |>
+  summarise(
+    mean = mean(relative_difference),
+    median = median(relative_difference),
+    sd = sd(relative_difference),
+    min = min(relative_difference),
+    max = max(relative_difference)
+  )
 ```
 
 
-We can visualize these differences as percentages:
+We can visualize these differences and see that they are similar across all simulation conditions:
 ```{r}
-centrality_diff |> 
-  ggplot(aes(x = relative_difference))+
-  geom_density()
+ggplot(all_diffs, aes(x = relative_difference)) +
+  geom_density(fill = "grey70") +
+  facet_wrap(~condition, ncol = 2) +
+  theme_centrality() +
+  labs(
+    x = "Relative Difference",
+    y = "Density"
+  )
 
 ```
+
+
+We off-load these results to make space for the heterogeneous conditions below: 
+
+```{r}
+rm(sim_conditions)
+```
+
+
+## Heterogeneous Conditions
+
+
+
+
+
+
+
+# Session Info
+
+```{r}
+pander::pander(sessionInfo())
+```
+
+
+
 
