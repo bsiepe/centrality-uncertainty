@@ -1,6 +1,6 @@
 ---
 title: "Using features of dynamic networks to guide treatment selection and outcome prediction"
-subtitle: "Simulation Study Visualizations"
+subtitle: "Simulation Study Visualizations: Heterogeneous DGP"
 author: 
  - name: Björn S. Siepe
    orcid: 0000-0002-9558-4648
@@ -42,7 +42,7 @@ params:
 
 # Background
 
-This document contains code to reproduce the visualizations of the simulation study in the manuscript. It also contains additional results not shown in the main manuscript.
+This document contains code to reproduce the visualizations of the simulation study in the manuscript for the heterogeneous condition, which is only partly shown in the manuscript. 
 
 
 # Preparation
@@ -78,7 +78,7 @@ Load the simulation results:
 
 ```{r}
 if(isTRUE(use_rev1)){
-  sim_results <- readRDS(here::here("output", "sim_results_rev1_fixed_sigma.rds"))
+  sim_results <- readRDS(here::here("output", "sim_results_rev1_heterogeneous.rds"))
 } else {
   sim_results <- readRDS(here::here("output", "sim_results.RDS"))
 }
@@ -156,30 +156,30 @@ sr_edit <- sim_res_cut |>
   pivot_longer(cols = -c("dgp", "n_tp", "n_id"), 
                names_to = "measure", 
                values_to = "value") |> 
-  dplyr::mutate(measure = str_replace(measure, "power_reg", "powerreg"),
+  mutate(measure = str_replace(measure, "power_reg", "powerreg"),
          measure = str_replace(measure, "powertwoside_reg", "powertwosidereg"),
          measure = str_replace(measure, "poweroneside_reg", "poweronesidereg"),
          measure = str_replace(measure, "rmse_reg", "rmsereg"),
          measure = str_replace(measure, "bias_reg", "biasreg"),
          measure = str_replace(measure, "mse_reg", "msereg")) |>
-  dplyr::filter(!measure %in% c("strength_sd", "outstrength_sd", "instrength_sd")) |> 
+  filter(!measure %in% c("strength_sd", "outstrength_sd", "instrength_sd")) |> 
   separate_wider_delim(measure, 
                        delim = "_",
                        names = c("pm", "outcome", "method", "summary")) |> 
- dplyr::mutate(method = case_when(
+  mutate(method = case_when(
     method == "gvar" ~ "GVAR",
     method == "gimme" ~ "GIMME",
     method == "mlvar" ~ "mlVAR",
     method == "bmlvar" ~ "BmlVAR"
   )) |>
   # treat method as factor and order 
-  dplyr::mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) |>
-  dplyr::mutate(outcome = case_when(
+  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) |>
+  mutate(outcome = case_when(
     outcome == "beta" ~ "Temporal",
     outcome == "pcor" ~ "Contemporaneous",
     .default = outcome
   )) |>
-  dplyr::group_by(dgp, n_tp, n_id, pm, outcome, method) |>
+  group_by(dgp, n_tp, n_id, pm, outcome, method) |>
   pivot_wider(names_from = summary, values_from = value) |> 
   ungroup()
 
@@ -388,7 +388,7 @@ plot_mostcentral <- sr_edit |>
        colour = "",
        y = "Proportion of Correct Central Nodes")
 
-ggsave_rev("plot_mostcentral.pdf", plot_mostcentral, height = 6 * 1.1, width = 9 * 1.1,
+ggsave_rev("plot_mostcentral_heterogeneous.pdf", plot_mostcentral, height = 6 * 1.1, width = 9 * 1.1,
        path = here::here("figures/"), device = "pdf")
 
 plot_mostcentral
@@ -455,155 +455,13 @@ plot_mostcentral_presentation <- sr_edit |>
        colour = "",
        y = "Proportion of Correct Central Nodes")
 
-ggsave_rev("plot_mostcentral_presentation.pdf", plot_mostcentral_presentation, height = 6 * 1.2, width = 9 * 1.2,
+ggsave_rev("plot_mostcentral_presentation_heterogeneous.pdf", plot_mostcentral_presentation, height = 6 * 1.2, width = 9 * 1.2,
        path = here::here("figures/"), device = "pdf")
 
 plot_mostcentral_presentation
 ```
 
 
-### Combining homogeneous and heterogeneous conditions
-
-For the manuscript, we can also combine the homogeneous and heterogeneous conditions into one plot. To do so, we first need to load both results dataframes: 
-
-```{r}
-#| label: combine-heterogeneity-most-central
-
-# load heterogeneous simulations
-sim_results_het <- readRDS(here::here("output", "sim_results_rev1_heterogeneous.rds"))
-
-# cut irrelevant columns
-sim_res_het_cut <- sim_results_het |>
-  select(-contains("rhat")) |>
-  select(-contains("divtrans"))
-
-sr_edit_het <- sim_res_het_cut |> 
-  mutate(
-    dgp = factor(n_tp, levels = c(60, 120)),
-    n_id = factor(n_id, levels = c(75, 200))
-    ) |>
-  # remove "reg_" from all column names
-  rename_with(~str_remove(., "reg_")) |> 
-  # remove everything before a "." in the column names
-  rename_with(~str_remove(., ".*\\.")) |> 
-  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS")) |>
-  dplyr::select(-c("heterogeneity")) |> 
-  # pivot longer except conditions cols
-  pivot_longer(cols = -c("dgp", "n_tp", "n_id"), 
-               names_to = "measure", 
-               values_to = "value") |> 
-  mutate(measure = str_replace(measure, "power_reg", "powerreg"),
-         measure = str_replace(measure, "powertwoside_reg", "powertwosidereg"),
-         measure = str_replace(measure, "poweroneside_reg", "poweronesidereg"),
-         measure = str_replace(measure, "rmse_reg", "rmsereg"),
-         measure = str_replace(measure, "bias_reg", "biasreg"),
-         measure = str_replace(measure, "mse_reg", "msereg")) |>
-  filter(!measure %in% c("strength_sd", "outstrength_sd", "instrength_sd")) |> 
-  separate_wider_delim(measure, 
-                       delim = "_",
-                       names = c("pm", "outcome", "method", "summary")) |> 
-  mutate(method = case_when(
-    method == "gvar" ~ "GVAR",
-    method == "gimme" ~ "GIMME",
-    method == "mlvar" ~ "mlVAR",
-    method == "bmlvar" ~ "BmlVAR"
-  )) |>
-  # treat method as factor and order 
-  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) |>
-  mutate(outcome = case_when(
-    outcome == "beta" ~ "Temporal",
-    outcome == "pcor" ~ "Contemporaneous",
-    .default = outcome
-  )) |>
-  group_by(dgp, n_tp, n_id, pm, outcome, method) |>
-  pivot_wider(names_from = summary, values_from = value) |> 
-  ungroup()
-
-
-# Create heterogeneous plot
-plot_mostcentral_het <- sr_edit_het |> 
-  # if mcse is missing, set to 0
-  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
-  mutate(outcome = factor(outcome, levels = c("Temporal", "Contemporaneous"))) |>
-  filter(pm == "mostcent") |> 
-  mutate(n_tp = paste0("t = ", n_tp)) |>
-  mutate(n_tp = factor(n_tp, levels = c("t = 60", "t = 120"))) |>
-  mutate(n_id = paste0("n = ", n_id)) |>
-  mutate(n_id = factor(n_id, levels = c("n = 75", "n = 200"))) |>
-  ggplot(aes(x = as.factor(n_tp), 
-             y = mean,
-             group = method,
-             colour = method
-             )) +
-  # horizontal line at chance level of 1/6
-  geom_hline(yintercept = 1/6, 
-             linetype = 2, 
-             alpha = .7)+
-  # add vertical line between methods
-  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 3, 1))+
-  geom_errorbar(aes(ymin = mean - 1*mcse,
-                            ymax = mean + 1*mcse),
-                        width = .5,
-                 position = position_dodge(0.8),
-                 show.legend = FALSE)+
-  geom_point(position = position_dodge(0.8), 
-             size = 1.4) +
-  # add mean as text above errorbar
-  geom_text(aes(label = sub("^(-?)0.", "\\1.",sprintf("%.2f", mean))),
-              position = position_dodge(0.8),
-              vjust = -1.0,
-              size = 4,
-              show.legend = FALSE) +
-  ggh4x::facet_nested(n_id ~ outcome,
-                      axes = "all",
-                      remove_labels = "y") +
-  # scale_x_discrete(guide = guide_axis(angle = 90))+
-  scale_y_continuous(expand = c(0, 0), limits = c(0,1.15)) +
-  scale_color_manual(values = meth_colors) +
-  theme_centrality() +
-  theme(legend.position = "bottom",
-        title = element_text(size = 27)
-        )+
-  labs(title = "",
-       x = "Time Points",
-       colour = "",
-       y = "Proportion of Correct Central Nodes")
-
-# combine both plots into one
-# obtain common legend
-plot_legend_source <- plot_mostcentral + 
-  theme(legend.position = "bottom",
-        text = element_text(size = 20),
-        # increase all legend element size
-        legend.text = element_text(size = 18),
-        legend.title = element_text(size = 18),
-        legend.key.size = unit(1.6, "lines")) 
-
-# extract the legend
-legend <- cowplot::get_plot_component(plot_legend_source, 'guide-box-bottom', return_all = TRUE)
-
-# combine the two plots (no labels)
-plot_combined <- cowplot::plot_grid(plot_mostcentral + theme(legend.position = "none"),
-                                    plot_mostcentral_het + theme(legend.position = "none"),
-                                    ncol = 1,
-                                    nrow = 2,
-                                    labels = c("Homogeneous", "Heterogeneous"),
-                                    label_fontfamily  = "news",
-                                    label_size = 20)
-
-# add legend below
-combined_mostcentral_plot <- cowplot::plot_grid(
-  plot_combined,
-  legend,
-  ncol = 1,
-  nrow = 2,
-  rel_heights = c(1, 0.1)
-)
-
-ggsave_rev("plot_mostcentral_combined.pdf", combined_mostcentral_plot, height = 11 * 1.2, width = 9 * 1.2,
-       path = here::here("figures/"), device = "pdf")
-
-```
 
 
 
@@ -652,27 +510,12 @@ plot_rankcor <- sr_edit |>
        y = "Centrality Rank Correlation")
 
 
-ggsave_rev("plot_rankcor.pdf", plot_rankcor, height = 12, width = 16,
+ggsave_rev("plot_rankcor_heterogeneous.pdf", plot_rankcor, height = 12, width = 16,
        path = here::here("figures/"), device = "pdf")
 
 plot_rankcor
 
 ```
-
-## Bias and MSE of Centrality
-
-Based on a reviewer comment, we also added the bias and MSE of the centrality of the first node to this supplement. 
-We first need to compute it, as we didn't compute it in our initial simulation: 
-
-```{r}
-#| label: compute-bias-mse-centrality
-
-
-```
-
-
-
-
 
 # Regression
 
@@ -751,6 +594,7 @@ Create the plots and combine them with patchwork
 
 ```{r viz-regression-power-combined}
 #| output: false
+#| eval: false
 plot_power_list <- lapply(power_list, power_plot)
 
 # add legend to the third plot
@@ -779,15 +623,14 @@ plot_power_combined <- cowplot::plot_grid(plot_power_list[[1]],
 
 
 
-ggsave_rev("plot_power_combined.pdf", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
+ggsave_rev("plot_power_combined_heterogeneous.pdf", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
        path = here::here("figures/"))
-ggsave_rev("plot_power_combined.svg", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
+ggsave_rev("plot_power_combined_heterogeneous.svg", plot_power_combined, height = 16* 0.95, width = 16* 0.8,
        path = here::here("scripts", "simulation_viz_figures"))
 
 
 ```
 
-![](simulation_viz_figures/plot_power_bias_strength.svg){width="710"}
 
 How large was the difference between instrength and outstrength?
 
@@ -806,9 +649,11 @@ power_df |>
 
 ## Power and Bias for Outstrength
 
-This reproduces the simulation figure in the manuscript.
+This is an analogue to the simulation figure in the manuscript, but for the heterogeneous condition. 
 
 ```{r outstrength-plot}
+#| fig-width: 14
+#| fig-height: 14
 power_bias_reg_combined_df <- sr_edit |> 
   mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
   filter(!str_detect(pm, "poweroneside")) |>
@@ -884,10 +729,11 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
           strip.text.x.top = ggplot2::element_text(size = 24)
           )
 
-ggsave_rev("plot_power_bias_outstrength.pdf", 
+ggsave_rev("plot_power_bias_outstrength_heterogeneous.pdf", 
        plot_power_bias_outstrength, height = 16* 0.95, width = 16* 0.8,
        path = here::here("figures/"))
 
+plot_power_bias_outstrength 
 ```
 
 Plot subset of conditions for presentation:
@@ -946,7 +792,7 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
           plot.title = ggplot2::element_text(size = 30)
           )
 
-ggsave_rev("plot_power_bias_outstrength_presentation.pdf", 
+ggsave_rev("plot_power_bias_outstrength_presentation_heterogeneous.pdf", 
        plot_power_bias_outstrength, height = 16 * 0.6 * 0.9, width = 16 * 0.8 *0.9,
        path = here::here("figures/"))
 ```
@@ -956,7 +802,9 @@ ggsave_rev("plot_power_bias_outstrength_presentation.pdf",
 
 ## Power and Bias for Contemporaneous Strength
 
-```{r contemporaneous-strength-plot, eval = FALSE}
+```{r contemporaneous-strength-plot}
+#| fig-width: 12
+#| fig-height: 12
 power_bias_reg_strength_df <- sr_edit |> 
   mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
   filter(!str_detect(pm, "poweroneside")) |>
@@ -1030,15 +878,17 @@ plot_power_bias_strength <- power_bias_reg_strength_df |>
           strip.text.x.top = ggplot2::element_text(size = 24)
           )
 
-ggsave_rev("plot_power_bias_strength.pdf", 
+plot_power_bias_strength 
+
+ggsave_rev("plot_power_bias_strength_heterogeneous.pdf", 
        plot_power_bias_strength, height = 16* 0.95, width = 16* 0.8,
        path = here::here("figures/"))
-ggsave_rev("plot_power_bias_strength.svg", 
+ggsave_rev("plot_power_bias_strength_heterogeneous.svg", 
        plot_power_bias_strength, height = 16* 0.95, width = 16* 0.8,
        path = here::here("scripts", "simulation_viz_figures"), device = "svg")
 ```
 
-![](../scripts/simulation_viz_figures/plot_power_bias_strength.svg){width="710"}
+
 
 ## RMSE and Bias of Regression
 
@@ -1120,10 +970,10 @@ generate_regression_plots <- function(data, summary, y_label, file_name) {
 
 
 ## RMSE Plot
-generate_regression_plots(sr_edit, "rmsereg", "RMSE", "plot_reg_rmse_combined.pdf")
+generate_regression_plots(sr_edit, "rmsereg", "RMSE", "plot_reg_rmse_combined_heterogeneous.pdf")
 
 ## Bias Plot
-generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined.pdf")
+generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined_heterogeneous.pdf")
 
 ```
 
@@ -1135,7 +985,7 @@ Here, we investigate the variability of point estimates in specific simulation c
 ```{r}
 #| eval: !expr params$rerun
 if(isTRUE(use_rev1)){
-  r3 <- readRDS("~/centrality-uncertainty/output/rev1_fixed_sigma/sim_full_rev1_cond23_fixed_sigma.rds-results_pc04669/results-row-2.rds")
+  r3 <- readRDS("~/centrality-uncertainty/output/rev1_heterogeneous/sim_full_rev1_cond23_heterogeneous.rds-results_pc04669/results-row-2.rds")
 } else {
   r3 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-3.rds")
 }
@@ -1209,7 +1059,7 @@ est_variability_plot <- df_all |>
   scale_y_continuous(breaks = round(seq(-0.6, 1, by = .2), 1))+
   geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 3, 1))
 
-ggsave_rev("est_variability_plot.pdf", plot = est_variability_plot, 
+ggsave_rev("est_variability_plot_heterogeneous.pdf", plot = est_variability_plot, 
        height = 6, width = 9,
        path = here::here("figures/"), device = "pdf")
 

@@ -54,16 +54,16 @@ source(here::here("scripts", "00_functions.R"))
 
 
 
-## Homogeneous Conditions
+# Homogeneous Conditions
 
 We load all condition specific results: 
 
 ```{r}
 sim_conditions <- list(
-  cond1 = readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond14.rds-results_pc04798/results-row-1.rds"),
-  cond2 = readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond23.rds-results_pc04669/results-row-1.rds"),
-  cond3 = readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond23.rds-results_pc04669/results-row-2.rds"),
-  cond4 = readRDS("~/centrality-uncertainty/output/rev1/sim_full_rev1_cond14.rds-results_pc04798/results-row-2.rds")
+  cond1 = readRDS("~/centrality-uncertainty/output/rev1_fixed_sigma/sim_full_rev1_cond14_fixed_sigma.rds-results_pc04798/results-row-1.rds"),
+  cond2 = readRDS("~/centrality-uncertainty/output/rev1_fixed_sigma/sim_full_rev1_cond23_fixed_sigma.rds-results_pc04669/results-row-1.rds"),
+  cond3 = readRDS("~/centrality-uncertainty/output/rev1_fixed_sigma/sim_full_rev1_cond23_fixed_sigma.rds-results_pc04669/results-row-2.rds"),
+  cond4 = readRDS("~/centrality-uncertainty/output/rev1_fixed_sigma/sim_full_rev1_cond14_fixed_sigma.rds-results_pc04798/results-row-2.rds")
 )
 
 ```
@@ -154,7 +154,7 @@ all_rank_percentages <- map_dfr(results, "rank_percentages")
 all_rank_stats <- map_dfr(results, "rank_stats")
 all_diffs <- map_dfr(results, "centrality_diff")
 
-
+saveRDS(results, file = here::here("output", "centrality_comparison_homogeneous.rds"))
 
 ```
 
@@ -196,6 +196,12 @@ ggplot(all_diffs, aes(x = relative_difference)) +
 ```
 
 
+## Investigate BmlVAR centrality values specifically
+
+
+
+
+
 We off-load these results to make space for the heterogeneous conditions below: 
 
 ```{r}
@@ -203,11 +209,59 @@ rm(sim_conditions)
 ```
 
 
-## Heterogeneous Conditions
+# Heterogeneous Conditions
 
 
+```{r}
+sim_conditions_het <- list(
+  cond1 = readRDS("~/centrality-uncertainty/output/rev1_heterogeneous/sim_full_rev1_cond14_heterogeneous.rds-results_pc04798/results-row-1.rds"),
+  cond2 = readRDS("~/centrality-uncertainty/output/rev1_heterogeneous/sim_full_rev1_cond23_heterogeneous.rds-results_pc04669/results-row-1.rds"),
+  cond3 = readRDS("~/centrality-uncertainty/output/rev1_heterogeneous/sim_full_rev1_cond23_heterogeneous.rds-results_pc04669/results-row-2.rds"),
+  cond4 = readRDS("~/centrality-uncertainty/output/rev1_heterogeneous/sim_full_rev1_cond14_heterogeneous.rds-results_pc04798/results-row-2.rds")
+)
+
+```
+
+Analyze all conditions: 
+
+```{r}
+# analyze all conditions
+results_het <- map2(sim_conditions_het, names(sim_conditions_het), analyze_condition)
+
+# percentages and ranked results
+all_rank_percentages_het <- map_dfr(results_het, "rank_percentages")
+all_rank_stats_het <- map_dfr(results_het, "rank_stats")
+all_diffs_het <- map_dfr(results_het, "centrality_diff")
+
+saveRDS(results_het, file = here::here("output", "centrality_comparison_heterogeneous.rds"))
+
+```
 
 
+Inspect differences between most central and second most central nodes: 
+
+```{r}
+all_diffs_het |>
+  group_by(condition) |>
+  summarise(
+    mean = mean(relative_difference),
+    median = median(relative_difference),
+    sd = sd(relative_difference),
+    min = min(relative_difference),
+    max = max(relative_difference)
+  )
+```
+
+Summarize them into one average across the homogeneous and heterogeneous condition: 
+
+```{r}
+mean_diff_central_node <- all_diffs_het |>
+  bind_rows(all_diffs) |> 
+  summarise(
+    mean_diff = mean(relative_difference)
+  )
+```
+On average, the first node was `r round(mean_diff_central_node, 4)*100`% larger than the second most central node. 
 
 
 

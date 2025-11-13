@@ -1374,6 +1374,57 @@ most_central_example_plot
 ggsave(here::here("figures", "empirical_example", "most_central_example_plot.pdf"), width = 9 * 0.9, height = 6 * 0.9)
 ```
 
+## Prior Predictive
+
+To better understand our model, we can simulate from our priors. We can use that, for example, to understand the implied prior on the outstrength centrality. We do not place a prior directly on the centrality, but rather on the individual coefficients going into its sum. 
+
+```{r}
+#| label: bmlvar-priorpred
+n_sim <- 100000
+
+# Simulate from Cauchy(0, 0.05)
+# rcauchy uses location and scale parameters
+cauchy_samples <- matrix(rcauchy(n_sim * 6, location = 0, scale = 0.05), 
+                         nrow = n_sim, ncol = 6)
+
+# obtain single coefficient and sum of coefficients
+single_coef <- cauchy_samples[, 1]
+abs_sum <- rowSums(abs(cauchy_samples))
+
+# create data frame for plotting
+df <- data.frame(
+  single = single_coef,
+  abs_sum = abs_sum
+)
+
+# reshape to long format for ggplot
+df_long <- pivot_longer(df, cols = everything(), 
+                        names_to = "type", 
+                        values_to = "value")
+
+# rename for better labels
+df_long$type <- factor(df_long$type, 
+                       levels = c("single", "abs_sum"),
+                       labels = c("Single Coefficient", 
+                                  "Implied Outstrength Centrality Prior"))
+
+# create the plot
+ggplot(df_long, aes(x = value, fill = type)) +
+  geom_histogram(aes(y = after_stat(density)), 
+                 bins = 100, alpha = 0.6, position = "identity") +
+  geom_density(alpha = 0.3, linewidth = 1) +
+  scale_fill_manual(values = c("steelblue", "coral")) +
+  xlim(-2, 5) +
+  labs(title = "Distribution of Single Cauchy(0, 0.05) vs Absolute Sum of 6",
+       x = "Value",
+       y = "Density",
+       fill = "") +
+  theme_minimal() +
+  theme(legend.position = "top",
+        plot.title = element_text(hjust = 0.5, face = "bold"))
+
+```
+
 
 
 ## Posterior Predictive
