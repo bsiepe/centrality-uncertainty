@@ -64,7 +64,8 @@ source(here::here("scripts", "00_functions.R"))
 
 Load DGP based on estimated network structures:  
 ```{r}
-# non-sparse Graph to simulate from
+# non-sparse Graph to simulate from - we do not use this anymore, just keep it here for 
+# legacy code purpose
 graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
 # sparse DGP
@@ -180,6 +181,7 @@ for(i in 1:nrow(df_design)){
                      listify = TRUE,
                      sim_pkg = "mlVAR",
                      sparse_sim = TRUE,
+                     sparse_sim_sigma = TRUE,
                      most_cent_diff_temp = TRUE,
                      most_cent_diff_temp_min = 0.05,
                      most_cent_diff_cont = TRUE,
@@ -206,13 +208,13 @@ sd_results <- list(sd_results_strength, sd_results_outstrength, sd_results_instr
 names(sd_results) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 
 
-saveRDS(sd_results, here::here("data", "true_sd_semisparse.RDS"))
+saveRDS(sd_results, here::here("data", "true_sd_semisparse_rev1.RDS"))
 
 ```
 
 As we only need to compute the true SD once, we can simply load it from disk to save time: 
 ```{r}
-true_sd <- readRDS(here::here("data", "true_sd_semisparse.RDS"))
+true_sd <- readRDS(here::here("data", "true_sd_semisparse_rev1.RDS"))
 names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 df_design$strength_sd <- unlist(true_sd$sd_results_strength)
 df_design$outstrength_sd <- unlist(true_sd$sd_results_outstrength)
@@ -1413,17 +1415,75 @@ saveRDS(object = sim_res, here::here("output", "sim_results.RDS"))
 
 # Putting together individual files for revision
 
-During the first revision of the paper, we spread the computation above across multiple machines. We thus need to put back together the results: 
+During the first revision of the paper, we spread the computation above across multiple machines. We thus need to put back together the results. First, we do so for the simulation results before changing the generation of partial correlations to induce more sparsity. This code is just used for documentation purposes, these results are not used anywhere: 
 
 ```{r}
-cond1 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond1.rds"))
-cond2 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond2.rds"))
-cond3 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond3.rds"))
-cond4 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond4.rds"))
+cond1 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond1.rds"))
+cond2 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond2.rds"))
+cond3 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond3.rds"))
+cond4 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond4.rds"))
 
 sim_full_rev1 <- rbind(cond1, cond2, cond3, cond4)
 
+saveRDS(sim_full_rev1, here::here("output", "sim_results_rev1_pre_pcor_change.rds"))
+```
+
+We then combine the actual revision simulation results: 
+
+```{r}
+cond14 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond14.rds"))
+cond23 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond23.rds"))
+
+# remove irrelevant column
+cond14 <- cond14 |> dplyr::select(!RAM_USED)
+
+# combine
+sim_full_rev1 <- rbind(cond14, cond23)
+
+# change row order 
+sim_full_rev1 <- sim_full_rev1[c(1, 3, 4, 2), ]
+
 saveRDS(sim_full_rev1, here::here("output", "sim_results_rev1.rds"))
+
+```
+
+We further combine the results under heterogeneity: 
+
+```{r}
+cond14_het <- readRDS(here::here("output", "rev1_heterogeneous", "sim_full_rev1_cond14_heterogeneous.rds"))
+cond23_het <- readRDS(here::here("output", "rev1_heterogeneous", "sim_full_rev1_cond23_heterogeneous.rds"))
+
+# remove irrelevant column
+cond14_het <- cond14_het |> dplyr::select(!RAM_USED)
+
+# combine
+sim_full_rev1_het <- rbind(cond14_het, cond23_het)
+
+# change row order 
+sim_full_rev1_het <- sim_full_rev1_het[c(1, 3, 4, 2), ]
+
+saveRDS(sim_full_rev1_het, here::here("output", "sim_results_rev1_heterogeneous.rds"))
+
+```
+
+
+We further combine the results  after fixing sigma: 
+
+```{r}
+cond14_het <- readRDS(here::here("output", "rev1_fixed_sigma", "sim_full_rev1_cond14_fixed_sigma.rds"))
+cond23_het <- readRDS(here::here("output", "rev1_fixed_sigma", "sim_full_rev1_cond23_fixed_sigma.rds"))
+
+# remove irrelevant column
+cond14_het <- cond14_het |> dplyr::select(!RAM_USED)
+
+# combine
+sim_full_rev1_het <- rbind(cond14_het, cond23_het)
+
+# change row order 
+sim_full_rev1_het <- sim_full_rev1_het[c(1, 3, 4, 2), ]
+
+saveRDS(sim_full_rev1_het, here::here("output", "sim_results_rev1_fixed_sigma.rds"))
+
 ```
 
 

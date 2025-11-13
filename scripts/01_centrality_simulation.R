@@ -32,7 +32,7 @@
 #'     fig-width: 7
 #'     fig-height: 4.5
 #'     fig-align: "center"
-#'     embed-resouces: true
+#'     embed-resources: true
 #' execute:
 #'   message: false
 #'   warning: false
@@ -43,7 +43,7 @@
 #' This script contains the `SimDesign` code for the simulation study. The visualization of the results is done in the `05_simulation_viz.qmd` script.
 #' 
 #' We first load all relevant packages: 
-## ----packages---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----packages--------------------------------------------------------------------------------------------------------------------------------------------------------------
 library(tidyverse)
 library(SimDesign)
 library(mlVAR)
@@ -63,8 +63,9 @@ source(here::here("scripts", "00_functions.R"))
 #' ## Data-Generating Processes
 #' 
 #' Load DGP based on estimated network structures:  
-## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# non-sparse Graph to simulate from
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# non-sparse Graph to simulate from - we do not use this anymore, just keep it here for 
+# legacy code purpose
 graph_nonsparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 
 # sparse DGP
@@ -77,7 +78,7 @@ graph_sparse <- readRDS(here::here("data/graph_semisparse_synth.RDS"))
 #' 
 #' We define the conditions and the fixed parameters for the simulation.
 #' 
-## ----params-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----params----------------------------------------------------------------------------------------------------------------------------------------------------------------
 dgp <- c("sparse")
 
 # Number of timepoints
@@ -135,7 +136,7 @@ sim_pars <- list(
 
 #' 
 #' Pre-compiling the Stan model
-## ----precompile-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----precompile------------------------------------------------------------------------------------------------------------------------------------------------------------
 model_name <- "MLVAR_lkj_only"
 # Compile model
 sim_pars$mlvar_model <-
@@ -150,7 +151,7 @@ sim_pars$mlvar_model <-
 #' To simulate data with a specific correlation, we need to obtain the true standard deviation of the different centrality measures. For the temporal network, this is easy to compute, as it just follows from the random effects of the VAR matrix. 
 #' For the partial correlations, this is a bit more complicated, as we simulate from the true covariance matrix, but calculate the centrality based on the partial correlation matrix. Therefore, we just simulate a large number of partial correlation matrices for the data-generating process of each condition and then calculate the implied standard deviation of the centrality measure.
 #' 
-## ----true-strength-sd, eval = FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----true-strength-sd, eval = FALSE----------------------------------------------------------------------------------------------------------------------------------------
 # # number of simulations to obtain sd
 # n_sim_sd <- 30000
 # sd_results_strength <- sd_results_outstrength <- sd_results_instrength <- vector("list", length = nrow(df_design))
@@ -180,6 +181,7 @@ sim_pars$mlvar_model <-
 #                      listify = TRUE,
 #                      sim_pkg = "mlVAR",
 #                      sparse_sim = TRUE,
+#                      sparse_sim_sigma = TRUE,
 #                      most_cent_diff_temp = TRUE,
 #                      most_cent_diff_temp_min = 0.05,
 #                      most_cent_diff_cont = TRUE,
@@ -211,7 +213,7 @@ sim_pars$mlvar_model <-
 
 #' 
 #' As we only need to compute the true SD once, we can simply load it from disk to save time: 
-## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 true_sd <- readRDS(here::here("data", "true_sd_semisparse_rev1.RDS"))
 names(true_sd) <- c("sd_results_strength", "sd_results_outstrength", "sd_results_instrength")
 df_design$strength_sd <- unlist(true_sd$sd_results_strength)
@@ -224,7 +226,7 @@ df_design$instrength_sd <- unlist(true_sd$sd_results_instrength)
 #' ## Simulating Data
 #' 
 #' 
-## ----generate---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----generate--------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_generate <- function(condition, fixed_objects = NULL){
   source(here::here("scripts", "00_functions.R"))
 
@@ -362,7 +364,7 @@ sim_generate <- function(condition, fixed_objects = NULL){
 #' 
 #' # Analysis
 #' 
-## ----data-analysis----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----data-analysis---------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_analyse <- function(condition, dat, fixed_objects = NULL){
   
   #--- Preparation
@@ -767,7 +769,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL){
 #' 
 #' However, with the new sim function, we do not transpose anymore! We simulate from `graphicalVARsim`, so in the true DGP, columns represent the nodes of origin. 
 #' 
-## ----summarize--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----summarize-------------------------------------------------------------------------------------------------------------------------------------------------------------
 sim_summarise <- function(condition, results, fixed_objects = NULL){
   
   #--- Preparation
@@ -1334,25 +1336,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL){
 #' 
 #' # Executing Simulation
 #' 
-## ----run-sim----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# For testing
-# df_design_test <- df_design[3,]
-# df_design_test$n_id <- 200
-# df_design_test$n_var <- 4
-# sim_pars$n_id <- 200
-# sim_pars$n_var <- 4
-# n_var <- 4
-# n_id <- 200
-# sim_pars$graph_sparse$beta <- sim_pars$graph_sparse$beta[1:4,1:4]
-# sim_pars$graph_sparse$pcor <- sim_pars$graph_sparse$pcor[1:4,1:4]
-# sim_pars$graph_sparse$kappa <- sim_pars$graph_sparse$kappa[1:4,1:4]
-# sim_pars$graph_nonsparse$beta <- sim_pars$graph_nonsparse$beta[1:4,1:4]
-# sim_pars$graph_nonsparse$pcor <- sim_pars$graph_nonsparse$pcor[1:4,1:4]
-# sim_pars$graph_nonsparse$kappa <- sim_pars$graph_nonsparse$kappa[1:4,1:4]
-# sim_pars$graph_sparse$sigma <- sim_pars$graph_sparse$sigma[1:4,1:4]
-# sim_pars$graph_nonsparse$sigma <- sim_pars$graph_nonsparse$sigma[1:4,1:4]
-
-
+## ----run-sim---------------------------------------------------------------------------------------------------------------------------------------------------------------
 n_rep <- 200
 n_workers <- 
 future::plan(multisession, workers = 60)
@@ -1361,31 +1345,32 @@ future::plan(multisession, workers = 60)
 # df_design_test <- df_design[c(4),]
 
 sim_results_4 <- SimDesign::runSimulation(
-                                    design = df_design[c(4),], 
-                                    replications = n_rep, 
-                                    generate = sim_generate, 
-                                    analyse = sim_analyse, 
-                                    summarise = sim_summarise,
-                                    fixed_objects = sim_pars,
-                                    parallel = "future",
-                                    # parallel = TRUE,
-                                    max_errors = 2,
-                                    packages = c("tidyverse", 
-                                                 "gimme",
-                                                 "mlVAR",
-                                                 "graphicalVAR",
-                                                 "lm.beta",
-                                                 "bayestestR",
-                                                 "posterior",
-                                                 "rstan",
-                                                 "corpcor",
-                                                 "Rcpp"),
-                                    save_results = TRUE,
-                                    filename = "sim_full_rev1_cond4.rds"
-                                    # save_seeds = TRUE
-                                    )
+  design = df_design[c(1,4),], 
+  replications = n_rep, 
+  generate = sim_generate, 
+  analyse = sim_analyse, 
+  summarise = sim_summarise,
+  fixed_objects = sim_pars,
+  parallel = "future",
+  # parallel = TRUE,
+  max_errors = 2,
+  packages = c("tidyverse", 
+               "gimme",
+               "mlVAR",
+               "graphicalVAR",
+               "lm.beta",
+               "bayestestR",
+               "posterior",
+               "rstan",
+               "corpcor",
+               "Rcpp"),
+  save_results = TRUE,
+  filename = "sim_full_rev1_cond14_fixed_sigma.rds"
+  # save_seeds = TRUE
+)
 
 plan(sequential)
+
 
 # SimClean()
 # saveRDS(sim_results, file = here("output/pilot_sim_results_clean_2104.RDS"))
@@ -1399,7 +1384,7 @@ plan(sequential)
 #' 
 #' To run the simulation on the server, it can be easier to just execute an R script.
 #' 
-## ----eval = FALSE-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----eval = FALSE----------------------------------------------------------------------------------------------------------------------------------------------------------
 # knitr::purl(here::here("scripts", "01_centrality_simulation.qmd"),
 #             output = here::here("scripts", "01_centrality_simulation.R"),
 #             documentation = 2)
@@ -1407,7 +1392,7 @@ plan(sequential)
 #' 
 #' # Resummarize after fixing details in summary function
 #' 
-## ----resummarize, eval = FALSE----------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----resummarize, eval = FALSE---------------------------------------------------------------------------------------------------------------------------------------------
 # sim_res_resum <- SimDesign::reSummarise(summarise = sim_summarise,
 #                                         dir = here("sim_full.rds-results_pc04798"))
 # saveRDS(object = sim_res_resum, here::here("output", "sim_results.RDS"))
@@ -1416,7 +1401,7 @@ plan(sequential)
 #' 
 #' Add the run information (seed, time, etc.) from the previous output to the resummarized results object:
 #' 
-## ----results-info, eval = FALSE---------------------------------------------------------------------------------------------------------------------------------------------------------------
+## ----results-info, eval = FALSE--------------------------------------------------------------------------------------------------------------------------------------------
 # sim_res_old <- readRDS(here("output", "sim_full.RDS"))
 # 
 # sim_res_resum <- readRDS(here("output", "sim_results.RDS"))
@@ -1429,6 +1414,59 @@ plan(sequential)
 # saveRDS(object = sim_res, here::here("output", "sim_results.RDS"))
 
 #' 
+#' 
+#' # Putting together individual files for revision
+#' 
+#' During the first revision of the paper, we spread the computation above across multiple machines. We thus need to put back together the results. First, we do so for the simulation results before changing the generation of partial correlations to induce more sparsity. This code is just used for documentation purposes, these results are not used anywhere: 
+#' 
+## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' cond1 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond1.rds"))
+#' cond2 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond2.rds"))
+#' cond3 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond3.rds"))
+#' cond4 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond4.rds"))
+#' 
+#' sim_full_rev1 <- rbind(cond1, cond2, cond3, cond4)
+#' 
+#' saveRDS(sim_full_rev1, here::here("output", "sim_results_rev1_pre_pcor_change.rds"))
+#' 
+#' #' 
+#' #' We then combine the actual revision simulation results: 
+#' #' 
+#' ## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' cond14 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond14.rds"))
+#' cond23 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond23.rds"))
+#' 
+#' # remove irrelevant column
+#' cond14 <- cond14 |> dplyr::select(!RAM_USED)
+#' 
+#' # combine
+#' sim_full_rev1 <- rbind(cond14, cond23)
+#' 
+#' # change row order 
+#' sim_full_rev1 <- sim_full_rev1[c(1, 3, 4, 2), ]
+#' 
+#' saveRDS(sim_full_rev1, here::here("output", "sim_results_rev1.rds"))
+#' 
+#' 
+#' #' 
+#' #' We further combine the results under heterogeneity: 
+#' #' 
+#' ## --------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#' cond14_het <- readRDS(here::here("output", "rev1_heterogeneous", "sim_full_rev1_cond14_heterogeneous.rds"))
+#' cond23_het <- readRDS(here::here("output", "rev1_heterogeneous", "sim_full_rev1_cond23_heterogeneous.rds"))
+#' 
+#' # remove irrelevant column
+#' cond14_het <- cond14_het |> dplyr::select(!RAM_USED)
+#' 
+#' # combine
+#' sim_full_rev1_het <- rbind(cond14_het, cond23_het)
+#' 
+#' # change row order 
+#' sim_full_rev1_het <- sim_full_rev1_het[c(1, 3, 4, 2), ]
+#' 
+#' saveRDS(sim_full_rev1_het, here::here("output", "sim_results_rev1_heterogeneous.rds"))
+
+
 #' 
 #' 
 #' 

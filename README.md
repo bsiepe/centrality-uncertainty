@@ -54,7 +54,9 @@ Contains the figures generated in our project.
 
 ### `\output\`
 Contains the simulation and empirical example output. 
-As the full simulation files are too large to be stored on GitHub, we provide the summary of simulation results in `sim_results.RDS`. 
+As the full simulation files are too large to be stored on GitHub, we provide the summary of simulation results in `sim_results_rev1.RDS`. 
+
+Our specific output structure is as follows: 
 
 
 # Reproducibility
