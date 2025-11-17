@@ -35,6 +35,7 @@ Contains the scripts used in our project:
 | `05_simulation_viz.qmd` | code to analyze \& visualize the simulation results |
 | `06_additional_mlvar_simulations.qmd` | additional simulations for the mlVAR model |
 | `07_exploratory_simulations.qmd` | exploratory simulations |
+| `08_centrality_values_exploration.qmd` | exploration of centrality values |
 
 Some of these scripts have rendered `.html` versions. 
 `05_simulation_viz.html` also contains information about the data-generating matrices and deviations from the preregistration.
@@ -58,6 +59,13 @@ As the full simulation files are too large to be stored on GitHub, we provide th
 
 Our specific output structure is as follows: 
 
+| File | Description |
+| --- | --- |
+| `sim_full.rds` | Simulation results for our initial manuscript version. Only kept for reproducibility purposes. |
+| `sim_results_rev1_fixed_sigma.rds` | Results of the revised simulation setup |
+| `sim_results_rev1_heterogeneous.rds` | Results of the revised simulation setup for a heterogeneous data-generating mechanism |
+
+These are sourced automatically in `05_simulation_viz.qmd`. 
 
 # Reproducibility
 
