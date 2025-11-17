@@ -177,24 +177,35 @@ subj_to_exclude |>
   knitr::kable()
 ```
 
-As we can see, they all have a very low variance for "depressed"" and, in one case, for "dysphoric" and "anxious" as well.
+As we can see, they all have a very low variance for "depressed" and, in one case, for "dysphoric" and "anxious" as well.
 
 We then create an overview table that gives the average of person-specific means, standard deviations, and non-missing observations for all variables: 
 
 ```{r summary-table}
-data_bringmann |> 
+summary_table <- data_bringmann |> 
   dplyr::select(-c(neuroticism)) |> 
   dplyr::group_by(subj_id) |> 
   dplyr::summarize(across(everything(),
                    list(mean = ~round(mean(.x, na.rm = TRUE), 2),
                           sd = ~round(sd(.x, na.rm = TRUE), 2),
                           obs = ~sum(!is.na(.x))),
-                   .names = "{.col}_{.fn}")) |> 
+                   .names = "{.col}_{.fn}"))
+
+summary_table |> 
   knitr::kable()
 ```
 
 
 
+```{r}
+n_non_miss <- summary_table |> 
+  dplyr::select(dplyr::ends_with("_obs")) |>
+  unlist() |>
+  mean()
+  
+```
+
+The average number of non-missing observations is `r round(n_non_miss, 2)`.
 
 
 ## Imputation
@@ -256,7 +267,15 @@ data_bringmann_imputed <- data_bringmann_imputed |>
 
 ```
 
+What is the final number of time points per person?
 
+```{r}
+n_final <- data_bringmann_imputed |> 
+  dplyr::count(subj_id) |> 
+  summarize(avg_n = mean(n))
+```
+
+After imputation, it is `r round(n_final, 2)`
 
 # Estimation
 

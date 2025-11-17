@@ -787,7 +787,7 @@ ggsave_rev("plot_power_combined.svg", plot_power_combined, height = 16* 0.95, wi
 
 ```
 
-![](simulation_viz_figures/plot_power_bias_strength.svg){width="710"}
+
 
 How large was the difference between instrength and outstrength?
 
@@ -956,7 +956,9 @@ ggsave_rev("plot_power_bias_outstrength_presentation.pdf",
 
 ## Power and Bias for Contemporaneous Strength
 
-```{r contemporaneous-strength-plot, eval = FALSE}
+```{r contemporaneous-strength-plot}
+#| fig-width: 12
+#| fig-height: 12
 power_bias_reg_strength_df <- sr_edit |> 
   mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
   filter(!str_detect(pm, "poweroneside")) |>
@@ -1036,9 +1038,11 @@ ggsave_rev("plot_power_bias_strength.pdf",
 ggsave_rev("plot_power_bias_strength.svg", 
        plot_power_bias_strength, height = 16* 0.95, width = 16* 0.8,
        path = here::here("scripts", "simulation_viz_figures"), device = "svg")
+
+plot_power_bias_strength
 ```
 
-![](../scripts/simulation_viz_figures/plot_power_bias_strength.svg){width="710"}
+
 
 ## RMSE and Bias of Regression
 

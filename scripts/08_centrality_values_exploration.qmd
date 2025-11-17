@@ -36,7 +36,7 @@ format:
 execute:
   message: false
   warning: false
-  eval: false # only show code
+  eval: true # only show code
 ---
 
 # Background
@@ -196,7 +196,7 @@ ggplot(all_diffs, aes(x = relative_difference)) +
 ```
 
 
-## Investigate BmlVAR centrality values specifically
+
 
 
 
@@ -249,18 +249,22 @@ all_diffs_het |>
     sd = sd(relative_difference),
     min = min(relative_difference),
     max = max(relative_difference)
-  )
+  ) |> 
+  knitr::kable()
 ```
 
 Summarize them into one average across the homogeneous and heterogeneous condition: 
 
 ```{r}
+
 mean_diff_central_node <- all_diffs_het |>
   bind_rows(all_diffs) |> 
   summarise(
     mean_diff = mean(relative_difference)
-  )
+  ) |> pull(mean_diff)
+
 ```
+
 On average, the first node was `r round(mean_diff_central_node, 4)*100`% larger than the second most central node. 
 
 
