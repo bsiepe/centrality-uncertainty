@@ -4,6 +4,7 @@ This repository contains files for the manuscript:
 
 > Siepe, B. S., Kloft, M., Zhang, Y., Petersen, F., Bringmann, L. F., & Heck, D. W. (2025). Using features of dynamic networks to guide treatment selection and outcome prediction: The central role of uncertainty. PsyArXiv. https://doi.org/10.31234/osf.io/2c8xf_v1 
 
+A timestamped version of this reproducibility archive can be found on Zenodo.
 
 Please cite the associated preprint as: 
 
@@ -20,7 +21,15 @@ Please cite the associated preprint as:
 # Overview
 ### `\data\`
 
-Contains data for our simulation study and empirical example. 
+Contains data for our simulation study and empirical example.
+
+| Dataset | Description |
+| --- | --- |
+| `data_Bringmann2016.RDS` | Data for the empirical example. Used in  `02_empirical_example_bringmann_2016.qmd` |
+| `graph_semisparse_synth.RDS` | True graph structure for simulation. Generated and explained in `04_dgps.qmd` |
+| `true_sd_semisparse_rev1.RDS` | True standard deviations of variables for simulation. Generated and explained in `01_centrality_simulation.qmd` |
+| `true_sd.RDS` | True SDs for old DGM. No longer used, only kept for legacy. | 
+| `true_sd_semisparse.RDS` | True SDs for old DGM. No longer used, only kept for legacy. | 
 
 ### `\scripts\`
 
@@ -28,14 +37,14 @@ Contains the scripts used in our project:
 
 | Script | Description |
 | --- | --- |
-| `00_functions.R` | contains auxiliary functions |
-| `01_centrality_simulation.qmd` | contains code to replicate the main simulation study |
-| `02_empirical_example_bringmann_2016.qmd` | empirical example: Bringmann et al. (2016) |
-| `04_dgps.qmd` | code for data-generating processes |
-| `05_simulation_viz.qmd` | code to analyze \& visualize the simulation results |
-| `06_additional_mlvar_simulations.qmd` | additional simulations for the mlVAR model |
-| `07_exploratory_simulations.qmd` | exploratory simulations |
-| `08_centrality_values_exploration.qmd` | exploration of centrality values |
+| `00_functions.R` | Contains auxiliary functions |
+| `01_centrality_simulation.qmd` | Contains code to replicate the main simulation study |
+| `02_empirical_example_bringmann_2016.qmd` | Empirical example: Bringmann et al. (2016) |
+| `04_dgps.qmd` | Code for data-generating processes |
+| `05_simulation_viz.qmd` | Code to analyze \& visualize the simulation results |
+| `06_additional_mlvar_simulations.qmd` | Additional simulations for the mlVAR model |
+| `07_exploratory_simulations.qmd` | Exploratory simulations |
+| `08_centrality_values_exploration.qmd` | Exploration of centrality values |
 
 Some of these scripts have rendered `.html` versions. 
 `05_simulation_viz.html` also contains information about the data-generating matrices and deviations from the preregistration.
