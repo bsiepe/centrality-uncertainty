@@ -4,7 +4,7 @@ This repository contains files for the manuscript:
 
 > Siepe, B. S., Kloft, M., Zhang, Y., Petersen, F., Bringmann, L. F., & Heck, D. W. (2025). Using features of dynamic networks to guide treatment selection and outcome prediction: The central role of uncertainty. PsyArXiv. https://doi.org/10.31234/osf.io/2c8xf_v1 
 
-A timestamped version of this reproducibility archive can be found on Zenodo.
+A timestamped version of this reproducibility archive can be found on Zenodo (DOI: [10.5281/zenodo.18155739](https://doi.org/10.5281/zenodo.18155739)).
 
 Please cite the associated preprint as: 
 
