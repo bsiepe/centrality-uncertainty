@@ -100,3 +100,209 @@ saveRDS(graph_semisparse_synth, here("data/graph_semisparse_synth.RDS"))
 ```
 
 
+# Revision 2: Additional DGPs
+
+Three additional DGPs for the second revision address reviewer requests:
+(A) 6-node network with >70% sparsity, (B) 10-node network with original (semi-sparse) DGM, and (C) 10-node network with sparse DGM. DGPs A and C are created with `exclude_node1 = FALSE`, allowing the boost factor to ensure node 1 retains sufficient centrality after the additional zeroing.
+
+
+## Test novel implementation of sparsity
+
+Here, we test the impact of the sparsity proportion implemented in our simulation function. A reviewer asked for a considerably more sparse network then our original setup. 
+We investigate whether the sparsity proportion is correctly implemented and whether the boost factor can maintain node 1's centrality even when many edges are zeroed. We also check that the resulting matrices are still valid (e.g., positive definite for the covariance matrix) and that the sparsity level matches our expectations. 
+
+```{r test-sparsity-implementation}
+source(here::here("scripts", "00_functions.R"))
+
+# Conditions to probe: (p, sparsity_proportion, boost_factor, exclude_node1)
+conditions <- list(
+  original_6n    = list(p = 6,  sp = 0.15, bf = 1.25, excl = TRUE),
+  highsparse_6n  = list(p = 6,  sp = 0.72, bf = 1.5,  excl = FALSE),
+  original_10n   = list(p = 10, sp = 0.15, bf = 1.25, excl = TRUE),
+  highsparse_10n = list(p = 10, sp = 0.72, bf = 1.5,  excl = FALSE)
+)
+n_rep <- 50  # small but sufficient for a sanity check
+
+off_diag_count <- function(mat) {
+  sum(mat[row(mat) != col(mat)] == 0) / (nrow(mat)^2 - nrow(mat))
+}
+
+results <- purrr::imap_dfr(conditions, function(cond, name) {
+  checks <- vapply(seq_len(n_rep), function(s) {
+    set.seed(s)
+    m <- create_var_matrix(cond$p,
+                           sparse            = TRUE,
+                           sparsity_proportion = cond$sp,
+                           boost_factor      = cond$bf,
+                           exclude_node1     = cond$excl)
+    check_node1_most_central(m, n_node = cond$p, min_diff = 0.05)
+  }, logical(1))
+  sparsities <- vapply(seq_len(n_rep), function(s) {
+    set.seed(s)
+    m <- create_var_matrix(cond$p,
+                           sparse            = TRUE,
+                           sparsity_proportion = cond$sp,
+                           boost_factor      = cond$bf,
+                           exclude_node1     = cond$excl)
+    off_diag_count(m)
+  }, numeric(1))
+  data.frame(
+    condition   = name,
+    p           = cond$p,
+    target_sp   = cond$sp,
+    node1_prop  = mean(checks),
+    mean_sp     = round(mean(sparsities), 3),
+    min_sp      = round(min(sparsities),  3),
+    max_sp      = round(max(sparsities),  3)
+  )
+})
+
+knitr::kable(results, digits = 3,
+             col.names = c("Condition", "p", "Target sparsity",
+                           "Node 1 most central", "Mean sparsity",
+                           "Min sparsity", "Max sparsity"))
+```
+
+
+## DGP A: 6-node high-sparsity network
+
+This replicates the original 6-node setup but zeroes many more edges (including those connected to node 1), targeting >70% off-diagonal sparsity. `sparsity_proportion = 0.72` on a 6×6 matrix produces approximately 26 zeros out of 30 off-diagonal entries (~87% sparsity). After zeroing, `boost_factor = 1.5` elevates node 1's row and column so it remains the most central node.
+
+```{r dgp-a-6n-sparse}
+set.seed(35037)
+var_mat_6n_sparse <- create_var_matrix(6,
+                                       sparse = TRUE,
+                                       sparsity_proportion = 0.72,
+                                       boost_factor = 1.5,
+                                       exclude_node1 = FALSE)
+colSums(abs(var_mat_6n_sparse))  # node 1 should have highest outstrength
+rowSums(abs(var_mat_6n_sparse))  # node 1 should have highest instrength
+
+# Check sparsity: proportion of zero off-diagonal entries
+sum(var_mat_6n_sparse[row(var_mat_6n_sparse) != col(var_mat_6n_sparse)] == 0) /
+  (6 * 6 - 6)
+
+arr_to_latex(var_mat_6n_sparse)
+```
+
+Innovation covariance matrix for DGP A:
+```{r dgp-a-6n-sparse-cov}
+cov_mat_6n_sparse <- create_cov_matrix(6,
+                                       off_diag_val = .15,
+                                       sparse = TRUE,
+                                       sparsity_proportion = 0.72,
+                                       boost_factor = 1.5,
+                                       exclude_node1 = FALSE)
+colSums(cov_mat_6n_sparse)
+rowSums(cov_mat_6n_sparse)
+arr_to_latex(cov_mat_6n_sparse)
+```
+
+```{r dgp-a-6n-sparse-save}
+pcor_mat_6n_sparse   <- -stats::cov2cor(solve(cov_mat_6n_sparse))
+kappa_mat_6n_sparse  <- solve(cov_mat_6n_sparse)
+
+graph_sparse_6n_highsparse <- list(
+  beta  = var_mat_6n_sparse,
+  sigma = cov_mat_6n_sparse,
+  kappa = kappa_mat_6n_sparse,
+  pcor  = pcor_mat_6n_sparse
+)
+
+saveRDS(graph_sparse_6n_highsparse, here("data/graph_sparse_6n_highsparse.RDS"))
+```
+
+
+## DGP B: 10-node original (semi-sparse) network
+
+Same construction logic as `graph_semisparse_synth` but with p = 10. `sparsity_proportion = 0.15` with `exclude_node1 = TRUE` preserves the same density level as the original 6-node DGP.
+
+```{r dgp-b-10n}
+set.seed(35037)
+var_mat_10n <- create_var_matrix(10,
+                                 sparse = TRUE,
+                                 sparsity_proportion = 0.15,
+                                 boost_factor = 1.25,
+                                 exclude_node1 = TRUE)
+colSums(abs(var_mat_10n))
+rowSums(abs(var_mat_10n))
+arr_to_latex(var_mat_10n)
+```
+
+Innovation covariance matrix for DGP B:
+```{r dgp-b-10n-cov}
+cov_mat_10n <- create_cov_matrix(10,
+                                 off_diag_val = .15,
+                                 sparse = TRUE,
+                                 sparsity_proportion = 0.15,
+                                 boost_factor = 1.25,
+                                 exclude_node1 = TRUE)
+colSums(cov_mat_10n)
+rowSums(cov_mat_10n)
+arr_to_latex(cov_mat_10n)
+```
+
+```{r dgp-b-10n-save}
+pcor_mat_10n  <- -stats::cov2cor(solve(cov_mat_10n))
+kappa_mat_10n <- solve(cov_mat_10n)
+
+graph_semisparse_10n <- list(
+  beta  = var_mat_10n,
+  sigma = cov_mat_10n,
+  kappa = kappa_mat_10n,
+  pcor  = pcor_mat_10n
+)
+
+saveRDS(graph_semisparse_10n, here("data/graph_semisparse_10n.RDS"))
+```
+
+
+## DGP C: 10-node sparse network
+
+Same construction as DGP B but with `sparsity_proportion = 0.72` and `exclude_node1 = FALSE`. For p = 10, this produces approximately 72 zeros out of 90 off-diagonal entries (~80% sparsity).
+
+```{r dgp-c-10n-sparse}
+set.seed(35037)
+var_mat_10n_sparse <- create_var_matrix(10,
+                                        sparse = TRUE,
+                                        sparsity_proportion = 0.72,
+                                        boost_factor = 1.5,
+                                        exclude_node1 = FALSE)
+colSums(abs(var_mat_10n_sparse))
+rowSums(abs(var_mat_10n_sparse))
+
+# Check sparsity
+sum(var_mat_10n_sparse[row(var_mat_10n_sparse) != col(var_mat_10n_sparse)] == 0) /
+  (10 * 10 - 10)
+
+arr_to_latex(var_mat_10n_sparse)
+```
+
+Innovation covariance matrix for DGP C:
+```{r dgp-c-10n-sparse-cov}
+cov_mat_10n_sparse <- create_cov_matrix(10,
+                                        off_diag_val = .15,
+                                        sparse = TRUE,
+                                        sparsity_proportion = 0.72,
+                                        boost_factor = 1.5,
+                                        exclude_node1 = FALSE)
+colSums(cov_mat_10n_sparse)
+rowSums(cov_mat_10n_sparse)
+arr_to_latex(cov_mat_10n_sparse)
+```
+
+```{r dgp-c-10n-sparse-save}
+pcor_mat_10n_sparse   <- -stats::cov2cor(solve(cov_mat_10n_sparse))
+kappa_mat_10n_sparse  <- solve(cov_mat_10n_sparse)
+
+graph_sparse_10n <- list(
+  beta  = var_mat_10n_sparse,
+  sigma = cov_mat_10n_sparse,
+  kappa = kappa_mat_10n_sparse,
+  pcor  = pcor_mat_10n_sparse
+)
+
+saveRDS(graph_sparse_10n, here("data/graph_sparse_10n.RDS"))
+```
+
+
