@@ -40,34 +40,58 @@ create_var_matrix <- function(p,
                               off_diag_val = 0.075, 
                               boost_factor = 1.5, 
                               sparse = FALSE, 
-                              sparsity_proportion = 0.15) {
+                              sparsity_proportion = 0.15,
+                              exclude_node1 = TRUE) {
   mat <- matrix(off_diag_val, p, p)
   diag(mat) <- diag_val
   
   if (sparse) {
-    # Get only off-diagonal indices of the matrix, exclude first row and column
-    # if we include it, the boost factor can remove zeroes
+    # Get only off-diagonal indices of the matrix
     off_diag_indices <- which(row(mat) != col(mat), arr.ind = TRUE)
-    off_diag_indices <- off_diag_indices[-which(off_diag_indices[, 1] == 1), ]
-    off_diag_indices <- off_diag_indices[-which(off_diag_indices[, 2] == 1), ]
     
-    
-    # number of effects to be set to zero
-    num_to_zero <- round(sparsity_proportion * p * p)
-    
-    # sample indices
-    zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
-    
-    for (i in 1:nrow(zero_indices)) {
-      mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+    if (exclude_node1) {
+      # --- ORIGINAL BEHAVIOUR (exclude_node1 = TRUE) ---
+      # Exclude first row and column so the boost factor cannot remove zeroes.
+      # Boost is applied AFTER zeroing (same as before) to preserve
+      # backward compatibility with historical simulations.
+      off_diag_indices <- off_diag_indices[-which(off_diag_indices[, 1] == 1), ]
+      off_diag_indices <- off_diag_indices[-which(off_diag_indices[, 2] == 1), ]
+      
+      num_to_zero <- min(round(sparsity_proportion * p * p), nrow(off_diag_indices))
+      zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
+      for (i in 1:nrow(zero_indices)) {
+        mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+      }
+      
+      # Boost AFTER zeroing (original order)
+      first_col_sum <- sum(mat[, 1])
+      boost_amount <- boost_factor * first_col_sum - first_col_sum
+      mat[1, ] <- mat[1, ] + boost_amount / p
+      mat[, 1] <- mat[, 1] + boost_amount / p
+      
+    } else {
+      # --- NEW BEHAVIOUR (exclude_node1 = FALSE) ---
+      # Node 1's edges are eligible for zeroing, so boost must come FIRST
+      # to avoid zeroed entries being restored by the boost step.
+      first_col_sum <- sum(mat[, 1])
+      boost_amount <- boost_factor * first_col_sum - first_col_sum
+      mat[1, ] <- mat[1, ] + boost_amount / p
+      mat[, 1] <- mat[, 1] + boost_amount / p
+      
+      num_to_zero <- min(round(sparsity_proportion * p * p), nrow(off_diag_indices))
+      zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
+      for (i in 1:nrow(zero_indices)) {
+        mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+      }
     }
+    
+  } else {
+    # --- NO SPARSITY: original boost behaviour unchanged ---
+    first_col_sum <- sum(mat[, 1])
+    boost_amount <- boost_factor * first_col_sum - first_col_sum
+    mat[1, ] <- mat[1, ] + boost_amount / p
+    mat[, 1] <- mat[, 1] + boost_amount / p
   }
-  
-  first_col_sum <- sum(mat[, 1])
-  boost_amount <- boost_factor * first_col_sum - first_col_sum
-  
-  mat[1, ] <- mat[1, ] + boost_amount / p
-  mat[, 1] <- mat[, 1] + boost_amount / p
   
   mat <- round(mat, digits = 3)
   
@@ -75,7 +99,6 @@ create_var_matrix <- function(p,
   if (isFALSE(all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1))) {
     stop("VAR matrix is not stationary")
   }
-  
   
   return(mat)
 }
@@ -86,32 +109,56 @@ create_cov_matrix <- function(p,
                               off_diag_val = 0.1, 
                               boost_factor = 1.5, 
                               sparse = FALSE, 
-                              sparsity_proportion = 0.15) {
+                              sparsity_proportion = 0.15,
+                              exclude_node1 = TRUE) {
   mat <- matrix(off_diag_val, p, p)
   diag(mat) <- diag_val
   
   if (sparse) {
     upper_tri_indices <- which(row(mat) < col(mat), arr.ind = TRUE)
-    # exclude first row (or else the boost factor will remove zeroes)
-    upper_tri_indices <- upper_tri_indices[-which(upper_tri_indices[, 1] == 1), ]
     
-    num_to_zero <- round(sparsity_proportion * length(upper_tri_indices[, 1]))
-    
-    zero_indices <- upper_tri_indices[sample(1:nrow(upper_tri_indices), num_to_zero), ]
-    
-    # set off-diagonal elements and their symmetric counterparts to zero
-    for (i in 1:nrow(zero_indices)) {
-      mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
-      mat[zero_indices[i, 2], zero_indices[i, 1]] <- 0 # ensure symmetry
+    if (exclude_node1) {
+      # --- ORIGINAL BEHAVIOUR (exclude_node1 = TRUE) ---
+      # Exclude first row so boost cannot restore zeroed entries.
+      # Boost applied AFTER zeroing to preserve backward compatibility.
+      upper_tri_indices <- upper_tri_indices[-which(upper_tri_indices[, 1] == 1), ]
+      
+      num_to_zero <- round(sparsity_proportion * length(upper_tri_indices[, 1]))
+      zero_indices <- upper_tri_indices[sample(1:nrow(upper_tri_indices), num_to_zero), ]
+      for (i in 1:nrow(zero_indices)) {
+        mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+        mat[zero_indices[i, 2], zero_indices[i, 1]] <- 0
+      }
+      
+      # Boost AFTER zeroing (original order)
+      first_col_sum <- sum(mat[-1, 1])
+      boost_amount <- boost_factor * first_col_sum - first_col_sum
+      mat[1, -1] <- mat[1, -1] + boost_amount / (p - 1)
+      mat[-1, 1] <- mat[-1, 1] + boost_amount / (p - 1)
+      
+    } else {
+      # --- NEW BEHAVIOUR (exclude_node1 = FALSE) ---
+      # Boost BEFORE zeroing so node 1 entries are not restored.
+      first_col_sum <- sum(mat[-1, 1])
+      boost_amount <- boost_factor * first_col_sum - first_col_sum
+      mat[1, -1] <- mat[1, -1] + boost_amount / (p - 1)
+      mat[-1, 1] <- mat[-1, 1] + boost_amount / (p - 1)
+      
+      num_to_zero <- round(sparsity_proportion * length(upper_tri_indices[, 1]))
+      zero_indices <- upper_tri_indices[sample(1:nrow(upper_tri_indices), num_to_zero), ]
+      for (i in 1:nrow(zero_indices)) {
+        mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+        mat[zero_indices[i, 2], zero_indices[i, 1]] <- 0
+      }
     }
+    
+  } else {
+    # --- NO SPARSITY: original boost behaviour unchanged ---
+    first_col_sum <- sum(mat[-1, 1])
+    boost_amount <- boost_factor * first_col_sum - first_col_sum
+    mat[1, -1] <- mat[1, -1] + boost_amount / (p - 1)
+    mat[-1, 1] <- mat[-1, 1] + boost_amount / (p - 1)
   }
-  
-  # Exclude diagonal values from the boost calculation
-  first_col_sum <- sum(mat[-1, 1])
-  boost_amount <- boost_factor * first_col_sum - first_col_sum
-  
-  mat[1, -1] <- mat[1, -1] + boost_amount / (p - 1)
-  mat[-1, 1] <- mat[-1, 1] + boost_amount / (p - 1)
   
   mat <- round(mat, digits = 3)
   
