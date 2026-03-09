@@ -41,64 +41,80 @@ create_var_matrix <- function(p,
                               boost_factor = 1.5, 
                               sparse = FALSE, 
                               sparsity_proportion = 0.15,
-                              exclude_node1 = TRUE) {
-  mat <- matrix(off_diag_val, p, p)
-  diag(mat) <- diag_val
+                              exclude_node1 = TRUE,
+                              min_diff = 0.05,
+                              max_tries = 1000L,
+                              sparsity_tol = 0.05) {
   
-  if (sparse) {
-    # Get only off-diagonal indices of the matrix
-    off_diag_indices <- which(row(mat) != col(mat), arr.ind = TRUE)
+  n_total <- p * p
+  
+  .make_one <- function() {
+    mat <- matrix(off_diag_val, p, p)
+    diag(mat) <- diag_val
+    zeroed <- matrix(FALSE, p, p)
     
-    if (exclude_node1) {
-      # --- ORIGINAL BEHAVIOUR (exclude_node1 = TRUE) ---
-      # Exclude first row and column so the boost factor cannot remove zeroes.
-      # Boost is applied AFTER zeroing (same as before) to preserve
-      # backward compatibility with historical simulations.
-      off_diag_indices <- off_diag_indices[-which(off_diag_indices[, 1] == 1), ]
-      off_diag_indices <- off_diag_indices[-which(off_diag_indices[, 2] == 1), ]
+    if (sparse) {
+      off_diag_indices <- which(row(mat) != col(mat), arr.ind = TRUE)
       
-      num_to_zero <- min(round(sparsity_proportion * p * p), nrow(off_diag_indices))
-      zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
-      for (i in 1:nrow(zero_indices)) {
-        mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+      if (exclude_node1) {
+        off_diag_indices <- off_diag_indices[
+          off_diag_indices[, 1] != 1 & off_diag_indices[, 2] != 1, , drop = FALSE]
       }
       
-      # Boost AFTER zeroing (original order)
-      first_col_sum <- sum(mat[, 1])
-      boost_amount <- boost_factor * first_col_sum - first_col_sum
-      mat[1, ] <- mat[1, ] + boost_amount / p
-      mat[, 1] <- mat[, 1] + boost_amount / p
+      # each selection zeros one directed edge (VAR matrix is asymmetric)
+      num_to_zero <- min(round(sparsity_proportion * n_total), nrow(off_diag_indices))
       
-    } else {
-      # --- NEW BEHAVIOUR (exclude_node1 = FALSE) ---
-      # Node 1's edges are eligible for zeroing, so boost must come FIRST
-      # to avoid zeroed entries being restored by the boost step.
-      first_col_sum <- sum(mat[, 1])
-      boost_amount <- boost_factor * first_col_sum - first_col_sum
-      mat[1, ] <- mat[1, ] + boost_amount / p
-      mat[, 1] <- mat[, 1] + boost_amount / p
-      
-      num_to_zero <- min(round(sparsity_proportion * p * p), nrow(off_diag_indices))
-      zero_indices <- off_diag_indices[sample(1:nrow(off_diag_indices), num_to_zero), ]
-      for (i in 1:nrow(zero_indices)) {
+      zero_indices <- off_diag_indices[sample(nrow(off_diag_indices), num_to_zero), , drop = FALSE]
+      for (i in seq_len(nrow(zero_indices))) {
         mat[zero_indices[i, 1], zero_indices[i, 2]] <- 0
+        zeroed[zero_indices[i, 1], zero_indices[i, 2]] <- TRUE
       }
     }
     
-  } else {
-    # --- NO SPARSITY: original boost behaviour unchanged ---
+    # Boost (always after zeroing — original order preserved)
     first_col_sum <- sum(mat[, 1])
-    boost_amount <- boost_factor * first_col_sum - first_col_sum
-    mat[1, ] <- mat[1, ] + boost_amount / p
-    mat[, 1] <- mat[, 1] + boost_amount / p
+    boost_amount  <- boost_factor * first_col_sum - first_col_sum
+    mat[1, ]      <- mat[1, ] + boost_amount / p
+    mat[, 1]      <- mat[, 1] + boost_amount / p
+    mat[zeroed]   <- 0
+    
+    round(mat, digits = 3)
   }
   
-  mat <- round(mat, digits = 3)
-  
-  ev_b <- eigen(mat)$values
-  if (isFALSE(all(Re(ev_b) ^ 2 + Im(ev_b) ^ 2 < 1))) {
-    stop("VAR matrix is not stationary")
+  # overall sparsity: zeros / p^2 (diagonal counts as non-zero)
+  .check_sparsity <- function(mat) {
+    achieved <- sum(mat == 0) / n_total
+    abs(achieved - sparsity_proportion) <= sparsity_tol
   }
+
+  # check stationarity 
+  .check_stationarity <- function(mat) {
+    ev <- eigen(mat)$values
+    all(Re(ev)^2 + Im(ev)^2 < 1)
+  }
+  
+  if (!sparse || exclude_node1) {
+    # --- ORIGINAL PATH: single draw, backward compatible ---
+    mat <- .make_one()
+  } else {
+    # --- NEW PATH: retry until node 1 is most central AND overall sparsity is on target ---
+    mat <- NULL
+    for (try in seq_len(max_tries)) {
+      candidate <- .make_one()
+      if (check_node1_most_central(candidate, n_node = p, min_diff = min_diff) &
+          .check_sparsity(candidate) & .check_stationarity(candidate)) {
+        mat <- candidate
+        break
+      }
+    }
+    if (is.null(mat))
+      stop(sprintf(
+        paste0("create_var_matrix: could not produce a matrix where node 1 is most ",
+               "central and overall sparsity is within %.2f of target (%.2f) after %d tries. ",
+               "Consider reducing sparsity_proportion or increasing boost_factor."),
+        sparsity_tol, sparsity_proportion, max_tries))
+  }
+  
   
   return(mat)
 }
@@ -112,11 +128,15 @@ create_cov_matrix <- function(p,
                               sparsity_proportion = 0.15,
                               exclude_node1 = TRUE,
                               min_diff = 0.05,
-                              max_tries = 1000L) {
+                              max_tries = 1000L,
+                              sparsity_tol = 0.05) {
+  
+  n_total <- p * p
   
   .make_one <- function() {
     mat <- matrix(off_diag_val, p, p)
     diag(mat) <- diag_val
+    zeroed <- matrix(FALSE, p, p)
     
     if (sparse) {
       upper_tri_indices <- which(row(mat) < col(mat), arr.ind = TRUE)
@@ -126,12 +146,17 @@ create_cov_matrix <- function(p,
           upper_tri_indices[, 1] != 1, , drop = FALSE]
       }
       
-      num_to_zero <- min(round(sparsity_proportion * nrow(upper_tri_indices)),
-                         nrow(upper_tri_indices))
+      # each upper-tri selection zeros 2 cells (symmetric matrix)
+      # so divide total zeros needed by 2
+      total_zeros_needed <- sparsity_proportion * n_total
+      num_to_zero <- min(ceiling(total_zeros_needed / 2), nrow(upper_tri_indices))
+      
       zi <- upper_tri_indices[sample(nrow(upper_tri_indices), num_to_zero), , drop = FALSE]
       for (i in seq_len(nrow(zi))) {
         mat[zi[i, 1], zi[i, 2]] <- 0
         mat[zi[i, 2], zi[i, 1]] <- 0
+        zeroed[zi[i, 1], zi[i, 2]] <- TRUE
+        zeroed[zi[i, 2], zi[i, 1]] <- TRUE
       }
     }
     
@@ -140,39 +165,45 @@ create_cov_matrix <- function(p,
     boost_amount  <- boost_factor * first_col_sum - first_col_sum
     mat[1, -1]    <- mat[1, -1] + boost_amount / (p - 1)
     mat[-1, 1]    <- mat[-1, 1] + boost_amount / (p - 1)
+    mat[zeroed]   <- 0
     
     round(mat, digits = 3)
   }
   
-  # Covariance matrix uses row sums as centrality proxy (symmetric)
-  .node1_central_cov <- function(mat) {
-    rs <- rowSums(abs(mat))
-    rs[1] > rs[2] && (rs[1] - rs[2]) / rs[1] >= min_diff
+  # overall sparsity: zeros / p^2 (diagonal counts as non-zero)
+  .check_sparsity <- function(mat) {
+    achieved <- sum(mat == 0) / n_total
+    abs(achieved - sparsity_proportion) <= sparsity_tol
+  }
+
+  # check positive-definiteness
+  .check_pd <- function(mat) {
+    ev <- eigen(mat)$values
+    all(ev > 0)
   }
   
   if (!sparse || exclude_node1) {
     # --- ORIGINAL PATH ---
     mat <- .make_one()
   } else {
-    # --- NEW PATH: retry ---
+    # --- NEW PATH: retry until node 1 is most central AND overall sparsity is on target ---
     mat <- NULL
     for (try in seq_len(max_tries)) {
       candidate <- .make_one()
-      if (.node1_central_cov(candidate)) {
+      if (check_node1_most_central(candidate, n_node = p, min_diff = min_diff) &
+          .check_sparsity(candidate) & .check_pd(candidate)) {
         mat <- candidate
         break
       }
     }
     if (is.null(mat))
       stop(sprintf(
-        "create_cov_matrix: could not produce a matrix where node 1 is most central ",
-        "after %d tries. Consider reducing sparsity_proportion or increasing boost_factor.",
-        max_tries))
+        paste0("create_cov_matrix: could not produce a matrix where node 1 is most ",
+               "central and overall sparsity is within %.2f of target (%.2f) after %d tries. ",
+               "Consider reducing sparsity_proportion or increasing boost_factor."),
+        sparsity_tol, sparsity_proportion, max_tries))
   }
-  
-  ev_b <- eigen(mat)$values
-  if (isFALSE(all(ev_b > 0)))
-    stop("Covariance matrix is not positive definite")
+
   
   return(mat)
 }
