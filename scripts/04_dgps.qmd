@@ -116,15 +116,15 @@ source(here::here("scripts", "00_functions.R"))
 
 # Conditions to probe: (p, sparsity_proportion, boost_factor, exclude_node1)
 conditions <- list(
-  original_6n    = list(p = 6,  sp = 0.15, bf = 1.25, excl = TRUE),
-  highsparse_6n  = list(p = 6,  sp = 0.72, bf = 1.5,  excl = FALSE),
-  original_10n   = list(p = 10, sp = 0.15, bf = 1.25, excl = TRUE),
-  highsparse_10n = list(p = 10, sp = 0.72, bf = 1.5,  excl = FALSE)
+  original_6n    = list(p = 6,  sp = 0.15, bf = 1.5, excl = TRUE),
+  highsparse_6n  = list(p = 6,  sp = 0.70, bf = 1.5,  excl = FALSE),
+  original_10n   = list(p = 10, sp = 0.15, bf = 1.5, excl = TRUE),
+  highsparse_10n = list(p = 10, sp = 0.70, bf = 1.5,  excl = FALSE)
 )
-n_rep <- 50  # small but sufficient for a sanity check
+n_rep <- 100  # small but sufficient for a sanity check
 
-off_diag_count <- function(mat) {
-  sum(mat[row(mat) != col(mat)] == 0) / (nrow(mat)^2 - nrow(mat))
+overall_sparsity_count <- function(mat) {
+  sum(mat == 0) / (nrow(mat)^2)
 }
 
 results <- purrr::imap_dfr(conditions, function(cond, name) {
@@ -134,7 +134,8 @@ results <- purrr::imap_dfr(conditions, function(cond, name) {
                            sparse            = TRUE,
                            sparsity_proportion = cond$sp,
                            boost_factor      = cond$bf,
-                           exclude_node1     = cond$excl)
+                           exclude_node1     = cond$excl, 
+                           max_tries = 1000)
     check_node1_most_central(m, n_node = cond$p, min_diff = 0.05)
   }, logical(1))
   sparsities <- vapply(seq_len(n_rep), function(s) {
@@ -143,8 +144,9 @@ results <- purrr::imap_dfr(conditions, function(cond, name) {
                            sparse            = TRUE,
                            sparsity_proportion = cond$sp,
                            boost_factor      = cond$bf,
-                           exclude_node1     = cond$excl)
-    off_diag_count(m)
+                           exclude_node1     = cond$excl, 
+                           max_tries = 1000)
+    overall_sparsity_count(m)
   }, numeric(1))
   data.frame(
     condition   = name,
@@ -172,15 +174,14 @@ This replicates the original 6-node setup but zeroes many more edges (including 
 set.seed(35037)
 var_mat_6n_sparse <- create_var_matrix(6,
                                        sparse = TRUE,
-                                       sparsity_proportion = 0.72,
+                                       sparsity_proportion = 0.70,
                                        boost_factor = 1.5,
                                        exclude_node1 = FALSE)
 colSums(abs(var_mat_6n_sparse))  # node 1 should have highest outstrength
 rowSums(abs(var_mat_6n_sparse))  # node 1 should have highest instrength
 
 # Check sparsity: proportion of zero off-diagonal entries
-sum(var_mat_6n_sparse[row(var_mat_6n_sparse) != col(var_mat_6n_sparse)] == 0) /
-  (6 * 6 - 6)
+overall_sparsity_count(var_mat_6n_sparse)
 
 arr_to_latex(var_mat_6n_sparse)
 ```
@@ -190,7 +191,7 @@ Innovation covariance matrix for DGP A:
 cov_mat_6n_sparse <- create_cov_matrix(6,
                                        off_diag_val = .15,
                                        sparse = TRUE,
-                                       sparsity_proportion = 0.72,
+                                       sparsity_proportion = 0.70,
                                        boost_factor = 1.5,
                                        exclude_node1 = FALSE)
 colSums(cov_mat_6n_sparse)
@@ -265,15 +266,13 @@ Same construction as DGP B but with `sparsity_proportion = 0.72` and `exclude_no
 set.seed(35037)
 var_mat_10n_sparse <- create_var_matrix(10,
                                         sparse = TRUE,
-                                        sparsity_proportion = 0.72,
+                                        sparsity_proportion = 0.70,
                                         boost_factor = 1.5,
                                         exclude_node1 = FALSE)
 colSums(abs(var_mat_10n_sparse))
 rowSums(abs(var_mat_10n_sparse))
+overall_sparsity_count(var_mat_10n_sparse)
 
-# Check sparsity
-sum(var_mat_10n_sparse[row(var_mat_10n_sparse) != col(var_mat_10n_sparse)] == 0) /
-  (10 * 10 - 10)
 
 arr_to_latex(var_mat_10n_sparse)
 ```
@@ -283,7 +282,7 @@ Innovation covariance matrix for DGP C:
 cov_mat_10n_sparse <- create_cov_matrix(10,
                                         off_diag_val = .15,
                                         sparse = TRUE,
-                                        sparsity_proportion = 0.72,
+                                        sparsity_proportion = 0.70,
                                         boost_factor = 1.5,
                                         exclude_node1 = FALSE)
 colSums(cov_mat_10n_sparse)
