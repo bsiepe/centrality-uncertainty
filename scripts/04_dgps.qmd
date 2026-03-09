@@ -116,10 +116,10 @@ source(here::here("scripts", "00_functions.R"))
 
 # Conditions to probe: (p, sparsity_proportion, boost_factor, exclude_node1)
 conditions <- list(
-  original_6n    = list(p = 6,  sp = 0.15, bf = 1.5, excl = TRUE),
-  highsparse_6n  = list(p = 6,  sp = 0.70, bf = 1.5,  excl = FALSE),
-  original_10n   = list(p = 10, sp = 0.15, bf = 1.5, excl = TRUE),
-  highsparse_10n = list(p = 10, sp = 0.70, bf = 1.5,  excl = FALSE)
+  original_6n    = list(p = 6,  sp = 0.15, bf = 1.25, excl = TRUE),
+  highsparse_6n  = list(p = 6,  sp = 0.70, bf = 1.25,  excl = FALSE),
+  original_10n   = list(p = 10, sp = 0.15, bf = 1.25, excl = TRUE),
+  highsparse_10n = list(p = 10, sp = 0.70, bf = 1.25,  excl = FALSE)
 )
 n_rep <- 100  # small but sufficient for a sanity check
 
@@ -175,7 +175,7 @@ set.seed(35037)
 var_mat_6n_sparse <- create_var_matrix(6,
                                        sparse = TRUE,
                                        sparsity_proportion = 0.70,
-                                       boost_factor = 1.5,
+                                       boost_factor = 1.25,
                                        exclude_node1 = FALSE)
 colSums(abs(var_mat_6n_sparse))  # node 1 should have highest outstrength
 rowSums(abs(var_mat_6n_sparse))  # node 1 should have highest instrength
@@ -192,7 +192,7 @@ cov_mat_6n_sparse <- create_cov_matrix(6,
                                        off_diag_val = .15,
                                        sparse = TRUE,
                                        sparsity_proportion = 0.70,
-                                       boost_factor = 1.5,
+                                       boost_factor = 1.25,
                                        exclude_node1 = FALSE)
 colSums(cov_mat_6n_sparse)
 rowSums(cov_mat_6n_sparse)
@@ -267,7 +267,7 @@ set.seed(35037)
 var_mat_10n_sparse <- create_var_matrix(10,
                                         sparse = TRUE,
                                         sparsity_proportion = 0.70,
-                                        boost_factor = 1.5,
+                                        boost_factor = 1.25,
                                         exclude_node1 = FALSE)
 colSums(abs(var_mat_10n_sparse))
 rowSums(abs(var_mat_10n_sparse))
@@ -283,7 +283,7 @@ cov_mat_10n_sparse <- create_cov_matrix(10,
                                         off_diag_val = .15,
                                         sparse = TRUE,
                                         sparsity_proportion = 0.70,
-                                        boost_factor = 1.5,
+                                        boost_factor = 1.25,
                                         exclude_node1 = FALSE)
 colSums(cov_mat_10n_sparse)
 rowSums(cov_mat_10n_sparse)
