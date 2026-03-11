@@ -166,8 +166,8 @@ for (i in 1:nrow(df_design)) {
   kappa_sd <- 0.075 * mean_diag_kappa
   
   ml_sim <- sim_gvar_loop(
-    graph   = sim_pars[[dgp_graph]],
-    beta_sd = beta_sd,
+    graph    = sim_pars[[dgp_graph]],
+    beta_sd  = beta_sd,
     kappa_sd = kappa_sd,
     sigma_sd = sigma_sd,
     n_person = n_sim_sd,
@@ -179,11 +179,11 @@ for (i in 1:nrow(df_design)) {
     sim_pkg  = "mlVAR",
     sparse_sim = TRUE,
     sparse_sim_sigma = TRUE,
-    most_cent_diff_temp = TRUE,
+    most_cent_diff_temp     = TRUE,
     most_cent_diff_temp_min = 0.05,
-    most_cent_diff_cont = TRUE,
+    most_cent_diff_cont     = TRUE,
     most_cent_diff_cont_min = 0.05,
-    innov_var_fixed_sigma = TRUE
+    innov_var_fixed_sigma   = TRUE
   )
   
   true_cent <- centrality_mlvar_sim(ml_sim, sim_fn = "sim_gvar_loop")
@@ -248,11 +248,12 @@ sim_generate <- function(condition, fixed_objects = NULL) {
     listify  = TRUE,
     sim_pkg  = "mlVAR",
     sparse_sim = TRUE,
-    most_cent_diff_temp     = TRUE,
+    sparse_sim_sigma = TRUE,
+    most_cent_diff_temp = TRUE,
     most_cent_diff_temp_min = 0.05,
-    most_cent_diff_cont     = TRUE,
+    most_cent_diff_cont = TRUE,
     most_cent_diff_cont_min = 0.05,
-    innov_var_fixed_sigma   = TRUE
+    innov_var_fixed_sigma = TRUE
   )
   
   if (any(is.na(ml_sim$beta))) stop("Generation of Betas failed")
@@ -483,6 +484,7 @@ sim_analyse <- function(condition, dat, fixed_objects = NULL) {
     idx_rho  = array(idx_rho, dim = length(idx_rho)),
     Y        = Y,
     reg_covariate = reg_data,
+    reg_cent_type = array(c(1L, 2L, 3L), dim = 3),  # instrength, outstrength, strength
     sparsity = 2,
     mean_center = 1
   )

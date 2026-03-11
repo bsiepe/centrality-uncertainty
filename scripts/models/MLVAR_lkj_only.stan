@@ -13,6 +13,7 @@ data {
   array[I] int<lower=0> n_t; // number of time points per person
   array[N_total] vector[K] Y; // longitudinal responses for all persons
   matrix[I,P] reg_covariate; // regression outcome
+  array[P] int<lower=1, upper=3> reg_cent_type; // 1=instrength, 2=outstrength, 3=strength
 }
 ////////////////////////////////////////////////////////////////////////////////
 transformed data{
@@ -141,18 +142,14 @@ transformed parameters{
   } // end i
   } // end block
   // Regression ////////////////////////////////////////////////////////
-    mu_regression[,1] = reg_intercept[1] + reg_slope_density[1] * Beta_in_strength[,1];
-    mu_regression[,2] = reg_intercept[2] + reg_slope_density[2] * Beta_in_strength[,1];
-    mu_regression[,3] = reg_intercept[3] + reg_slope_density[3] * Beta_in_strength[,1];
-    
-    
-    mu_regression[,4] = reg_intercept[4] + reg_slope_density[4] * Beta_out_strength[,1];
-    mu_regression[,5] = reg_intercept[5] + reg_slope_density[5] * Beta_out_strength[,1];
-    mu_regression[,6] = reg_intercept[6] + reg_slope_density[6] * Beta_out_strength[,1];
-    
-    mu_regression[,7] = reg_intercept[7] + reg_slope_density[7] * Rho_strength[,1];
-    mu_regression[,8] = reg_intercept[8] + reg_slope_density[8] * Rho_strength[,1];
-    mu_regression[,9] = reg_intercept[9] + reg_slope_density[9] * Rho_strength[,1];
+  for (p in 1:P) {
+    if (reg_cent_type[p] == 1)
+      mu_regression[,p] = reg_intercept[p] + reg_slope_density[p] * Beta_in_strength[,1];
+    else if (reg_cent_type[p] == 2)
+      mu_regression[,p] = reg_intercept[p] + reg_slope_density[p] * Beta_out_strength[,1];
+    else
+      mu_regression[,p] = reg_intercept[p] + reg_slope_density[p] * Rho_strength[,1];
+  }
 
 } // end transformed parameters
 ////////////////////////////////////////////////////////////////////////////////
@@ -235,34 +232,21 @@ generated quantities{
   vector[P] reg_slope_density_z;
   vector[P] reg_intercept_z;
   
-  // Standardize Regression Coefficients
-  // beta * sd(x) = beta_std;
-  reg_slope_density_z[1] = reg_slope_density[1] * sd(Beta_in_strength[,1]);
-  reg_slope_density_z[2] = reg_slope_density[2] * sd(Beta_in_strength[,1]);
-  reg_slope_density_z[3] = reg_slope_density[3] * sd(Beta_in_strength[,1]);
-
-  reg_slope_density_z[4] = reg_slope_density[4] * sd(Beta_out_strength[,1]);
-  reg_slope_density_z[5] = reg_slope_density[5] * sd(Beta_out_strength[,1]);
-  reg_slope_density_z[6] = reg_slope_density[6] * sd(Beta_out_strength[,1]);
-  
-  reg_slope_density_z[7] = reg_slope_density[7] * sd(Rho_strength[,1]);
-  reg_slope_density_z[8] = reg_slope_density[8] * sd(Rho_strength[,1]);
-  reg_slope_density_z[9] = reg_slope_density[9] * sd(Rho_strength[,1]);
-  
-
-  
-  // Standardize Regression Intercept
-  // alpha_std = alpha + (beta_std * mean(x)) / sd(x);
-  reg_intercept_z[1] = reg_intercept[1] + (reg_slope_density_z[1] * mean(Beta_in_strength[,1])) / sd(Beta_in_strength[,1]);
-  reg_intercept_z[2] = reg_intercept[2] + (reg_slope_density_z[2] * mean(Beta_in_strength[,1])) / sd(Beta_in_strength[,1]);
-  reg_intercept_z[3] = reg_intercept[3] + (reg_slope_density_z[3] * mean(Beta_in_strength[,1])) / sd(Beta_in_strength[,1]);
-  
-  reg_intercept_z[4] = reg_intercept[4] + (reg_slope_density_z[4] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
-  reg_intercept_z[5] = reg_intercept[5] + (reg_slope_density_z[5] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
-  reg_intercept_z[6] = reg_intercept[6] + (reg_slope_density_z[6] * mean(Beta_out_strength[,1])) / sd(Beta_out_strength[,1]);
-  
-  reg_intercept_z[7] = reg_intercept[7] + (reg_slope_density_z[7] * mean(Rho_strength[,1])) / sd(Rho_strength[,1]);
-  reg_intercept_z[8] = reg_intercept[8] + (reg_slope_density_z[8] * mean(Rho_strength[,1])) / sd(Rho_strength[,1]);
-  reg_intercept_z[9] = reg_intercept[9] + (reg_slope_density_z[9] * mean(Rho_strength[,1])) / sd(Rho_strength[,1]);
+  for (p in 1:P) {
+    real sd_cent;
+    real mean_cent;
+    if (reg_cent_type[p] == 1) {
+      sd_cent   = sd(Beta_in_strength[,1]);
+      mean_cent = mean(Beta_in_strength[,1]);
+    } else if (reg_cent_type[p] == 2) {
+      sd_cent   = sd(Beta_out_strength[,1]);
+      mean_cent = mean(Beta_out_strength[,1]);
+    } else {
+      sd_cent   = sd(Rho_strength[,1]);
+      mean_cent = mean(Rho_strength[,1]);
+    }
+    reg_slope_density_z[p] = reg_slope_density[p] * sd_cent;
+    reg_intercept_z[p]     = reg_intercept[p] + (reg_slope_density_z[p] * mean_cent) / sd_cent;
+  }
   
 } // end generated quantities
