@@ -936,3 +936,31 @@ knitr::purl(here::here("scripts", "09_additional_simulations.qmd"),
             output = here::here("scripts", "09_additional_simulations.R"),
             documentation = 2)
 ```
+
+
+
+# Re-summarize output
+
+In a first iteration of this simulation script, only parts of its output were executed. Particularly, we have the raw output of row 1 for all methods. We therefore summarize this output here with our simulation function above. 
+
+
+```{r}
+#| label: re-summarize 
+#| eval: false
+
+directory_name <- here::here("sim_full_rev2_additional_row1_raw")
+
+resummarized_row1 <- reSummarise(summarise = sim_summarise, dir = directory_name)
+
+saveRDS(resummarized_row1, here::here("output", "rev2", "sim_full_rev2_additional_row1_raw.rds"))
+
+```
+
+
+
+# Session Info
+
+
+```{r session-info}
+pander::pander(sessionInfo())
+```
