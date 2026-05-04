@@ -68,7 +68,8 @@ source(here::here("scripts", "00_functions.R"))
 
 We then load the simulation results. Due to the computational complexity of the simulation, these are spread across different files in `output\rev2`: 
 
-- `sim_full_rev2_additional_row1_raw.rds`: Results of the first row with 200 iterations for each method 
+- `sim_full_rev2_additional_row1_raw.rds`: Results of the first row with 200 iterations for each method
+- `sim_full_rev2_additional_no_bayes.rds`: Results of the second and third row with 200 iterations for the non-Bayesian methods
 
 
 
