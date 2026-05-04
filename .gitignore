@@ -13,3 +13,4 @@ scripts/archive
 scripts/mplus
 *.inp
 *.dat
+.positai

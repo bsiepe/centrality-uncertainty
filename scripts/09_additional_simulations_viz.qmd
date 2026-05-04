@@ -66,7 +66,77 @@ source(here::here("scripts", "00_functions.R"))
 ```
 
 
-We then load the simulation results. Due to the computational complexity of the simulation, these are spread across different files: 
+We then load the simulation results. Due to the computational complexity of the simulation, these are spread across different files:
+
+
+
+
+
+We then combine these files into a single large file: 
+
+
+
+
+
+
+
+# Data Wrangling
+
+Prepare dataframe for visualization by giving proper names, removing unnecessary columns, and pivoting longer:
+
+```{r}
+sr_edit <- sim_res_cut |> 
+  mutate(
+    dgp = factor(n_tp, levels = c(60, 120)),
+    n_id = factor(n_id, levels = c(75, 200))
+    ) |>
+  # remove "reg_" from all column names
+  rename_with(~str_remove(., "reg_")) |> 
+  # remove everything before a "." in the column names
+  rename_with(~str_remove(., ".*\\.")) |> 
+  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS")) |>
+  dplyr::select(-c("heterogeneity")) |> 
+  # pivot longer except conditions cols
+  pivot_longer(cols = -c("dgp", "n_tp", "n_id"), 
+               names_to = "measure", 
+               values_to = "value") |> 
+  mutate(measure = str_replace(measure, "power_reg", "powerreg"),
+         measure = str_replace(measure, "powertwoside_reg", "powertwosidereg"),
+         measure = str_replace(measure, "poweroneside_reg", "poweronesidereg"),
+         measure = str_replace(measure, "rmse_reg", "rmsereg"),
+         measure = str_replace(measure, "bias_reg", "biasreg"),
+         measure = str_replace(measure, "mse_reg", "msereg")) |>
+  filter(!measure %in% c("strength_sd", "outstrength_sd", "instrength_sd")) |> 
+  separate_wider_delim(measure, 
+                       delim = "_",
+                       names = c("pm", "outcome", "method", "summary")) |> 
+  mutate(method = case_when(
+    method == "gvar" ~ "GVAR",
+    method == "gimme" ~ "GIMME",
+    method == "mlvar" ~ "mlVAR",
+    method == "bmlvar" ~ "BmlVAR"
+  )) |>
+  # treat method as factor and order 
+  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) |>
+  mutate(outcome = case_when(
+    outcome == "beta" ~ "Temporal",
+    outcome == "pcor" ~ "Contemporaneous",
+    .default = outcome
+  )) |>
+  group_by(dgp, n_tp, n_id, pm, outcome, method) |>
+  pivot_wider(names_from = summary, values_from = value) |> 
+  ungroup()
+
+
+
+```
+
+Prepare different colors and settings for visualization:
+
+```{r viz-prep}
+meth_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,2,4,5)],
+                         c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
+```
 
 
 
