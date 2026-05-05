@@ -886,7 +886,7 @@ sim_summarise <- function(condition, results, fixed_objects = NULL) {
 # Executing Simulation
 
 ```{r run-sim}
-n_rep     <- 15
+n_rep     <- 30
 n_workers <- 15
 future::plan(multisession, workers = n_workers)
 
@@ -927,3 +927,129 @@ knitr::purl(here::here("scripts", "09_additional_simulations_only_bayes.qmd"),
             output = here::here("scripts", "09_additional_simulations_only_bayes.R"),
             documentation = 2)
 ```
+
+
+# Combine two iterations into one
+
+We ran this script twice to avoid some computational issues with our server. These results were originally avilable as `sim_results_rev2_additional_only_bayes.rds` and `sim_results_rev2_additional_only_bayes_iter2.rds`. 
+We here combine these results, averaging both point estimates and uncertainty.
+
+```{r}
+#| label: combine-results
+#| eval: false
+
+iter1 <- readRDS(here::here("output", "sim_results_rev2_additional_only_bayes.rds"))
+iter2 <- readRDS(here::here("output", "sim_results_rev2_additional_only_bayes_iter2.rds"))
+
+
+n1 <- 15
+n2 <- 15
+n_total <- n1 + n2
+
+# initialize final dataframe
+final_df <- iter1
+final_df$REPLICATIONS <- n_total
+
+# identify column categories
+all_cols <- names(iter1)
+mean_cols <- all_cols[grepl("_mean$", all_cols)]
+mcse_cols <- all_cols[grepl("_mcse$", all_cols)]
+
+# 1. combine diagnostic sums and counts
+final_df$bmlvar_diagnostics.divtrans_bmlvar_sum <- iter1$bmlvar_diagnostics.divtrans_bmlvar_sum + 
+                                                   iter2$bmlvar_diagnostics.divtrans_bmlvar_sum
+final_df$bmlvar_diagnostics.divtrans_bmlvar_sumnonz <- iter1$bmlvar_diagnostics.divtrans_bmlvar_sumnonz + 
+                                                       iter2$bmlvar_diagnostics.divtrans_bmlvar_sumnonz
+
+# 2. process means and mcse values
+for (m_col in mean_cols) {
+  
+  # calculate combined mean (arithmetic mean since n1 == n2)
+  mu1 <- iter1[[m_col]]
+  mu2 <- iter2[[m_col]]
+  mu_comb <- (mu1 + mu2) / 2
+  final_df[[m_col]] <- mu_comb
+  
+  # extract base name to find the corresponding mcse column
+  base_name <- sub("mean_.*\\.", "", m_col) 
+  base_name <- sub("_mean$", "", base_name)
+  e_col <- mcse_cols[grepl(base_name, mcse_cols)][1]
+  
+  if (!is.na(e_col)) {
+    se1 <- iter1[[e_col]]
+    se2 <- iter2[[e_col]]
+    
+    # case a: binomial mcse (power and most central node identification)
+    if (grepl("power|mostcent", m_col)) {
+      final_df[[e_col]] <- sqrt(mu_comb * (1 - mu_comb) / n_total)
+    } 
+    
+    # case b: rmse mcse (requires the specific mse mean for the denominator)
+    else if (grepl("rmse", m_col)) {
+      # locate the matching mse mean column for the rmse formula
+      mse_col_name <- sub("rmse", "mse", base_name)
+      mse_col <- mean_cols[grepl(mse_col_name, mean_cols)][1]
+      
+      mse_comb <- (iter1[[mse_col]] + iter2[[mse_col]]) / 2
+      
+      # reverse original mcse to recover the variance of the rmse components
+      var1 <- se1^2 * (4 * n1 * iter1[[mse_col]])
+      var2 <- se2^2 * (4 * n2 * iter2[[mse_col]])
+      
+      # pool the variances and calculate the new mcse
+      var_pooled <- ((n1 - 1) * var1 + (n2 - 1) * var2) / (n_total - 1)
+      final_df[[e_col]] <- sqrt(var_pooled / (4 * n_total * mse_comb))
+    } 
+    
+    # case c: bias, mse, and rank correlation (standard variance pooling)
+    else {
+      # reverse out the sample variance from the mcse
+      var1 <- se1^2 * n1
+      var2 <- se2^2 * n2
+      
+      # use pooled variance formula (includes the difference between means)
+      var_pooled <- ((n1 - 1) * var1 + (n2 - 1) * var2 + (n1 * n2 / n_total) * (mu1 - mu2)^2) / (n_total - 1)
+      final_df[[e_col]] <- sqrt(var_pooled / n_total)
+    }
+  }
+}
+
+
+saveRDS(final_df, here::here("output", "rev2", "sim_full_rev2_additional_only_bayes.rds"))
+
+```
+
+
+We additionally conduct some unit testing/sanity checks to see if the aggregation worked as intended: 
+
+```{r}
+#| label: sanity-check-aggregation
+
+# loop-based sanity check
+for (col in names(final_df)) {
+  v1 <- iter1[[col]]; v2 <- iter2[[col]]; vc <- final_df[[col]]
+  
+  # skip non-numeric or static condition columns
+  if (is.character(vc) || col %in% names(final_df)[1:7]) next
+  
+  if (grepl("_mean$", col)) {
+    # check if combined mean is the exact midpoint
+    if (!all(abs(vc - (v1 + v2) / 2) < 1e-10)) stop(paste("mean failed:", col))
+    
+  } else if (grepl("_mcse$", col)) {
+    # check if pooled mcse is smaller than the maximum individual mcse
+    # note: we use a small tolerance for cases where pooled variance increases slightly
+    if (!all(vc <= pmax(v1, v2) + 1e-10)) stop(paste("mcse failed:", col))
+    
+  } else if (grepl("_sum|_sumnonz", col)) {
+    # check if sums are exactly additive
+    if (!all(vc == (v1 + v2))) stop(paste("sum failed:", col))
+  }
+}
+
+# check replication count
+if (any(final_df$REPLICATIONS != 30)) stop("replication count incorrect")
+
+
+```
+
