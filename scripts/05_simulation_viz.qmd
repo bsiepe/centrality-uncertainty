@@ -69,7 +69,7 @@ source(here::here("scripts", "00_functions.R"))
 To separate original results from our first revision, we add the subscript "rev1" to all new results: 
 ```{r}
 revision <- "rev1"
-use_rev1 <- TRUE
+use_rev <- TRUE
 ```
 
 
@@ -133,6 +133,7 @@ Also, after running the simulation study, we realized that our Stan code had an 
 | Incorrect prior notation for second step regression residual variance | We accidentally noted a t-prior on $log(sigma)$, but a half-t prior on $\sigma$ was used in both steps for consistency across models and had already been implemented in the code. We fixed the notation to align with our actual implementation |
 | Omitted sum over individuals in centrality selection accuracy formula | The preregistered formula did not include a summation over individuals, which is necessary for the proportion. |
 | 200 instead of 100 simulation repetitions | As we explained in the manuscript, we accidentally calculated that we needed 200 instead of the actual 100 simulation repetitions to achieve the desired worst-case MCSE. We kept the 200 repetitions as they are informative and increase precision.|
+| Added completely new simulation settings in the second revision | A reviewer suggested to add additional simulation conditions, which are included in `09_additional_simulations_viz.qmd`| 
 
 
 

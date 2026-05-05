@@ -5,7 +5,7 @@ ggsave_rev <- function(filename, plot, path = here::here("figures/"), ...) {
   file_ext <- tools::file_ext(filename)
   
   # add revision to filename
-  if (use_rev1) {
+  if (use_rev) {
     new_filename <- paste0(file_parts, "_", revision, ".", file_ext)
     new_path <- file.path(path, revision)
   } else {
