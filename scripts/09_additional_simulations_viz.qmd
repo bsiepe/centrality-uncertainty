@@ -36,7 +36,7 @@ format:
 execute:
   message: false
   warning: false
-  eval: false # only show code
+  eval: true # only show code
 ---
 
 # Background
@@ -66,14 +66,51 @@ source(here::here("scripts", "00_functions.R"))
 ```
 
 
+
+To separate original results from our first revision, we add the subscript "rev1" to all new results: 
+```{r}
+revision <- "rev2"
+use_rev <- TRUE
+```
+
+
+
 We then load the simulation results. Due to the computational complexity of the simulation, these are spread across different files in `output\rev2`: 
 
 - `sim_full_rev2_additional_row1_raw.rds`: Results of the first row with 200 iterations for each method
 - `sim_full_rev2_additional_no_bayes.rds`: Results of the second and third row with 200 iterations for the non-Bayesian methods
+- `sim_full_rev2_additional_only_bayes.rds`: Results of the second and third row with 30 iterations for the Bayesian methods
+
+```{r}
+#| label: load-sim-results
+
+row1 <- readRDS(here::here("output", "rev2", "sim_full_rev2_additional_row1_raw.rds"))
+no_bayes <- readRDS(here::here("output", "rev2", "sim_full_rev2_additional_no_bayes.rds"))
+only_bayes <- readRDS(here::here("output", "rev2", "sim_full_rev2_additional_only_bayes.rds"))
+
+```
 
 
 
 We then combine these files into a single large file: 
+```{r}
+#| label: combine-sim-results
+
+# combine results for row 2 and 3 while ensuring that duplicate columns are named correctly
+row23 <- no_bayes |> 
+  left_join(only_bayes, by = c("dgp", "n_id", "heterogeneity", "n_tp"),
+            suffix = c("_no_bayes", "_only_bayes")) 
+
+# combine row 1 with rows 2 and 3
+df_rev2 <- bind_rows(row1, row23)
+
+
+# Create a cut version of the simulation results without MCMC diagnostics
+sim_res_cut <- df_rev2 |>
+  select(-contains("rhat")) |>
+  select(-contains("divtrans"))
+
+```
 
 
 
@@ -83,19 +120,34 @@ We then combine these files into a single large file:
 
 # Data Wrangling
 
-Prepare dataframe for visualization by giving proper names, removing unnecessary columns, and pivoting longer:
+Prepare dataframe for visualization by giving proper names, removing unnecessary columns, and pivoting longer. We also remove columns that contain standard deviations of the strength measures.
 
 ```{r}
 sr_edit <- sim_res_cut |> 
   mutate(
-    dgp = factor(n_tp, levels = c(60, 120)),
-    n_id = factor(n_id, levels = c(75, 200))
+    n_tp = factor(n_tp, levels = c(120)),
+    n_id = factor(n_id, levels = c(75)),
+    dgp = case_when(
+      dgp == "sparse_6n_highsparse" ~ "Sparse (6 nodes, high sparsity)",
+      dgp == "semisparse_10n" ~ "Semi-sparse (10 nodes, medium sparsity)",
+      dgp == "sparse_10n" ~ "Sparse (10 nodes, high sparsity)",
+      .default = dgp
+    )
     ) |>
+  # turn dgp into factor for correct ordering
+  mutate(dgp = factor(dgp, levels = c(
+    "Sparse (6 nodes, high sparsity)",
+    "Semi-sparse (10 nodes, medium sparsity)",
+    "Sparse (10 nodes, high sparsity)"
+  ))) |>  
+  
+  
   # remove "reg_" from all column names
   rename_with(~str_remove(., "reg_")) |> 
   # remove everything before a "." in the column names
   rename_with(~str_remove(., ".*\\.")) |> 
-  dplyr::select(-c("REPLICATIONS", "SIM_TIME", "SEED", "COMPLETED", "WARNINGS")) |>
+  dplyr::select(!matches("REPLICATIONS|SIM_TIME|SEED|COMPLETED|WARNINGS")) |> 
+  dplyr::select(!matches("strength_sd|instrength_sd|outstrength_sd")) |> 
   dplyr::select(-c("heterogeneity")) |> 
   # pivot longer except conditions cols
   pivot_longer(cols = -c("dgp", "n_tp", "n_id"), 
@@ -107,7 +159,6 @@ sr_edit <- sim_res_cut |>
          measure = str_replace(measure, "rmse_reg", "rmsereg"),
          measure = str_replace(measure, "bias_reg", "biasreg"),
          measure = str_replace(measure, "mse_reg", "msereg")) |>
-  filter(!measure %in% c("strength_sd", "outstrength_sd", "instrength_sd")) |> 
   separate_wider_delim(measure, 
                        delim = "_",
                        names = c("pm", "outcome", "method", "summary")) |> 
@@ -141,7 +192,566 @@ meth_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,2,4,5)],
 
 
 
+# Warnings and Errors
 
+
+
+# Point Estimates
+
+Plot point estimate recovery as mean squared error (MSE) which is helpful to understand the overall performance of the different methods.
+
+```{r viz-point-estimates}
+plot_mse <- sr_edit |> 
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
+  mutate(outcome = factor(outcome, levels = c("Temporal", "Contemporaneous"))) |>
+  filter(pm == "mse") |> 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add vertical line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_wrap2(dgp ~ outcome,
+                      axes = "all",
+                      remove_labels = "y", nrow = 3) +
+  scale_x_discrete(guide = guide_axis(angle = 90))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,0.03)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality()+
+  theme(legend.position = "none",
+        text = element_text(size = 22))+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "MSE of Network Estimation")
+
+plot_mse
+
+```
+
+Plot Bias:
+
+```{r viz-bias}
+plot_bias <- sr_edit |> 
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
+  mutate(outcome = factor(outcome, levels = c("Temporal", "Contemporaneous"))) |>
+  filter(pm == "bias") |> 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add vertical line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_wrap2(dgp ~ outcome,
+                      axes = "all",
+                      remove_labels = "y") +
+  scale_x_discrete(guide = guide_axis(angle = 90))+
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1,0.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        text = element_text(size = 22))+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Bias of Network Estimation")
+
+plot_bias
+```
+
+
+# Centrality
+
+## Plot most central identical
+
+```{r}
+#| label: viz-most-central
+#| eval: true
+
+plot_mostcentral <- sr_edit |> 
+  # if mcse is missing, set to 0
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
+  mutate(outcome = factor(outcome, levels = c("Temporal", "Contemporaneous"))) |>
+  filter(pm == "mostcent") |> 
+  mutate(n_tp = paste0("t = ", n_tp)) |>
+  mutate(n_tp = factor(n_tp, levels = c("t = 120"))) |>
+  mutate(n_id = paste0("n = ", n_id)) |>
+  mutate(n_id = factor(n_id, levels = c("n = 75"))) |>
+  ggplot(aes(x = as.factor(n_tp), 
+             y = mean,
+             group = method,
+             colour = method
+             )) +
+  # horizontal line at chance level of 1/6
+  geom_hline(yintercept = 1/6, 
+             linetype = 2, 
+             alpha = .7)+
+  # add vertical line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 3, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .5,
+                 position = position_dodge(0.8),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.8), 
+             size = 1.4) +
+  # add mean as text above errorbar
+    geom_text(aes(label = sub("^(-?)0.", "\\1.",sprintf("%.2f", mean))),
+              position = position_dodge(0.8),
+              vjust = -1.0,
+              size = 4,
+              show.legend = FALSE) +
+  ggh4x::facet_wrap2(dgp ~ outcome,
+                      axes = "all",
+                      remove_labels = "y", 
+               nrow = 3) +
+  # scale_x_discrete(guide = guide_axis(angle = 90))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.15)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "bottom",
+        title = element_text(size = 27)
+        )+
+  labs(title = "",
+       x = "Time Points",
+       colour = "",
+       y = "Proportion of Correct Central Nodes")
+
+ggsave_rev("plot_mostcentral.pdf", plot_mostcentral, height = 6 * 1.1, width = 9 * 1.1,
+       path = here::here("figures"), device = "pdf")
+
+plot_mostcentral
+
+```
+
+## Plot rank correlation of centrality measures
+
+We were interested in the performance of centrality estimation, which we assessed with regard to rank-order performance. As we expected centrality estimates to be biased downwards in some methods due to sparsity assumptions, we computed the rank-order consistency of individual centrality estimates. To do so, we computed the point estimate of network centrality $\hat{c}$ per individual in a data set, which ignored estimation uncertainty. We then estimated the Spearman rank correlation $\hat{\rho}_{i}$ in repetition $i$ of these estimates with the true network centrality $c$ and calculated its average across repetitions as: \begin{align*}
+    \widehat{\rho} = \frac{\sum_{i=1}^{n_{\text{sim}}} \hat{\rho}_i}{n_{\text{sim}}}
+\end{align*} We calculated the MCSE of this correlation via bootstrapping.
+
+```{r viz-rank-correlation, eval = TRUE}
+plot_rankcor <- sr_edit |> 
+  # if mcse is missing, set to 0
+  mutate(mcse = ifelse(is.na(mcse), 0, mcse)) |>
+  # uselessly used temp and cont instead of beta and pcor here
+  mutate(outcome = case_when(
+    outcome == "temp" ~ "Temporal",
+    outcome == "cont" ~ "Contemporaneous"
+  )) |>
+  mutate(outcome = factor(outcome, levels = c("Temporal", "Contemporaneous"))) |>
+  filter(pm == "rankcor") |> 
+  ggplot(aes(x = method, 
+             y = mean, 
+             colour = method
+             )) +
+  # add vertical line between methods
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+  geom_errorbar(aes(ymin = mean - 1*mcse,
+                            ymax = mean + 1*mcse),
+                        width = .8,
+                 position = position_dodge(0.7),
+                 show.legend = FALSE)+
+  geom_point(position = position_dodge(0.7), 
+             size = 1.2) +
+  ggh4x::facet_wrap2(dgp ~ outcome,
+                      axes = "all",
+                      remove_labels = "y", nrow = 3) +
+  scale_x_discrete(guide = guide_axis(angle = 90))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0,1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  theme(legend.position = "none",
+        text = element_text(size = 22))+
+  labs(title = "",
+       x = "Method",
+       colour = "Method",
+       y = "Centrality Rank Correlation")
+
+
+ggsave_rev("plot_rankcor.pdf", plot_rankcor, height = 12, width = 16,
+       path = here::here("figures/"), device = "pdf")
+
+plot_rankcor
+
+```
+
+
+## Bias and RMSE of Centrality
+
+
+# Regression
+
+## Power of Regression
+
+### In- and Outstrength combined
+
+Prep data
+
+```{r viz-regression-power-prep}
+# Split data set into three based on true effect
+power_df <- sr_edit |> 
+  filter(!str_detect(pm, "poweroneside")) |> 
+  mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
+  filter(str_detect(pm, "power")) |> 
+  mutate(outcome = case_when(
+    # outcome == "tempdens" ~ "Temporal\nDensity",
+    # outcome == "contdens" ~ "Contemporaneous\nDensity",
+    outcome == "outstrength" ~ "Temporal\nOutstrength",
+    outcome == "strength" ~ "Contemporaneous\nStrength",
+    outcome == "instrength" ~ "Temporal\nInstrength"
+  )) |>
+  # For now, remove contemporaneous strength
+  filter(outcome != "Contemporaneous\nStrength") |>
+  mutate(n_id = paste0("n = ", n_id)) |>
+  mutate(n_id = factor(n_id, levels = c("n = 75"))) |>
+  mutate(n_tp = paste0("t = ", n_tp)) |>
+  mutate(n_tp = factor(n_tp, levels = c("t = 120"))) |>
+  # split pm into two columns, take last number into new column
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect"))
+
+```
+
+
+Create the plot: 
+
+```{r viz-regression-power-combined}
+#| output: false
+# plot the power results
+plot_power_combined <- ggplot(power_df, aes(x = n_tp, 
+                                            y = mean, 
+                                            colour = method,
+                                            fill = method,
+                                            group = method)) +
+  # error bars using pooled mcse
+  geom_errorbar(aes(ymin = mean - mcse,
+                    ymax = mean + mcse),
+                width = 0.5,
+                position = position_dodge(0.7),
+                show.legend = FALSE) +
+  # background vertical grid lines
+  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1)) +
+  geom_point(position = position_dodge(0.7), 
+             size = 1.4) +
+  ggh4x::facet_wrap2(dgp ~ outcome, 
+                      axes = "all", 
+                      remove_labels = "y", nrow = 3) +
+  scale_y_continuous(expand = c(0, 0), limits = c(-0.1, 1.1)) +
+  scale_color_manual(values = meth_colors) +
+  theme_centrality() +
+  # global theme adjustments and legend activation
+  theme(legend.position = "bottom",
+        text = element_text(size = 25),
+        strip.text = element_text(size = rel(0.85)),
+        ggh4x.facet.nestline = element_line(colour = "#6d6d6e"),
+        axis.text = element_text(size = 18)) +
+  labs(title = "",
+       x = "",
+       colour = "Method",
+       fill = "Method",
+       y = "Detection Rate")
+
+# saving output
+ggsave_rev("plot_power_combined.pdf", plot_power_combined, 
+           height = 16 * 0.95, width = 16 * 0.8,
+           path = here::here("figures/"))
+
+```
+
+
+
+How large was the difference between instrength and outstrength?
+
+```{r instrength-outstrength}
+power_df |> 
+  pivot_wider(id_cols = c(dgp, n_id, n_tp, pm, true_effect, method), 
+              names_from = outcome, 
+              values_from = c(mean, mcse)) |> 
+  filter(true_effect != 0) |> 
+  janitor::clean_names() |> 
+  mutate(mean_diff = mean_temporal_instrength - mean_temporal_outstrength) |> 
+  summarize(mean_mean_diff = mean(mean_diff)) |> 
+  knitr::kable()
+
+```
+
+
+## Power and Bias for Outstrength
+
+
+
+```{r outstrength-plot}
+power_bias_reg_combined_df <- sr_edit |> 
+  mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
+  filter(!str_detect(pm, "poweroneside")) |>
+  filter(str_detect(pm, "power") | str_detect(pm, "biasreg")) |> 
+    mutate(outcome = case_when(
+    outcome == "outstrength" ~ "Temporal\nOutstrength",
+    outcome == "strength" ~ "Contemporaneous\nStrength",
+    outcome == "instrength" ~ "Temporal\nInstrength"
+  )) |>
+  filter(outcome == "Temporal\nOutstrength") |> 
+  mutate(n_id = paste0("n = ", n_id)) |>
+  mutate(n_id = factor(n_id, levels = c("n = 75"))) |>
+  mutate(n_tp = paste0("t = ", n_tp)) |>
+  mutate(n_tp = factor(n_tp, levels = c("t = 120"))) |>
+  # split pm into two columns, take last number into new column
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) |> 
+  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR"))) |> 
+  mutate(true_effect = paste0("True Effect: .", true_effect)) |> 
+  mutate(pm = case_when(
+    str_detect(pm, "power") ~ "Detection Rate",
+    str_detect(pm, "bias") ~ "Bias"
+  ))
+
+plot_power_bias_outstrength <- power_bias_reg_combined_df |>
+  ggplot(aes(x = n_tp, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method))+
+  geom_errorbar(aes(ymin = mean - 1 * mcse,
+                      ymax = mean + 1 * mcse),
+                  width = 0.5,
+                  position = position_dodge(0.8),
+                  show.legend = FALSE) +
+    # add vertical
+    geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+    geom_point(position = position_dodge(0.8), 
+               size = 1.4) +
+    # add mean without leading zero
+    geom_text(aes(label = sub("^(-?)0.", "\\1.",sprintf("%.2f", mean))),
+              position = position_dodge(0.8),
+              vjust = -0.6,
+              size = 5,
+              show.legend = FALSE) +
+    ggh4x::facet_wrap2(dgp ~ pm,
+                        axes = "all",
+                        scales = "free_y") +
+    facetted_pos_scales(
+      y = list(pm == "Bias" ~ scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)),
+               pm == "Detection Rate" ~ scale_y_continuous(expand = c(0, 0), limits = c(-0.1, 1.1)))
+    )+
+    labs(
+      title = "",
+      x = "Time Points",
+      colour = "",
+      fill = "",
+      group = "",
+      y = ""
+    ) +
+    scale_color_manual(values = meth_colors) +
+    theme_centrality() +
+    theme(legend.position = "bottom",
+          ggh4x.facet.nestline = element_line(colour = "#6d6d6e"),
+          axis.text.x = element_text(size = 22),
+          axis.text.y = element_text(size = 22),
+          axis.title.x = element_text(size = 24),
+          # increase all legend element size
+          legend.text = element_text(size = 24),
+          legend.title = element_text(size = 24),
+          legend.key.size = unit(1.6, "lines"),
+          strip.text = ggplot2::element_text(size = 24),
+          strip.text.x.top = ggplot2::element_text(size = 24)
+          )
+
+ggsave_rev("plot_power_bias_outstrength.pdf", 
+       plot_power_bias_outstrength, height = 16* 0.95, width = 16* 0.8,
+       path = here::here("figures/"))
+
+plot_power_bias_outstrength
+
+```
+
+
+## Power and Bias for Contemporaneous Strength
+
+```{r contemporaneous-strength-plot}
+#| fig-width: 12
+#| fig-height: 12
+power_bias_reg_strength_df <- sr_edit |> 
+  mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
+  filter(!str_detect(pm, "poweroneside")) |>
+  filter(str_detect(pm, "power") | str_detect(pm, "biasreg")) |> 
+    mutate(outcome = case_when(
+    outcome == "outstrength" ~ "Temporal\nOutstrength",
+    outcome == "strength" ~ "Contemporaneous\nStrength",
+    outcome == "instrength" ~ "Temporal\nInstrength"
+  )) |>
+  filter(outcome == "Contemporaneous\nStrength") |> 
+  mutate(n_id = paste0("n = ", n_id)) |>
+  mutate(n_id = factor(n_id, levels = c("n = 75"))) |>
+  mutate(n_tp = paste0("t = ", n_tp)) |>
+  mutate(n_tp = factor(n_tp, levels = c("t = 120"))) |>
+  # split pm into two columns, take last number into new column
+  separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect")) |> 
+  mutate(method = factor(method, levels = c("GVAR", "mlVAR", "GIMME", "BmlVAR"))) |> 
+  mutate(true_effect = paste0("True Effect: .", true_effect)) |> 
+  mutate(pm = case_when(
+    str_detect(pm, "power") ~ "Detection Rate",
+    str_detect(pm, "bias") ~ "Bias"
+  ))
+
+plot_power_bias_strength <- power_bias_reg_strength_df |>
+  ggplot(aes(x = n_tp, 
+             y = mean, 
+             colour = method,
+             fill = method,
+             group = method))+
+  geom_errorbar(aes(ymin = mean - 1 * mcse,
+                      ymax = mean + 1 * mcse),
+                  width = 0.5,
+                  position = position_dodge(0.8),
+                  show.legend = FALSE) +
+    # add vertical
+    geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 4, 1))+
+    geom_point(position = position_dodge(0.8), 
+               size = 1.4) +
+    # add mean as text above errorbar
+    geom_text(aes(label = round(mean, 2)),
+              position = position_dodge(0.8),
+              vjust = -0.6,
+              size = 5,
+              show.legend = FALSE) +
+    ggh4x::facet_wrap2(dgp ~ pm,
+                        axes = "all",
+                        scales = "free_y", 
+                       nrow = 3) +
+    facetted_pos_scales(
+      y = list(pm == "Bias" ~ scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)),
+               pm == "Detection Rate" ~ scale_y_continuous(expand = c(0, 0), limits = c(-0.1, 1.1)))
+    )+
+    labs(
+      title = "",
+      x = "Timepoints",
+      colour = "",
+      fill = "",
+      group = "",
+      y = ""
+    ) +
+    scale_color_manual(values = meth_colors) +
+    theme_centrality() +
+    theme(legend.position = "bottom",
+          ggh4x.facet.nestline = element_line(colour = "#6d6d6e"),
+          axis.text = element_text(size = 18),
+          # increase all legend element size
+          legend.text = element_text(size = 18),
+          legend.title = element_text(size = 18),
+          legend.key.size = unit(1.5, "lines"),
+          strip.text = ggplot2::element_text(size = 24),
+          strip.text.x.top = ggplot2::element_text(size = 24)
+          )
+
+ggsave_rev("plot_power_bias_strength.pdf", 
+       plot_power_bias_strength, height = 16* 0.95, width = 16* 0.8,
+       path = here::here("figures/"))
+
+plot_power_bias_strength
+```
+
+
+
+## RMSE and Bias of Regression
+
+We create plot for different regression outcomes here: 
+
+```{r bias-rmse-functions, eval = FALSE}
+process_data <- function(data, summary) {
+  df_clean <- data |> 
+    filter(str_detect(pm, summary)) |> 
+    mutate(outcome = case_when(
+      outcome == "outstrength" ~ "Temporal\nOutstrength",
+      outcome == "strength" ~ "Contemporaneous\nStrength",
+      outcome == "instrength" ~ "Temporal\nInstrength"
+    )) |>
+    filter(outcome != "Contemporaneous\nStrength") |> 
+    mutate(
+      n_id = factor(paste0("n = ", n_id), levels = c("n = 75")),
+      n_tp = factor(paste0("t = ", n_tp), levels = c("t = 120"))
+    ) |>
+    separate_wider_delim(pm, delim = "reg", names = c("pm", "true_effect"))
+  
+    split(df_clean, df_clean$true_effect)
+}
+
+## Generic plotting function
+create_regression_plot <- function(df, 
+                                   y_label) {
+  ggplot(data = df,
+         aes(
+           x = n_tp,
+           y = mean,
+           colour = method,
+           fill = method,
+           group = method
+         )) +
+    # add horizontal dashed line at zero for bias
+    geom_hline(yintercept = 0, linetype = 2, alpha = .4)+
+    geom_errorbar(
+      aes(ymin = mean - 1 * mcse, ymax = mean + 1 * mcse),
+      width = .5,
+      position = position_dodge(0.7),
+      show.legend = FALSE
+    ) +
+    geom_point(position = position_dodge(0.7), size = 1.2) +
+    ggh4x::facet_wrap2(dgp ~ outcome,
+                        axes = "all",
+                        remove_labels = "y", 
+                       nrow = 3) +
+    scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)) +
+    scale_color_manual(values = meth_colors) +
+    theme_centrality() +
+    theme(
+      legend.position = "none",
+      strip.text.x.top = ggplot2::element_text(size = rel(0.85)),
+      ggh4x.facet.nestline = element_line(colour = "#6d6d6e"),
+      axis.text = element_text(size = 18)
+    ) +
+    labs(
+      title = "",
+      x = "",
+      colour = "",
+      group = "",
+      fill = "",
+      y = y_label
+    )
+}
+
+## Generate and save combined plots
+generate_regression_plots <- function(data, summary, y_label, file_name) {
+  processed_list <- process_data(data, summary)
+  plot_list <- lapply(processed_list, create_regression_plot, y_label = y_label)
+  combined_plot <- cowplot::plot_grid(
+    plotlist = plot_list, 
+    ncol = 1,
+    labels = c("True Effect: 0", "True Effect: 0.2", "True Effect: 0.4")
+  )
+  ggsave_rev(file_name, combined_plot, height = 16 * 0.95, width = 16 * 0.8, 
+         path = here::here("figures/"))
+}
+
+
+## RMSE Plot
+generate_regression_plots(sr_edit, "rmsereg", "RMSE", "plot_reg_rmse_combined.pdf")
+
+## Bias Plot
+generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined.pdf")
+
+```
 
 
 
