@@ -665,9 +665,26 @@ plot_rankcor
 Based on a reviewer comment, we also added the bias and MSE of the centrality of the first node to this supplement. 
 We first need to compute it, as we didn't compute it in our initial simulation: 
 
-```{r}
+```{r, eval = FALSE}
 #| label: compute-bias-mse-centrality
+node1_cent_cond14 <- resummarise_node1_centrality(
+  dir = here::here("output", "rev1_fixed_sigma",
+                   "sim_full_rev1_cond14_fixed_sigma.rds-results_pc04798"),
+  output_file = here::here("output", "node1_centrality_rev1_cond14_fixed_sigma.rds")
+)
 
+node1_cent_cond23 <- resummarise_node1_centrality(
+  dir = here::here("output", "rev1_fixed_sigma",
+                   "sim_full_rev1_cond23_fixed_sigma.rds-results_pc04798"),
+  output_file = here::here("output", "node1_centrality_rev1_cond23_fixed_sigma.rds")
+)
+
+node1_cent_rev1 <- dplyr::bind_rows(node1_cent_cond14, node1_cent_cond23)
+
+saveRDS(node1_cent_rev1,
+        here::here("output", "node1_centrality_rev1_fixed_sigma.rds"))
+
+node1_cent_rev1
 
 ```
 

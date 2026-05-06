@@ -23,6 +23,8 @@ ggsave_rev <- function(filename, plot, path = here::here("figures/"), ...) {
 
 
 
+
+
 # DGP Functions -----------------------------------------------------------
 
 # Write to LaTeX ----------------------------------------------------------
@@ -1271,6 +1273,75 @@ most_cent_ident <- function(x, y){
 mcse_generic <- function(x, n){
   sd(x, na.rm = TRUE)/sqrt(n)
 }
+
+
+# Function to summarise node 1 centrality across repetitions for all methods and measures
+# returns a named vector with mean and MCSE for bias and MSE of node 1 centrality for each method and measure
+
+sim_summarise_node1 <- function(condition, results, fixed_objects = NULL) {
+  if (!is.null(fixed_objects)) {
+    SimDesign::Attach(fixed_objects)
+  }
+
+  methods <- c("gvar", "gimme", "mlvar", "bmlvar")
+  measures <- c("instrength", "outstrength", "strength")
+  n_rep <- length(results)
+  ret <- list()
+
+  repetition_summary <- function(method, measure, summary) {
+    vapply(seq_along(results), function(i) {
+      res_i <- results[[i]]
+
+      if (is.null(res_i[[method]]) ||
+          is.null(res_i[[method]][[measure]]) ||
+          is.null(res_i$true_cent) ||
+          is.null(res_i$true_cent[[measure]])) {
+        return(NA_real_)
+      }
+
+      est_node1 <- vapply(res_i[[method]][[measure]], function(x) x[1], numeric(1))
+      true_node1 <- vapply(res_i$true_cent[[measure]], function(x) x[1], numeric(1))
+
+      if (summary == "bias") {
+        mean(est_node1 - true_node1, na.rm = TRUE)
+      } else {
+        mean((est_node1 - true_node1)^2, na.rm = TRUE)
+      }
+    }, numeric(1))
+  }
+
+  for (method in methods) {
+    for (measure in measures) {
+      rep_bias <- repetition_summary(method = method, measure = measure, summary = "bias")
+      rep_mse <- repetition_summary(method = method, measure = measure, summary = "mse")
+
+      ret[[paste0("biasnode1_", measure, "_", method, "_mean")]] <- mean(rep_bias, na.rm = TRUE)
+      ret[[paste0("biasnode1_", measure, "_", method, "_mcse")]] <- sd(rep_bias, na.rm = TRUE) / sqrt(n_rep)
+
+      ret[[paste0("msenode1_", measure, "_", method, "_mean")]] <- mean(rep_mse, na.rm = TRUE)
+      ret[[paste0("msenode1_", measure, "_", method, "_mcse")]] <- sd(rep_mse, na.rm = TRUE) / sqrt(n_rep)
+    }
+  }
+
+  unlist(ret, use.names = TRUE)
+}
+
+# Function to resummarise node 1 centrality across repetitions for all methods and measures
+# to be used with SimDesign::reSummarise to avoid having to load all results into memory at once
+resummarise_node1_centrality <- function(dir, output_file = NULL, fixed_objects = NULL) {
+  res <- SimDesign::reSummarise(
+    summarise = sim_summarise_node1,
+    dir = dir,
+    fixed_objects = fixed_objects
+  )
+
+  if (!is.null(output_file)) {
+    saveRDS(res, output_file)
+  }
+
+  res
+}
+
 
 
 
