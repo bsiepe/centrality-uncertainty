@@ -1419,6 +1419,7 @@ saveRDS(object = sim_res, here::here("output", "sim_results.RDS"))
 During the first revision of the paper, we spread the computation above across multiple machines. We thus need to put back together the results. First, we do so for the simulation results before changing the generation of partial correlations to induce more sparsity. This code is just used for documentation purposes, these results are not used anywhere: 
 
 ```{r}
+#| eval: false
 cond1 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond1.rds"))
 cond2 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond2.rds"))
 cond3 <- readRDS(here::here("output", "rev1_pre_pcor_change", "sim_full_rev1_cond3.rds"))
@@ -1432,6 +1433,7 @@ saveRDS(sim_full_rev1, here::here("output", "sim_results_rev1_pre_pcor_change.rd
 We then combine the actual revision simulation results: 
 
 ```{r}
+#| eval: false
 cond14 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond14.rds"))
 cond23 <- readRDS(here::here("output", "rev1", "sim_full_rev1_cond23.rds"))
 
@@ -1451,6 +1453,7 @@ saveRDS(sim_full_rev1, here::here("output", "sim_results_rev1.rds"))
 We further combine the results under heterogeneity: 
 
 ```{r}
+#| eval: false
 cond14_het <- readRDS(here::here("output", "rev1_heterogeneous", "sim_full_rev1_cond14_heterogeneous.rds"))
 cond23_het <- readRDS(here::here("output", "rev1_heterogeneous", "sim_full_rev1_cond23_heterogeneous.rds"))
 
@@ -1471,6 +1474,7 @@ saveRDS(sim_full_rev1_het, here::here("output", "sim_results_rev1_heterogeneous.
 We further combine the results  after fixing sigma: 
 
 ```{r}
+#| eval: false
 cond14_het <- readRDS(here::here("output", "rev1_fixed_sigma", "sim_full_rev1_cond14_fixed_sigma.rds"))
 cond23_het <- readRDS(here::here("output", "rev1_fixed_sigma", "sim_full_rev1_cond23_fixed_sigma.rds"))
 
