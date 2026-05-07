@@ -1,0 +1,28 @@
+## Full simulation image — includes Stan and all simulation packages.
+## Use for render-sim and render-additional targets (computationally intensive).
+## R version: https://hub.docker.com/r/rocker/verse/tags
+FROM rocker/verse:4.5.1
+
+## set up directories
+RUN mkdir -p /home/rstudio/scripts/models \
+             /home/rstudio/data \
+             /home/rstudio/output \
+             /home/rstudio/figures
+
+COPY centrality-uncertainty.Rproj /home/rstudio/
+
+## copy all scripts and Stan models
+COPY scripts/00_functions.R /home/rstudio/scripts/
+COPY scripts/04_dgps.qmd /home/rstudio/scripts/
+COPY scripts/01_centrality_simulation.qmd /home/rstudio/scripts/
+COPY scripts/09_additional_simulations_no_bayes.qmd /home/rstudio/scripts/
+COPY scripts/09_additional_simulations_only_bayes.qmd /home/rstudio/scripts/
+COPY scripts/references.bib /home/rstudio/scripts/
+COPY scripts/models/MLVAR_lkj_only.stan /home/rstudio/scripts/models/
+COPY scripts/models/MLVAR_lkj_only_empirical_example.stan /home/rstudio/scripts/models/
+
+## visualization + simulation packages including Stan
+RUN install2.r --error --skipinstalled --ncpus -1 \
+    tidyverse here cowplot ggh4x pander MetBrewer \
+    sysfonts showtext ggokabeito janitor svglite lm.beta \
+    SimDesign mlVAR graphicalVAR gimme future corpcor rstan

@@ -1,21 +1,27 @@
-## set R version (https://hub.docker.com/r/rocker/verse/tags)
+## Lightweight image for visualization (no Stan/simulation packages).
+## Output files are mounted as volumes at runtime — not baked into the image.
+## R version: https://hub.docker.com/r/rocker/verse/tags
 FROM rocker/verse:4.5.1
 
 ## set up directories
-RUN mkdir -p /home/rstudio/scripts/simulation_viz_figures /home/rstudio/data /home/rstudio/output /home/rstudio/figures
+RUN mkdir -p /home/rstudio/scripts/models \
+             /home/rstudio/scripts/simulation_viz_figures \
+             /home/rstudio/data \
+             /home/rstudio/output \
+             /home/rstudio/figures
+
 COPY centrality-uncertainty.Rproj /home/rstudio/
 
-## copy specific files
+## copy scripts (data and output are mounted as volumes at runtime)
 COPY scripts/00_functions.R /home/rstudio/scripts/
+COPY scripts/04_dgps.qmd /home/rstudio/scripts/
 COPY scripts/05_simulation_viz.qmd /home/rstudio/scripts/
-COPY output/sim_results.RDS /home/rstudio/output/
-COPY output/sim_full.rds /home/rstudio/output/
-COPY output/sim_results_rev1_fixed_sigma.rds /home/rstudio/output/
-COPY output/sim_results_rev1_heterogeneous.rds /home/rstudio/output/
+COPY scripts/05_simulation_viz_heterogeneous.qmd /home/rstudio/scripts/
+COPY scripts/09_additional_simulations_viz.qmd /home/rstudio/scripts/
+COPY scripts/references.bib /home/rstudio/scripts/
 
-
-## install R packages from CRAN the last day of the specified R version
-## ncpus set to -1 (all available cores)
+## visualization packages only
 RUN install2.r --error --skipinstalled --ncpus -1 \
-    tidyverse SimDesign here cowplot ggh4x pander MetBrewer sysfonts showtext ggokabeito janitor svglite rmarkdown knitr lm.beta
-
+    tidyverse here cowplot ggh4x pander MetBrewer \
+    sysfonts showtext ggokabeito janitor svglite lm.beta quarto \
+    SimDesign corpcor 
