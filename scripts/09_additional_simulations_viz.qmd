@@ -29,20 +29,28 @@ format:
     code-fold: true
     code-tools: true
     code-summary: "Show the code"
-    fig-width: 7
-    fig-height: 4.5
+    fig-width: 10
+    fig-height: 10
     fig-align: "center"
     embed-resources: true
 execute:
   message: false
   warning: false
-  eval: true # only show code
+  eval: true # false -> only show code
+bibliography: references.bib
 ---
 
 # Background
 
-In this document, we combine the various files for the additional simulations and analyze them together.
+In this document, we combine the various files for the additional simulations with different sparsity settings and different number of nodes and analyze them together. Overall, the results are similar to the results of the main manuscript.
 
+We think that our initial data-generating process (less sparsity than typically seen in simulation studies) is warranted for multiple reasons.
+
+The data-generating network was chosen deliberately to reflect theoretical considerations about realistic psychological processes, rather than to match the conventions of previous simulation studies. We justify this choice on three grounds. Firstly, previous simulation studies have largely used sparse data-generating mechanisms, often based on chain graphs in which each node is connected only to the next one. While these structures are useful for their simplicity and ease of visualisation, they do not realistically represent the temporal interplay of, for example, affect or symptom variables. Notably, @hoekstra2022 used a contemporaneous and temporal network density of 62–63% in their empirically based condition, which is considerably denser than the sparse synthetic conditions used in the same paper. Empirical networks also appear sparse, but this likely reflects estimation constraints rather than the true data-generating structure. Most empirical studies combine limited per-person observations with regularisation methods or conservative variable selection procedures (as employed in mlVAR or GIMME), which necessarily produce sparse solutions. This has been demonstrated for cross-sectional networks by @epskamp2017, who showed that LASSO estimation almost always yields sparse structures at typical sample sizes, even when the true network is not sparse.
+
+The problem is exacerbated in dynamic networks, which require the estimation of a temporal matrix with p² free parameters, in addition to the innovation covariance matrix, based on limited observations per person. In line with this, @mansueto2023 explicitly conclude that 'sparsity is likely to be caused by low power and should not be interpreted as an actual lack of connections', and simulation studies have confirmed that LASSO-based methods and GIMME strongly favour specificity over sensitivity [@nestler2021]. Measurement error further exacerbates this issue by masking genuine non-zero relationships [@kankaanpää2026]. Studies using larger sample sizes, such as @odriscoll2022, yield considerably less sparse networks, supporting the interpretation that observed sparsity in idiographic research is largely an artefact of limited data and aggressive regularisation.
+
+Theoretical considerations provide the primary justification for our design. Acyclic relations among closely related psychological constructs, such as affect items or symptom measures, are largely implausible from the perspective of network theory in psychopathology [@borsboom2017] and dynamical systems research more broadly. Furthermore, enforcing sparsity in a network of psychological items implies rejecting a latent variable or common cause explanation [@epskamp2017], an assumption that many researchers would find difficult to justify for typical affect or symptom batteries. However, we note that the converse does not hold: a dense network of relatively weak connections does not entail a common cause structure.
 
 # Preparation
 
@@ -65,17 +73,14 @@ library(lm.beta)
 source(here::here("scripts", "00_functions.R"))
 ```
 
+To separate original results from our first revision, we add the subscript "rev2" to all new results:
 
-
-To separate original results from our first revision, we add the subscript "rev1" to all new results: 
 ```{r}
 revision <- "rev2"
 use_rev <- TRUE
 ```
 
-
-
-We then load the simulation results. Due to the computational complexity of the simulation, these are spread across different files in `output\rev2`: 
+We then load the simulation results. Due to the computational complexity of the simulation, these are spread across different files in `output\rev2`:
 
 - `sim_full_rev2_additional_row1_raw.rds`: Results of the first row with 200 iterations for each method
 - `sim_full_rev2_additional_no_bayes.rds`: Results of the second and third row with 200 iterations for the non-Bayesian methods
@@ -90,9 +95,8 @@ only_bayes <- readRDS(here::here("output", "rev2", "sim_full_rev2_additional_onl
 
 ```
 
+We then combine these files into a single large file:
 
-
-We then combine these files into a single large file: 
 ```{r}
 #| label: combine-sim-results
 
@@ -111,11 +115,58 @@ sim_res_cut <- df_rev2 |>
   select(-contains("divtrans"))
 
 ```
+# Data-Generating Processes
+
+Here, we summarize the data-generating processes (DGPs) used in the simulations. We used three different DGPs with varying node counts and sparsity levels to assess the robustness of our findings across different network structures.
+
+```{r}
+#| label: load-dgps
+
+# write matrix to LaTeX format for better visualization
+write_matrix <- function(x) {
+  begin <- "\\begin{bmatrix}\n"
+  end <- "\\end{bmatrix}"
+  # format numbers to 3 decimal places and collapse into LaTeX rows
+  X <- apply(x, 1, function(x) paste(round(x, 3), collapse = " & "))
+  paste0(begin, paste(X, collapse = " \\\\ \n"), "\n", end)
+}
+
+# DGP A: 6-node, high-sparsity (>70% off-diagonal zeroed)
+graph_sparse_6n_highsparse <- readRDS(here::here("data", "graph_sparse_6n_highsparse.RDS"))
+
+# DGP B: 10-node, original semi-sparse DGM
+graph_semisparse_10n <- readRDS(here::here("data", "graph_semisparse_10n.RDS"))
+
+# DGP C: 10-node, sparse DGM
+graph_sparse_10n <- readRDS(here::here("data", "graph_sparse_10n.RDS"))
+```
+
+## First data-generating process (6 nodes, higher sparsity):
+
+VAR matrix:
+`r write_matrix(graph_sparse_6n_highsparse$beta)`
+
+Innovation covariance matrix:
+`r write_matrix(graph_sparse_6n_highsparse$sigma)`
+
+## Second data-generating process (10 nodes, medium sparsity):
+
+VAR matrix:
+
+`r write_matrix(graph_semisparse_10n$beta)`
+
+Innovation covariance matrix: 
+`r write_matrix(graph_semisparse_10n$sigma)`
+
+## Third data-generating process (10 nodes, higher sparsity):
+
+VAR matrix: 
+
+`r write_matrix(graph_sparse_10n$beta)`
 
 
-
-
-
+Innovation covariance matrix: 
+`r write_matrix(graph_sparse_10n$sigma)`
 
 
 # Data Wrangling
@@ -190,11 +241,52 @@ meth_colors <- set_names(MetBrewer::met.brewer("Johnson")[c(1,2,4,5)],
                          c("GVAR", "mlVAR", "GIMME", "BmlVAR"))
 ```
 
-
-
 # Warnings and Errors
 
+Here, we focus on the warnings and errors that occurred during the simulation. Unfortunately, warnings of the first row were not saved. We here present warnings and errors of the second and third row, which were saved separately for Bayesian and non-Bayesian methods.
 
+```{r}
+#| label: warnings-errors
+
+# extract warnings and errors for non-Bayesian methods
+no_bayes <- readRDS(here::here("output", "rev2", "sim_full_rev2_additional_no_bayes.rds"))
+only_bayes <- readRDS(here::here("output", "rev2", "sim_full_rev2_additional_only_bayes.rds"))
+
+# get warning
+no_bayes_warnings <- SimExtract(no_bayes, what = "warnings")
+only_bayes_warnings <- SimExtract(only_bayes, what = "warnings")
+
+
+```
+
+Print warnings for non-Bayesian methods:
+
+```{r}
+#| label: print-warnings
+# convert into readable format
+no_bayes_warnings |> 
+  dplyr::select(!c(strength_sd, outstrength_sd, instrength_sd)) |> 
+  pivot_longer(cols = !c(dgp, n_id, heterogeneity, n_tp)) |> 
+  select(name, value) |> 
+  knitr::kable()
+```
+
+Print warnings for Bayesian methods:
+
+```{r}
+#| label: print-warnings-bayes
+
+only_bayes_warnings |> 
+  # remove all line breaks to make table more readable
+  mutate(across(everything(), ~ str_replace_all(.x, "[\n]", " "))) |> 
+  dplyr::select(!c(strength_sd, outstrength_sd, instrength_sd)) |> 
+  pivot_longer(cols = !c(dgp, n_id, heterogeneity, n_tp)) |> 
+  mutate(name = gsub("WARNING:  Warning in NULL :", "", name)) |>
+  mutate(name = gsub("\n", "", name)) |>
+  select(name, value) |> 
+  filter(value > 0 ) |> 
+  knitr::kable()
+```
 
 # Point Estimates
 
@@ -272,7 +364,6 @@ plot_bias <- sr_edit |>
 
 plot_bias
 ```
-
 
 # Centrality
 
@@ -391,9 +482,6 @@ plot_rankcor
 ```
 
 
-## Bias and RMSE of Centrality
-
-
 # Regression
 
 ## Power of Regression
@@ -426,8 +514,7 @@ power_df <- sr_edit |>
 
 ```
 
-
-Create the plot: 
+Create the plot:
 
 ```{r viz-regression-power-combined}
 #| output: false
@@ -472,8 +559,6 @@ ggsave_rev("plot_power_combined.pdf", plot_power_combined,
 
 ```
 
-
-
 How large was the difference between instrength and outstrength?
 
 ```{r instrength-outstrength}
@@ -489,10 +574,7 @@ power_df |>
 
 ```
 
-
 ## Power and Bias for Outstrength
-
-
 
 ```{r outstrength-plot}
 power_bias_reg_combined_df <- sr_edit |> 
@@ -541,7 +623,8 @@ plot_power_bias_outstrength <- power_bias_reg_combined_df |>
               show.legend = FALSE) +
     ggh4x::facet_wrap2(dgp ~ pm,
                         axes = "all",
-                        scales = "free_y") +
+                        scales = "free_y", 
+                       nrow = 3) +
     facetted_pos_scales(
       y = list(pm == "Bias" ~ scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)),
                pm == "Detection Rate" ~ scale_y_continuous(expand = c(0, 0), limits = c(-0.1, 1.1)))
@@ -577,12 +660,11 @@ plot_power_bias_outstrength
 
 ```
 
-
 ## Power and Bias for Contemporaneous Strength
 
 ```{r contemporaneous-strength-plot}
-#| fig-width: 12
-#| fig-height: 12
+#| fig-width: 10
+#| fig-height: 10
 power_bias_reg_strength_df <- sr_edit |> 
   mutate(pm = str_replace(pm, "powertwoside", "power")) |> 
   filter(!str_detect(pm, "poweroneside")) |>
@@ -663,13 +745,11 @@ ggsave_rev("plot_power_bias_strength.pdf",
 plot_power_bias_strength
 ```
 
-
-
 ## RMSE and Bias of Regression
 
-We create plot for different regression outcomes here: 
+We create plot for different regression outcomes here:
 
-```{r bias-rmse-functions, eval = FALSE}
+```{r bias-rmse-functions}
 process_data <- function(data, summary) {
   df_clean <- data |> 
     filter(str_detect(pm, summary)) |> 
@@ -712,7 +792,7 @@ create_regression_plot <- function(df,
                         axes = "all",
                         remove_labels = "y", 
                        nrow = 3) +
-    scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(-.25, .3)) +
     scale_color_manual(values = meth_colors) +
     theme_centrality() +
     theme(
@@ -731,7 +811,7 @@ create_regression_plot <- function(df,
     )
 }
 
-## Generate and save combined plots
+# Generate and save combined plots
 generate_regression_plots <- function(data, summary, y_label, file_name) {
   processed_list <- process_data(data, summary)
   plot_list <- lapply(processed_list, create_regression_plot, y_label = y_label)
@@ -750,15 +830,67 @@ generate_regression_plots(sr_edit, "rmsereg", "RMSE", "plot_reg_rmse_combined.pd
 
 ## Bias Plot
 generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined.pdf")
-
 ```
 
+Plot the RMSE:
 
+```{r}
+#| label: plot-regression-rmse
+
+processed_list <- process_data(sr_edit, "rmsereg")
+plot_power_rmse_strength <- lapply(processed_list, create_regression_plot, y_label = "RMSE")
+combined_plot <- cowplot::plot_grid(
+  plotlist = plot_power_rmse_strength,
+  ncol = 1,
+  labels = c("True Effect: 0", "True Effect: 0.2", "True Effect: 0.4")
+)
+combined_plot
+```
+
+Plot the bias:
+
+```{r}
+#| label: plot-regression-bias
+
+processed_list <- process_data(sr_edit, "biasreg")
+plot_power_bias_strength <- lapply(processed_list, create_regression_plot, y_label = "Bias")
+combined_plot <- cowplot::plot_grid(
+  plotlist = plot_power_bias_strength, 
+  ncol = 1,
+  labels = c("True Effect: 0", "True Effect: 0.2", "True Effect: 0.4")
+)
+
+combined_plot
+```
+
+# MCMC Diagnostics
+
+We can now look at the Bayesian models in more detail and check if the Rhats are satisfactory, as well as if there were any divergent transitions.
+
+First, look at Rhats for the three conditions:
+
+```{r viz-rhat}
+df_rev2 |> 
+  select(bmlvar_diagnostics.rhat_bmlvar_mean) |> 
+  rename("Mean Rhat" = bmlvar_diagnostics.rhat_bmlvar_mean) |> 
+  knitr::kable()
+```
+
+Second, we tabulate divergent transitions:
+
+```{r check-divtrans}
+df_rev2|> 
+  select(contains("divtrans")) |> 
+  rename_with(~ str_remove(., "bmlvar_diagnostics."), everything()) |> 
+  knitr::kable(col.names = c("Mean Number of DivTrans",
+                            "Sum of DivTrans",
+                            "Models with Divtrans"))
+```
+
+We see that there are, on average, more divergent transitions for models with a sparse data-generating process.
 
 # Session Info
-
 
 ```{r session-info}
 pander::pander(sessionInfo())
 ```
-
