@@ -70,6 +70,7 @@ To separate original results from our first revision, we add the subscript "rev1
 ```{r}
 revision <- "rev1"
 use_rev1 <- TRUE
+use_rev <- use_rev1  # alias expected by ggsave_rev() in 00_functions.R
 ```
 
 
@@ -981,96 +982,104 @@ generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined_he
 
 ## Variability of Point Estimates
 
-Here, we investigate the variability of point estimates in specific simulation conditions, for which we need the raw results - this part is therefore not reproducible. 
+Here, we investigate the variability of point estimates in specific simulation conditions, for which we need the raw results - this part is therefore not reproducible. Again, this code is commented out not to clash with our make execution. Simply uncomment and run to reproduce manually. 
 ```{r}
 #| eval: !expr params$rerun
-if(isTRUE(use_rev1)){
-  r3 <- readRDS("~/centrality-uncertainty/output/rev1_heterogeneous/sim_full_rev1_cond23_heterogeneous.rds-results_pc04669/results-row-2.rds")
-} else {
-  r3 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-3.rds")
-}
+# if(isTRUE(use_rev1)){
+#   r3 <- readRDS(here::here("output", "rev1_heterogeneous", "sim_full_rev1_cond23_heterogeneous.rds-results_pc04669", "results-row-2.rds"))
+# } else {
+#   r3 <- readRDS("~/centrality-uncertainty/sim_full.rds-results_pc04798/results-row-3.rds")
+# }
 
 ```
 
-For easier interpretation, we plot the raw estimates instead of the bias:
+
+
+For easier interpretation, we plot the raw estimates instead of the bias. 
 ```{r variability-estimates}
 #| eval: !expr params$rerun
-# extract regression slope for a given method and repetition
-extract_coef <- function(res_list, method) {
-  map_dfr(res_list, function(x) {
-    if (!is.null(x[[method]])) {
-      if (method == "bmlvar") {
-        tmp <- x[[method]]$reg_bmlvar$regression_slope$median
-        tibble(
-          `0.0` = tmp[4],
-          `0.2` = tmp[5],
-          `0.4` = tmp[6],
-          method = "BmlVAR"
-        )
-      } else {
-        tibble(
-          `0.0` = tryCatch(summary(x[[method]]$reg_outstrength[[1]])$coefficients[2], error = function(e) NA),
-          `0.2` = tryCatch(summary(x[[method]]$reg_outstrength[[2]])$coefficients[2], error = function(e) NA),
-          `0.4` = tryCatch(summary(x[[method]]$reg_outstrength[[3]])$coefficients[2], error = function(e) NA),
-          method = method
-        )
-      }
-    } else {
-      NULL
-    }
-  })
-}
-
-
-methods <- c("gvar", "gimme", "mlvar", "bmlvar")
-df_all <- map_dfr(methods, ~ extract_coef(r3$results, .x))
-
-
-df_all <- df_all |>
-  mutate(method = recode(method,
-                         "mlvar" = "mlVAR",
-                         "gimme" = "GIMME",
-                         "gvar" = "GVAR")) |> 
-  mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR")))
-
-# Plot
-est_variability_plot <- df_all |>
-  pivot_longer(cols = c("0.0", "0.2", "0.4"), names_to = "reg_coef") |> 
-  mutate(
-    reg_coef = as.factor(reg_coef)
-    # method = factor(method, levels = names(meth_colors))
-  ) |> 
-  ggplot(aes(x = reg_coef, y = value, fill = method, color = method)) + 
-  geom_point(position = position_jitterdodge(jitter.width = 0.35, 
-                                              dodge.width = 0.8, 
-                                              jitter.height = 0),
-             size = 1.5,
-             alpha = 0.4) +
-  geom_boxplot(position = position_dodge(width = 0.8), 
-               outlier.shape = NA, alpha = 0.7) + 
-  labs(x = "True Regression Slope",
-       y = "Estimated Regression Slope", 
-       color = "",
-       fill = "") +
-  theme_centrality() +
-  theme(text = element_text(size = 21)) +
-  scale_fill_manual(values = meth_colors) +
-  scale_color_manual(values = meth_colors) + 
-  scale_y_continuous(breaks = round(seq(-0.6, 1, by = .2), 1))+
-  geom_vline(colour = "#F3F4F5", xintercept = seq(1.5, 3, 1))
-
-ggsave_rev("est_variability_plot_heterogeneous.pdf", plot = est_variability_plot, 
-       height = 6, width = 9,
-       path = here::here("figures/"), device = "pdf")
+# # extract regression slope for a given method and repetition
+# extract_coef <- function(res_list, method) {
+#    map_dfr(res_list, function(x) {
+#      if (!is.null(x[[method]])) {
+#        if (method == "bmlvar") {
+#          tmp <- x[[method]]$reg_bmlvar$regression_slope$median
+#          tibble(
+#            `0.0` = tmp[4],
+#            `0.2` = tmp[5],
+#            `0.4` = tmp[6],
+#            method = "BmlVAR"
+#          )
+#        } else {
+#          tibble(
+#            `0.0` = tryCatch(summary(x[[method]]$reg_outstrength[[1]])$coefficients[2], error = function(e) NA),
+#            `0.2` = tryCatch(summary(x[[method]]$reg_outstrength[[2]])$coefficients[2], error = function(e) NA),
+#            `0.4` = tryCatch(summary(x[[method]]$reg_outstrength[[3]])$coefficients[2], error = function(e) NA),
+#            method = method
+#          )
+#        }
+#      } else {
+#        NULL
+#      }
+#    })
+#  }
+#  
+#  
+# methods <- c("gvar", "gimme", "mlvar", "bmlvar")
+# df_all <- map_dfr(methods, ~ extract_coef(r3$results, .x))
+#  
+#  
+# df_all <- df_all |>
+#    mutate(method = recode(method,
+#                           "mlvar" = "mlVAR",
+#                           "gimme" = "GIMME",
+#                           "gvar" = "GVAR")) |> 
+#    mutate(method = factor(method, levels = c("GVAR", "GIMME", "mlVAR", "BmlVAR")))
+#  
+# #  Plot
+# est_variability_plot <- df_all |>
+#    pivot_longer(cols = c("0.0", "0.2", "0.4"), names_to = "reg_coef") |> 
+#    mutate(
+#      reg_coef = as.factor(reg_coef),
+#     method = factor(method, levels = names(meth_colors))
+#    ) |> 
+#    ggplot(aes(x = reg_coef, y = value, fill = method, color = method)) + 
+#    geom_point(position = position_jitterdodge(jitter.width = 0.35, 
+#                                                dodge.width = 0.8, 
+#                                                jitter.height = 0),
+#               size = 1.5,
+#               alpha = 0.4) +
+#    geom_boxplot(position = position_dodge(width = 0.8), 
+#                 outlier.shape = NA, alpha = 0.7) + 
+#    labs(x = "True Regression Slope",
+#         y = "Estimated Regression Slope", 
+#         color = "",
+#         fill = "") +
+#    theme_centrality() +
+#    theme(text = element_text(size = 21)) +
+#    scale_fill_manual(values = meth_colors) +
+#    scale_color_manual(values = meth_colors) + 
+#    scale_y_continuous(breaks = round(seq(-0.6, 1, by = .2), 1))+
+#    geom_vline(colour = "darkgrey", xintercept = seq(1.5, 3, 1))
+#  
+#  ggsave_rev("est_variability_plot.pdf", plot = est_variability_plot, 
+#         height = 6, width = 9,
+#         path = here::here("figures/"), device = "pdf")
+#  
+# # save plot as rds
+# saveRDS(est_variability_plot, here::here("figures", "rev1", "est_variability_plot_heterogeneous.rds"))
 
 ```
 
 ```{r}
 #| echo: false
 #| fig-width: 9
-#| fig-height: 6
+#| fig-height: 9
+est_variability_plot <- readRDS(here::here("figures", "rev1", "est_variability_plot_heterogeneous.rds"))
+
 est_variability_plot
 ```
+
 
 
 
