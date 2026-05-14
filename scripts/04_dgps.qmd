@@ -36,16 +36,21 @@ format:
 execute:
   message: false
   warning: false
-  eval: false
+  eval: true
 params:
   rerun: false  # define parameter if all large analyses should be rerun
 ---
 
 # Preparation
 
+All data-generating processes used in the simulation study are created in this document. 
+The final DGPS are saved as RDS files in the `data/` folder.
+
+
 ```{r}
 library(tidyverse)
 library(here)
+source(here::here("scripts", "00_functions.R"))
 set.seed(35037)
 ```
 
@@ -91,6 +96,7 @@ kappa_mat <- solve(cov_mat)
 
 Save the DGP:
 ```{r}
+#| eval: false
 graph_semisparse_synth <- list(beta = var_mat, 
                     sigma = cov_mat, 
                     kappa = kappa_mat,
@@ -112,7 +118,6 @@ Here, we test the impact of the sparsity proportion implemented in our simulatio
 We investigate whether the sparsity proportion is correctly implemented and whether the boost factor can maintain node 1's centrality even when many edges are zeroed. We also check that the resulting matrices are still valid (e.g., positive definite for the covariance matrix) and that the sparsity level matches our expectations. 
 
 ```{r test-sparsity-implementation}
-source(here::here("scripts", "00_functions.R"))
 
 # Conditions to probe: (p, sparsity_proportion, boost_factor, exclude_node1)
 conditions <- list(
@@ -200,6 +205,7 @@ arr_to_latex(cov_mat_6n_sparse)
 ```
 
 ```{r dgp-a-6n-sparse-save}
+#| eval: false
 pcor_mat_6n_sparse   <- -stats::cov2cor(solve(cov_mat_6n_sparse))
 kappa_mat_6n_sparse  <- solve(cov_mat_6n_sparse)
 
@@ -244,6 +250,7 @@ arr_to_latex(cov_mat_10n)
 ```
 
 ```{r dgp-b-10n-save}
+#| eval: false
 pcor_mat_10n  <- -stats::cov2cor(solve(cov_mat_10n))
 kappa_mat_10n <- solve(cov_mat_10n)
 
@@ -291,6 +298,7 @@ arr_to_latex(cov_mat_10n_sparse)
 ```
 
 ```{r dgp-c-10n-sparse-save}
+#| eval: false
 pcor_mat_10n_sparse   <- -stats::cov2cor(solve(cov_mat_10n_sparse))
 kappa_mat_10n_sparse  <- solve(cov_mat_10n_sparse)
 
