@@ -127,6 +127,8 @@ Also, after running the simulation study, we realized that our Stan code had an 
 
 ## Overview Table
 
+## Overview Table
+
 | Deviation | Explanation |
 |-----------|-------------|
 | Updated BmlVAR formula to fix subscripts and notation | The preregistered model formula omitted some necessary subscripts and used inconsistent distributional notation. These were corrected for clarity and correctness in the final version. |
@@ -134,6 +136,11 @@ Also, after running the simulation study, we realized that our Stan code had an 
 | Incorrect prior notation for second step regression residual variance | We accidentally noted a t-prior on $log(sigma)$, but a half-t prior on $\sigma$ was used in both steps for consistency across models and had already been implemented in the code. We fixed the notation to align with our actual implementation |
 | Omitted sum over individuals in centrality selection accuracy formula | The preregistered formula did not include a summation over individuals, which is necessary for the proportion. |
 | 200 instead of 100 simulation repetitions | As we explained in the manuscript, we accidentally calculated that we needed 200 instead of the actual 100 simulation repetitions to achieve the desired worst-case MCSE. We kept the 200 repetitions as they are informative and increase precision.|
+| Added heterogeneous most central node condition | The preregistration specified only the homogeneous condition, in which the first node was constrained to be the most central node for all individuals. A coding error revealed that our initial implementation had allowed the most central node to vary between individuals. Upon discovering this, and in line with a reviewer comment,  we recognized the scientific value of comparing both assumptions and retained both conditions in the manuscript. The preregistered homogeneous condition is included as originally planned. |
+| Added completely new simulation settings in the second revision | A reviewer suggested to add additional simulation conditions, which are included in `09_additional_simulations_viz.qmd`| 
+
+
+
 
 
 
@@ -895,7 +902,7 @@ ggsave_rev("plot_power_bias_strength_heterogeneous.svg",
 
 We create plot for different regression outcomes here: 
 
-```{r bias-rmse-functions, eval = FALSE}
+```{r bias-rmse-functions}
 process_data <- function(data, summary) {
   df_clean <- data |> 
     filter(str_detect(pm, summary)) |> 
@@ -937,7 +944,7 @@ create_regression_plot <- function(df,
     ggh4x::facet_nested(n_id ~ outcome,
                         axes = "all",
                         remove_labels = "y") +
-    scale_y_continuous(expand = c(0, 0), limits = c(-.45, .2)) +
+    scale_y_continuous(expand = c(0, 0), limits = c(-.45, .45)) +
     scale_color_manual(values = meth_colors) +
     theme_centrality() +
     theme(
@@ -978,6 +985,38 @@ generate_regression_plots(sr_edit, "biasreg", "bias", "plot_reg_bias_combined_he
 
 ```
 
+Plot the RMSE:
+
+```{r}
+#| label: plot-regression-rmse
+#| fig-height: 12
+
+processed_list <- process_data(sr_edit, "rmsereg")
+plot_power_rmse_strength <- lapply(processed_list, create_regression_plot, y_label = "RMSE")
+combined_plot <- cowplot::plot_grid(
+  plotlist = plot_power_rmse_strength,
+  ncol = 1,
+  labels = c("True Effect: 0", "True Effect: 0.2", "True Effect: 0.4")
+)
+combined_plot
+```
+
+Plot the bias:
+
+```{r}
+#| label: plot-regression-bias
+#| fig-height: 12
+
+processed_list <- process_data(sr_edit, "biasreg")
+plot_power_bias_strength <- lapply(processed_list, create_regression_plot, y_label = "Bias")
+combined_plot <- cowplot::plot_grid(
+  plotlist = plot_power_bias_strength, 
+  ncol = 1,
+  labels = c("True Effect: 0", "True Effect: 0.2", "True Effect: 0.4")
+)
+
+combined_plot
+```
 
 
 ## Variability of Point Estimates
