@@ -12,7 +12,7 @@
 <meta name="author" content="Yong Zhang">
 <meta name="author" content="Laura F. Bringmann">
 <meta name="author" content="Daniel W. Heck">
-<meta name="dcterms.date" content="2026-05-15">
+<meta name="dcterms.date" content="2026-09-09">
 
 <title>Using features of dynamic networks to guide treatment selection and outcome prediction</title>
 <style>
@@ -2429,7 +2429,7 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">May 15, 2026</p>
+      <p class="date">September 9, 2026</p>
     </div>
   </div>
   
@@ -2565,6 +2565,10 @@ Innovation covariance matrix:
 <tr class="odd">
 <td>Added completely new simulation settings in the second revision</td>
 <td>A reviewer suggested to add additional simulation conditions, which are included in <code>09_additional_simulations_viz.qmd</code></td>
+</tr>
+<tr class="even">
+<td>Kept all output despite divergent transitions</td>
+<td>Divergent transitions are a HMC sampling-efficiency warning and are distinct from non-convergence - we therefore do not perceive this as a true deviation, but rather a wording issue. The preregistered exclusion rule (exclude non-converged cases, base performance measures on converged cases only) was therefore not triggered.</td>
 </tr>
 </tbody>
 </table>
@@ -3799,9 +3803,9 @@ Innovation covariance matrix:
 <p><strong>R version 4.5.2 (2025-10-31 ucrt)</strong></p>
 <p><strong>Platform:</strong> x86_64-w64-mingw32/x64</p>
 <p><strong>locale:</strong> <em>LC_COLLATE=German_Germany.utf8</em>, <em>LC_CTYPE=German_Germany.utf8</em>, <em>LC_MONETARY=German_Germany.utf8</em>, <em>LC_NUMERIC=C</em> and <em>LC_TIME=German_Germany.utf8</em></p>
-<p><strong>attached base packages:</strong> <em>stats</em>, <em>graphics</em>, <em>grDevices</em>, <em>utils</em>, <em>datasets</em>, <em>methods</em> and <em>base</em></p>
+<p><strong>attached base packages:</strong> <em>stats</em>, <em>graphics</em>, <em>grDevices</em>, <em>datasets</em>, <em>utils</em>, <em>methods</em> and <em>base</em></p>
 <p><strong>other attached packages:</strong> <em>lm.beta(v.1.7-2)</em>, <em>here(v.1.0.1)</em>, <em>MetBrewer(v.0.2.0)</em>, <em>pander(v.0.6.6)</em>, <em>ggh4x(v.0.3.0)</em>, <em>janitor(v.2.2.1)</em>, <em>ggokabeito(v.0.1.0)</em>, <em>showtext(v.0.9-7)</em>, <em>showtextdb(v.3.0)</em>, <em>sysfonts(v.0.8.9)</em>, <em>cowplot(v.1.1.3)</em>, <em>SimDesign(v.2.19.2)</em>, <em>lubridate(v.1.9.4)</em>, <em>forcats(v.1.0.0)</em>, <em>stringr(v.1.5.1)</em>, <em>dplyr(v.1.1.4)</em>, <em>purrr(v.1.0.4)</em>, <em>readr(v.2.1.5)</em>, <em>tidyr(v.1.3.1)</em>, <em>tibble(v.3.2.1)</em>, <em>ggplot2(v.3.5.2)</em> and <em>tidyverse(v.2.0.0)</em></p>
-<p><strong>loaded via a namespace (and not attached):</strong> <em>gtable(v.0.3.6)</em>, <em>xfun(v.0.52)</em>, <em>htmlwidgets(v.1.6.4)</em>, <em>tzdb(v.0.5.0)</em>, <em>vctrs(v.0.6.5)</em>, <em>tools(v.4.5.2)</em>, <em>generics(v.0.1.3)</em>, <em>curl(v.6.2.2)</em>, <em>parallel(v.4.5.2)</em>, <em>pkgconfig(v.2.0.3)</em>, <em>R.oo(v.1.27.0)</em>, <em>RColorBrewer(v.1.1-3)</em>, <em>lifecycle(v.1.0.4)</em>, <em>compiler(v.4.5.2)</em>, <em>farver(v.2.1.2)</em>, <em>textshaping(v.1.0.0)</em>, <em>brio(v.1.1.5)</em>, <em>codetools(v.0.2-20)</em>, <em>snakecase(v.0.11.1)</em>, <em>htmltools(v.0.5.8.1)</em>, <em>yaml(v.2.3.10)</em>, <em>pillar(v.1.10.2)</em>, <em>R.utils(v.2.13.0)</em>, <em>sessioninfo(v.1.2.3)</em>, <em>parallelly(v.1.43.0)</em>, <em>tidyselect(v.1.2.1)</em>, <em>digest(v.0.6.37)</em>, <em>stringi(v.1.8.7)</em>, <em>future(v.1.40.0)</em>, <em>listenv(v.0.9.1)</em>, <em>labeling(v.0.4.3)</em>, <em>rprojroot(v.2.0.4)</em>, <em>fastmap(v.1.2.0)</em>, <em>grid(v.4.5.2)</em>, <em>cli(v.3.6.5)</em>, <em>beepr(v.2.0)</em>, <em>magrittr(v.2.0.3)</em>, <em>future.apply(v.1.11.3)</em>, <em>withr(v.3.0.2)</em>, <em>scales(v.1.4.0)</em>, <em>timechange(v.0.3.0)</em>, <em>rmarkdown(v.2.29)</em>, <em>globals(v.0.17.0)</em>, <em>audio(v.0.1-11)</em>, <em>progressr(v.0.15.1)</em>, <em>ragg(v.1.4.0)</em>, <em>R.methodsS3(v.1.8.2)</em>, <em>hms(v.1.1.3)</em>, <em>pbapply(v.1.7-2)</em>, <em>evaluate(v.1.0.3)</em>, <em>knitr(v.1.50)</em>, <em>testthat(v.3.2.3)</em>, <em>rlang(v.1.1.6)</em>, <em>Rcpp(v.1.0.14)</em>, <em>xtable(v.1.8-4)</em>, <em>glue(v.1.8.0)</em>, <em>svglite(v.2.2.2)</em>, <em>rstudioapi(v.0.17.1)</em>, <em>jsonlite(v.2.0.0)</em>, <em>R6(v.2.6.1)</em> and <em>systemfonts(v.1.3.2)</em></p>
+<p><strong>loaded via a namespace (and not attached):</strong> <em>gtable(v.0.3.6)</em>, <em>xfun(v.0.52)</em>, <em>htmlwidgets(v.1.6.4)</em>, <em>tzdb(v.0.5.0)</em>, <em>vctrs(v.0.6.5)</em>, <em>tools(v.4.5.2)</em>, <em>generics(v.0.1.3)</em>, <em>curl(v.6.2.2)</em>, <em>parallel(v.4.5.2)</em>, <em>pkgconfig(v.2.0.3)</em>, <em>R.oo(v.1.27.0)</em>, <em>RColorBrewer(v.1.1-3)</em>, <em>lifecycle(v.1.0.4)</em>, <em>compiler(v.4.5.2)</em>, <em>farver(v.2.1.2)</em>, <em>textshaping(v.1.0.0)</em>, <em>brio(v.1.1.5)</em>, <em>codetools(v.0.2-20)</em>, <em>snakecase(v.0.11.1)</em>, <em>htmltools(v.0.5.8.1)</em>, <em>yaml(v.2.3.10)</em>, <em>pillar(v.1.10.2)</em>, <em>R.utils(v.2.13.0)</em>, <em>sessioninfo(v.1.2.3)</em>, <em>parallelly(v.1.43.0)</em>, <em>tidyselect(v.1.2.1)</em>, <em>digest(v.0.6.37)</em>, <em>stringi(v.1.8.7)</em>, <em>future(v.1.40.0)</em>, <em>listenv(v.0.9.1)</em>, <em>labeling(v.0.4.3)</em>, <em>rprojroot(v.2.0.4)</em>, <em>fastmap(v.1.2.0)</em>, <em>grid(v.4.5.2)</em>, <em>cli(v.3.6.5)</em>, <em>beepr(v.2.0)</em>, <em>magrittr(v.2.0.3)</em>, <em>future.apply(v.1.11.3)</em>, <em>withr(v.3.0.2)</em>, <em>scales(v.1.4.0)</em>, <em>timechange(v.0.3.0)</em>, <em>rmarkdown(v.2.29)</em>, <em>globals(v.0.17.0)</em>, <em>audio(v.0.1-11)</em>, <em>progressr(v.0.15.1)</em>, <em>ragg(v.1.4.0)</em>, <em>R.methodsS3(v.1.8.2)</em>, <em>hms(v.1.1.3)</em>, <em>pbapply(v.1.7-2)</em>, <em>evaluate(v.1.0.3)</em>, <em>knitr(v.1.50)</em>, <em>testthat(v.3.2.3)</em>, <em>rlang(v.1.1.6)</em>, <em>Rcpp(v.1.0.14)</em>, <em>xtable(v.1.8-4)</em>, <em>glue(v.1.8.0)</em>, <em>BiocManager(v.1.30.25)</em>, <em>renv(v.1.1.4)</em>, <em>svglite(v.2.2.2)</em>, <em>jsonlite(v.2.0.0)</em>, <em>R6(v.2.6.1)</em> and <em>systemfonts(v.1.3.2)</em></p>
 </div>
 </div>
 <!-- -->
@@ -4400,7 +4404,7 @@ Innovation covariance matrix:
 <span id="cb29-144"><a href="#cb29-144" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> 200 instead of 100 simulation repetitions <span class="pp">|</span> As we explained in the manuscript, we accidentally calculated that we needed 200 instead of the actual 100 simulation repetitions to achieve the desired worst-case MCSE. We kept the 200 repetitions as they are informative and increase precision.<span class="pp">|</span></span>
 <span id="cb29-145"><a href="#cb29-145" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Added heterogeneous most central node condition <span class="pp">|</span> The preregistration specified only the homogeneous condition, in which the first node was constrained to be the most central node for all individuals. A coding error revealed that our initial implementation had allowed the most central node to vary between individuals. Upon discovering this, and in line with a reviewer comment,  we recognized the scientific value of comparing both assumptions and retained both conditions in the manuscript. The preregistered homogeneous condition is included as originally planned. <span class="pp">|</span></span>
 <span id="cb29-146"><a href="#cb29-146" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Added completely new simulation settings in the second revision <span class="pp">|</span> A reviewer suggested to add additional simulation conditions, which are included in <span class="in">`09_additional_simulations_viz.qmd`</span><span class="pp">|</span> </span>
-<span id="cb29-147"><a href="#cb29-147" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-147"><a href="#cb29-147" aria-hidden="true" tabindex="-1"></a><span class="pp">|</span> Kept all output despite divergent transitions <span class="pp">|</span> Divergent transitions are a HMC sampling-efficiency warning and are distinct from non-convergence - we therefore do not perceive this as a true deviation, but rather a wording issue. The preregistered exclusion rule (exclude non-converged cases, base performance measures on converged cases only) was therefore not triggered.  <span class="pp">|</span></span>
 <span id="cb29-148"><a href="#cb29-148" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb29-149"><a href="#cb29-149" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb29-150"><a href="#cb29-150" aria-hidden="true" tabindex="-1"></a></span>

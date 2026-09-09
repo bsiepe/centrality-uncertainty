@@ -138,7 +138,7 @@ Also, after running the simulation study, we realized that our Stan code had an 
 | 200 instead of 100 simulation repetitions | As we explained in the manuscript, we accidentally calculated that we needed 200 instead of the actual 100 simulation repetitions to achieve the desired worst-case MCSE. We kept the 200 repetitions as they are informative and increase precision.|
 | Added heterogeneous most central node condition | The preregistration specified only the homogeneous condition, in which the first node was constrained to be the most central node for all individuals. A coding error revealed that our initial implementation had allowed the most central node to vary between individuals. Upon discovering this, and in line with a reviewer comment,  we recognized the scientific value of comparing both assumptions and retained both conditions in the manuscript. The preregistered homogeneous condition is included as originally planned. |
 | Added completely new simulation settings in the second revision | A reviewer suggested to add additional simulation conditions, which are included in `09_additional_simulations_viz.qmd`| 
-
+| Kept all output despite divergent transitions | Divergent transitions are a HMC sampling-efficiency warning and are distinct from non-convergence - we therefore do not perceive this as a true deviation, but rather a wording issue. The preregistered exclusion rule (exclude non-converged cases, base performance measures on converged cases only) was therefore not triggered.  |
 
 
 
